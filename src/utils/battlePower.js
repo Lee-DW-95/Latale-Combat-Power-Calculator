@@ -9,32 +9,38 @@
  */
 
 // ============================================================
-// V_BIG 모델 - 8 파라미터 (사용자 도메인 지식 기반)
+// V_BIG2 모델 - 9 파라미터 (사용자 도메인 지식 기반)
 //
 // 게임 메커니즘:
 //   - 근력/공격력/고댐 → attackBase (가산형 베이스 스탯)
-//   - 크댐, 최소+최대뎀, 지배력, 근마 → 곱셈 항 (V_RICH의 K3 → 곱셈 항으로 이동)
+//   - 크댐, 최소+최대뎀, 지배력, 근마, 관통 → 곱셈 항
 //
 // 검증된 페어 데이터 분석:
 //   - 표시 (최소뎀+최대뎀) 변화율 ≈ 전투력 변화율 → 곱셈 항 확정
 //   - 표시 크댐 변화율 ≈ 전투력 변화율 → 곱셈 항 확정
+//   - 관통 98→99: 전투력 +0.81% (case2 페어로 측정)
 //
 // 입력 규칙:
 //   - 무기공격력/속성력은 T창 표시값의 max값 사용
 // ============================================================
 
-// V_BIG 학습 결과 (30건 + 페어 11쌍, RMSE 0.26%)
-// K0/K1/K2/base는 함께 절충되어 큰/작은 값으로 수렴 (비율은 자연스러움: K1/K0 ≈ 100)
+// V_BIG2 학습 결과 (47건, 관통 항 추가, RMSE 0.215%)
+// K0/K1/K2/base는 함께 절충되어 큰/작은 값으로 수렴 (비율은 자연스러움: K1/K0 ≈ 99)
 // D_dmg는 매우 작은 값으로 수렴 — (1 + 표시뎀합/D_dmg) ≈ 표시뎀합/D_dmg → base와 함께 균형
+// D_pen은 케이스2 관통 페어(98→99 = +0.81%) + 기존 관통 96/98/99 데이터로 학습됨
+//
+// 모델 미반영 효과 (데이터로 무의미함 확인):
+//   - 일몬추/보몬추: 100 변경 시 전투력 변화 -0.0003% (사실상 무시 가능)
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.84899108e+10,      // 주스탯 가중치
-  K1: 1.85509175e+12,      // 공격력 가중치 (K1/K0 ≈ 100.3)
-  K2: 2.17959335e+10,      // 고댐 가중치 (K2/K0 ≈ 1.18)
-  D_crit: 4.12185328e+1,   // 크댐 분모 (≈41.2)
-  D_dmg: 4.85566829e-17,   // (최소뎀+최대뎀) 분모 (수렴값, base와 함께 비율로만 의미)
-  D_dom: 2.21573906e+2,    // 지배력 분모 (≈221.6, 사용자 추정 200과 일치)
-  K_geunma: 9.58439336e-4, // 근마효율 계수 (≈0.000958, 사용자 추정 0.0011과 근사)
-  base: 1.22991247e-34,    // 전체 보정 상수
+  K0: 6.09028437e+0,       // 주스탯 가중치
+  K1: 6.04598442e+2,       // 공격력 가중치 (K1/K0 ≈ 99.3)
+  K2: 5.48535168e+0,       // 고댐 가중치 (K2/K0 ≈ 0.90)
+  D_crit: 1.81655273e+2,   // 크댐 분모 (≈181.7)
+  D_dmg: 1.15858110e-19,   // (최소뎀+최대뎀) 분모 (수렴값, base와 함께 비율로만 의미)
+  D_dom: 2.20614761e+2,    // 지배력 분모 (≈220.6, 사용자 추정 200과 근사)
+  K_geunma: 8.54463929e-4, // 근마효율 계수 (≈0.000854)
+  D_pen: 1.48725167e+2,    // 관통 분모 (≈148.7)
+  base: 2.37964005e-27,    // 전체 보정 상수
 });
 
 // 마법 직업은 데이터 부족으로 임시로 물리 파라미터 사용
@@ -89,12 +95,13 @@ export function calculateBattlePower(stats) {
 
   if (attackBase <= 0) return 0;
 
-  // 곱셈 항들 (크댐, 최소+최대뎀, 지배력, 근마)
+  // 곱셈 항들 (크댐, 최소+최대뎀, 지배력, 근마, 관통)
   const critMultiplier = 1 + Number(stats.크댐 || 0) / params.D_crit;
   const dmgMultiplier = 1 + (minDmg + maxDmg) / params.D_dmg;
   const dominanceMultiplier =
     1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
   const geunmaMultiplier = 1 + Number(stats.근마효율 || 0) * params.K_geunma;
+  const penetrationMultiplier = 1 + Number(stats.관통 || 0) / params.D_pen;
 
   const battlePower =
     attackBase *
@@ -102,6 +109,7 @@ export function calculateBattlePower(stats) {
     dmgMultiplier *
     dominanceMultiplier *
     geunmaMultiplier *
+    penetrationMultiplier *
     params.base;
 
   return Math.round(battlePower);

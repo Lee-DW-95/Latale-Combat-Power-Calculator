@@ -33,14 +33,15 @@ const N_STARTS = Number(args.starts ?? 500);
 const SEED = Number(args.seed ?? 42);
 
 // ============================================================
-// V_BIG 모델 (8 파라미터)
+// V_BIG2 모델 (9 파라미터)
 // 게임 메커니즘: 사용자 도메인 지식 기반
 //   - 근력/공격력/고댐 → attackBase (가산형)
-//   - 크댐, 최소+최대뎀, 지배력, 근마 → 곱셈 항
+//   - 크댐, 최소+최대뎀, 지배력, 근마, 관통 → 곱셈 항
+// 케이스2 관통 페어 (98→99 = +0.81%) 데이터로 D_pen 학습 가능
 // 수련의방 버프로 최소뎀이 최대뎀을 초과하면 cap (calculateBattlePower와 동일 처리)
 // ============================================================
 function modelBig(d, p) {
-  const [K0, K1, K2, Dcrit, Ddmg, Ddom, Kgeunma, base] = p;
+  const [K0, K1, K2, Dcrit, Ddmg, Ddom, Kgeunma, Dpen, base] = p;
   const maxDmg = d.최대뎀;
   const minDmg = Math.min(d.최소뎀, maxDmg);
   const aBase = d.주스탯 * K0 + d.공격력 * K1 + d.고댐 * K2;
@@ -51,6 +52,7 @@ function modelBig(d, p) {
     (1 + (minDmg + maxDmg) / Ddmg) *
     (1 + (d.일몬지 + d.보몬지) / Ddom) *
     (1 + d.근마효율 * Kgeunma) *
+    (1 + d.관통 / Dpen) *
     base
   );
 }
@@ -184,10 +186,10 @@ function mulberry32(seed) {
 // 다중 시작점 최적화
 // ============================================================
 function optimize(dataset, nStarts) {
-  // V_BIG 초기 분포 (log-space)
+  // V_BIG2 초기 분포 (log-space)
   // K0 (주스탯), K1 (공격력), K2 (고댐),
   // D_crit, D_dmg, D_dom,
-  // K_geunma, base
+  // K_geunma, D_pen, base
   const ranges = [
     [0.5, 3],         // K0 (주스탯, 페어 데이터로 ~1.32 추정)
     [80, 200],        // K1 (공격력)
@@ -196,6 +198,7 @@ function optimize(dataset, nStarts) {
     [10, 100000],     // D_dmg (최소+최대뎀 분모, 광범위 탐색)
     [30, 500],        // D_dom (지배력 분모, ~200 추정)
     [0.0001, 0.05],   // K_geunma (~0.0011 추정)
+    [10, 200],        // D_pen (관통 분모, case2 페어로 ~25 추정)
     [1e-7, 1e-3],     // base
   ];
 
@@ -240,7 +243,8 @@ function printReport(label, params, dataset) {
   console.log(`  D_dmg: ${params[4].toExponential(8)},`);
   console.log(`  D_dom: ${params[5].toExponential(8)},`);
   console.log(`  K_geunma: ${params[6].toExponential(8)},`);
-  console.log(`  base: ${params[7].toExponential(8)},`);
+  console.log(`  D_pen: ${params[7].toExponential(8)},`);
+  console.log(`  base: ${params[8].toExponential(8)},`);
   console.log(`});\n`);
 
   let over5 = 0;
