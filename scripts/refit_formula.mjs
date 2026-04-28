@@ -38,12 +38,12 @@ const SEED = Number(args.seed ?? 42);
 //   - 근력/공격력/고댐 → attackBase (가산형)
 //   - 크댐, 최소+최대뎀, 지배력, 근마, 관통 → 곱셈 항
 //
-// D_pen은 case2/case3 페어 데이터(관통 ±1 → ±0.818%) 두 독립 측정에서
-// 일관되게 25.2로 도출되어 고정값으로 사용. 옵티마이저는 1차원 자유도로
-// degenerate solution(D_pen → 0)에 빠지기 쉬워 학습 매개변수에서 제외함.
+// D_pen은 case2/case3/case4 페어 데이터(관통 ±1 → +0.812~0.818%) 세 독립
+// 측정의 평균에서 25.0으로 도출되어 고정값으로 사용. 옵티마이저는 1차원
+// 자유도로 degenerate solution(D_pen → 0)에 빠지기 쉬워 학습 매개변수에서 제외.
 // 수련의방 버프로 최소뎀이 최대뎀을 초과하면 cap (calculateBattlePower와 동일 처리)
 // ============================================================
-const D_PEN_FIXED = 25.2;
+const D_PEN_FIXED = 25.0;
 
 function modelBig(d, p) {
   const [K0, K1, K2, Dcrit, Ddmg, Ddom, Kgeunma, base] = p;
