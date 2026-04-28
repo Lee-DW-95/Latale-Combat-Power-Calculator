@@ -163,7 +163,7 @@ function restoreFromHistory(entry) {
 
       <footer class="pt-4 text-center text-xs text-slate-500 dark:text-slate-400">
         <p>
-          전투력 공식은 47개의 실제 T창 데이터(단일변수 통제 페어 포함)를 회귀분석하여 도출했습니다 · RMSE 0.22%
+          전투력 공식은 49개의 실제 T창 데이터(관통 페어 포함)를 회귀분석하여 도출했습니다 · RMSE 0.73% · 관통 1당 약 +0.81%
         </p>
         <p class="mt-1">
           데이터 부족으로 일부 직업/스탯에서 오차가 있을 수 있습니다. 사용자 데이터 기여로 개선될 예정입니다.
