@@ -8,6 +8,7 @@ import {
   perLineLabelExpected,
   perCardLabelExpected,
   rollOnce,
+  simulateUntilTargetWithLog,
 } from '../utils/memorialSim.js';
 
 // ============================================================
@@ -24,6 +25,10 @@ const result = ref(null);
 
 // 1회 굴림 결과 (참고용)
 const sampleRoll = ref(null);
+
+// 1번 실행 상세 로그 (목표 도달 시뮬 결과에 함께 표시)
+const sampleRunLog = ref(null);
+const showFullLog = ref(false);
 
 // ============================================================
 // 파생
@@ -93,6 +98,7 @@ async function runSimulation() {
   if (!selectedMemorial.value || !selectedLabel.value) return;
 
   isRunning.value = true;
+  showFullLog.value = false;
   await new Promise((r) => setTimeout(r, 30));
 
   try {
@@ -108,10 +114,31 @@ async function runSimulation() {
       target,
       mc
     );
+
+    // 1번의 실행 상세 로그 별도 캡처 (UI 표시용)
+    sampleRunLog.value = simulateUntilTargetWithLog(
+      selectedMemorial.value,
+      selectedLabel.value,
+      target
+    );
   } finally {
     isRunning.value = false;
   }
 }
+
+// 샘플 로그에서 목표 옵션 등장 줄만 추출
+const targetHits = computed(() => {
+  if (!sampleRunLog.value) return [];
+  const hits = [];
+  for (const card of sampleRunLog.value.log) {
+    for (const line of card.lines) {
+      if (line.label === selectedLabel.value) {
+        hits.push({ cardNo: card.cardNo, value: line.value });
+      }
+    }
+  }
+  return hits;
+});
 
 function rollSample() {
   if (!selectedMemorial.value) return;
@@ -356,6 +383,91 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
         <strong>90% 안에</strong> = 90% 사용자가 이 횟수 이내에 도달 (운 나쁜 케이스 대비).
         <br />최단 {{ fmt(result.min) }}회 / 최장 {{ fmt(result.max) }}회 (시뮬 {{ fmt(result.runs) }}회 중).
       </p>
+    </section>
+
+    <!-- 1번 실행 상세 로그 -->
+    <section
+      v-if="sampleRunLog"
+      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+    >
+      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
+        📜 1번 실행 상세 — 총 {{ fmt(sampleRunLog.tries) }}회 굴려서 도달 (누적 {{ sampleRunLog.finalValue }})
+      </h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+        시뮬 통계와는 별도로, <strong>한 번의 실제 진행을 그대로 재현</strong>한 결과입니다.
+        같은 조건이라도 매번 다른 결과가 나옵니다 (위 버튼 다시 누르면 재실행).
+      </p>
+
+      <!-- 목표 옵션 등장 요약 -->
+      <div class="mb-4">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+          🎯 {{ selectedLabel }} 등장 ({{ targetHits.length }}회)
+        </h3>
+        <div v-if="targetHits.length > 0" class="flex flex-wrap gap-2">
+          <span
+            v-for="(hit, i) in targetHits"
+            :key="i"
+            class="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 tabular-nums"
+          >
+            <span class="text-[11px] text-amber-600 dark:text-amber-400">
+              {{ hit.cardNo }}회차
+            </span>
+            <span class="font-bold">+{{ hit.value }}</span>
+          </span>
+        </div>
+        <p v-else class="text-sm text-slate-500 dark:text-slate-400">
+          (이번 실행에서는 {{ selectedLabel }}이(가) 한 번도 등장하지 않았습니다.)
+        </p>
+      </div>
+
+      <!-- 전체 굴림 로그 (펼치기) -->
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-3">
+        <button
+          type="button"
+          @click="showFullLog = !showFullLog"
+          class="flex items-center justify-between w-full text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+        >
+          <span>📋 전체 굴림 로그 ({{ fmt(sampleRunLog.tries) }}장 × 평균 {{ (sampleRunLog.log.reduce((s, c) => s + c.lines.length, 0) / sampleRunLog.tries).toFixed(1) }}줄)</span>
+          <span class="text-xs text-slate-500 dark:text-slate-400">
+            {{ showFullLog ? '접기 ▲' : '펼치기 ▼' }}
+          </span>
+        </button>
+
+        <div v-if="showFullLog" class="mt-3 max-h-96 overflow-y-auto rounded-lg bg-slate-50 dark:bg-slate-900/50 ring-1 ring-slate-200 dark:ring-slate-700 p-3 font-mono text-xs space-y-2">
+          <div
+            v-for="card in sampleRunLog.log"
+            :key="card.cardNo"
+            :class="[
+              'rounded p-2',
+              card.addedThisCard > 0
+                ? 'bg-amber-100 dark:bg-amber-950/40 ring-1 ring-amber-300 dark:ring-amber-700'
+                : 'bg-white dark:bg-slate-800/50',
+            ]"
+          >
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+              [{{ card.cardNo }}회차] · {{ card.lines.length }}줄
+              <span v-if="card.addedThisCard > 0" class="text-amber-600 dark:text-amber-400 font-semibold">
+                · {{ selectedLabel }} +{{ card.addedThisCard }} (누적 {{ card.cumulative }})
+              </span>
+            </div>
+            <ul class="space-y-0.5">
+              <li
+                v-for="(line, j) in card.lines"
+                :key="j"
+                :class="[
+                  'tabular-nums',
+                  line.label === selectedLabel
+                    ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400',
+                ]"
+              >
+                ▶ {{ line.label }} +{{ line.value }}
+                <span v-if="line.label === selectedLabel" class="text-[10px]">★</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 </template>

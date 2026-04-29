@@ -89,6 +89,27 @@ export function simulateUntilTarget(memorial, targetLabel, targetValue, maxTries
   return { tries, finalValue: acc };
 }
 
+/**
+ * 위와 동일하나 모든 카드의 모든 줄을 로그로 반환 (UI 상세 표시용).
+ * @returns {{ tries, finalValue, log }} log: [{ cardNo, lines, cumulative }]
+ */
+export function simulateUntilTargetWithLog(memorial, targetLabel, targetValue, maxTries = 1_000_000) {
+  let acc = 0;
+  let tries = 0;
+  const log = [];
+  while (acc < targetValue && tries < maxTries) {
+    const lines = rollOnce(memorial);
+    tries++;
+    let addedThisCard = 0;
+    for (const line of lines) {
+      if (line.label === targetLabel) addedThisCard += line.value;
+    }
+    acc += addedThisCard;
+    log.push({ cardNo: tries, lines, addedThisCard, cumulative: acc });
+  }
+  return { tries, finalValue: acc, log };
+}
+
 // ============================================================
 // Monte Carlo: N회 반복 → 분포 통계
 // ============================================================
