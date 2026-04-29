@@ -157,7 +157,6 @@ const pctSmart = (p) => {
       카드 간 누적이 아닙니다.
       <br />
       <strong class="text-xs">메커니즘</strong>: 한 카드 = 1~4줄 (세트 평균 2.2줄), 각 줄마다 옵션 풀에서 weight 비율로 선택 → [lo, hi] 정수 균등 분포.
-      확률 데이터: <a href="https://latale.info/80" target="_blank" rel="noopener" class="underline hover:no-underline">latale.info/80</a> JS 코드 정확 포팅.
     </div>
 
     <!-- 입력 -->
