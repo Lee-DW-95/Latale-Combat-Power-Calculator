@@ -45,11 +45,16 @@ const SEED = Number(args.seed ?? 42);
 // ============================================================
 const D_PEN_FIXED = 25.0;
 
+// V_BIG3: K_mon × (일몬추+보몬추) 항 추가
 function modelBig(d, p) {
-  const [K0, K1, K2, Dcrit, Ddmg, Ddom, Kgeunma, base] = p;
+  const [K0, K1, K2, Kmon, Dcrit, Ddmg, Ddom, Kgeunma, base] = p;
   const maxDmg = d.최대뎀;
   const minDmg = Math.min(d.최소뎀, maxDmg);
-  const aBase = d.주스탯 * K0 + d.공격력 * K1 + d.고댐 * K2;
+  const aBase =
+    d.주스탯 * K0 +
+    d.공격력 * K1 +
+    d.고댐 * K2 +
+    ((d.일몬추 || 0) + (d.보몬추 || 0)) * Kmon;
   if (aBase <= 0) return 0;
   return (
     aBase *
@@ -191,17 +196,17 @@ function mulberry32(seed) {
 // 다중 시작점 최적화
 // ============================================================
 function optimize(dataset, nStarts) {
-  // V_BIG2 초기 분포 (log-space)
-  // K0 (주스탯), K1 (공격력), K2 (고댐),
-  // D_crit, D_dmg, D_dom,
-  // K_geunma, base (D_pen은 고정 상수 25.2)
+  // V_BIG3 초기 분포 (log-space)
+  // K0 (주스탯), K1 (공격력), K2 (고댐), K_mon (일몬추+보몬추),
+  // D_crit, D_dmg, D_dom, K_geunma, base (D_pen은 고정 상수 25)
   const ranges = [
-    [0.5, 3],         // K0 (주스탯, 페어 데이터로 ~1.32 추정)
+    [0.5, 3],         // K0 (주스탯)
     [80, 200],        // K1 (공격력)
     [0.01, 5],        // K2 (고댐)
-    [20, 200],        // D_crit (크댐 분모, 작은 값으로 수렴 예상)
+    [0.005, 1.5],     // K_mon (일몬추+보몬추, K2의 ~1/3 추정)
+    [20, 200],        // D_crit (크댐 분모)
     [10, 100000],     // D_dmg (최소+최대뎀 분모, 광범위 탐색)
-    [30, 500],        // D_dom (지배력 분모, ~200 추정)
+    [30, 500],        // D_dom (지배력 분모)
     [0.0001, 0.05],   // K_geunma (~0.0011 추정)
     [1e-7, 1e-3],     // base
   ];
@@ -243,12 +248,13 @@ function printReport(label, params, dataset) {
   console.log(`  K0: ${params[0].toExponential(8)},`);
   console.log(`  K1: ${params[1].toExponential(8)},`);
   console.log(`  K2: ${params[2].toExponential(8)},`);
-  console.log(`  D_crit: ${params[3].toExponential(8)},`);
-  console.log(`  D_dmg: ${params[4].toExponential(8)},`);
-  console.log(`  D_dom: ${params[5].toExponential(8)},`);
-  console.log(`  K_geunma: ${params[6].toExponential(8)},`);
+  console.log(`  K_mon: ${params[3].toExponential(8)},  // V_BIG3 신규 (일몬추+보몬추)`);
+  console.log(`  D_crit: ${params[4].toExponential(8)},`);
+  console.log(`  D_dmg: ${params[5].toExponential(8)},`);
+  console.log(`  D_dom: ${params[6].toExponential(8)},`);
+  console.log(`  K_geunma: ${params[7].toExponential(8)},`);
   console.log(`  D_pen: ${D_PEN_FIXED},  // 고정 상수 (case2/case3 페어 데이터로 도출)`);
-  console.log(`  base: ${params[7].toExponential(8)},`);
+  console.log(`  base: ${params[8].toExponential(8)},`);
   console.log(`});\n`);
 
   let over5 = 0;

@@ -9,16 +9,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const data = JSON.parse(readFileSync(resolve(__dirname, '../SAMPLE_DATA.json'), 'utf-8'));
 
 const PHYSICAL = {
-  K0: 3.11084133e-1, K1: 3.04944138e+1, K2: 2.92501642e-1,
-  D_crit: 4.45313835e+2, D_dmg: 5.18950946e-10, D_dom: 1.93570364e+2,
-  K_geunma: 8.31043452e-4, D_pen: 25.0, base: 1.59521867e-16,
+  K0: 6.17849644e-1, K1: 6.06737270e+1, K2: 5.14088007e-1, K_mon: 1.62343581e-1,
+  D_crit: 2.23769255e+2, D_dmg: 1.45252219e-15, D_dom: 1.90955624e+2,
+  K_geunma: 9.99235770e-4, D_pen: 25.0, base: 1.10927917e-22,
 };
-const MAGIC = { ...PHYSICAL, K1: 3.09868000e+1 };
+const MAGIC = { ...PHYSICAL, K1: 6.12638000e+1 };
 
 function predict(d, p) {
   const maxDmg = d.최대뎀;
   const minDmg = Math.min(d.최소뎀, maxDmg);
-  const aBase = d.주스탯 * p.K0 + d.공격력 * p.K1 + d.고댐 * p.K2;
+  const aBase =
+    d.주스탯 * p.K0 +
+    d.공격력 * p.K1 +
+    d.고댐 * p.K2 +
+    ((d.일몬추 || 0) + (d.보몬추 || 0)) * (p.K_mon || 0);
   if (aBase <= 0) return 0;
   return aBase
     * (1 + d.크댐 / p.D_crit)
