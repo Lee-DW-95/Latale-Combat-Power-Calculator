@@ -9,11 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const data = JSON.parse(readFileSync(resolve(__dirname, '../SAMPLE_DATA.json'), 'utf-8'));
 
 const PHYSICAL = {
-  K0: 6.17849644e-1, K1: 6.06737270e+1, K2: 5.14088007e-1, K_mon: 1.62343581e-1,
-  D_crit: 2.23769255e+2, D_dmg: 1.45252219e-15, D_dom: 1.90955624e+2,
-  K_geunma: 9.99235770e-4, D_pen: 25.0, base: 1.10927917e-22,
+  K0: 1.48838356e+0, K1: 1.46221296e+2, K2: 1.28057007e+0, K_mon: 4.04390549e-1,
+  D_crit: 2.26209973e+2, D_dmg: 1.94551489e-34, D_dom: 1.88920615e+2,
+  K_geunma: 1.01531112e-3, D_pen: 25.0, base: 6.18437351e-42,
 };
-const MAGIC = { ...PHYSICAL, K1: 6.12638000e+1 };
+const MAGIC = { ...PHYSICAL, K1: 1.47548700e+2 };
 
 function predict(d, p) {
   const maxDmg = d.최대뎀;

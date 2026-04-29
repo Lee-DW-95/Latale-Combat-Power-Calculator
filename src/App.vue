@@ -109,7 +109,7 @@ function restoreFromHistory(entry) {
       <div
         class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
       >
-        <strong>ℹ️ 모델 정확도</strong> · 56건의 실측 T창 데이터 회귀분석 기반
+        <strong>ℹ️ 모델 정확도</strong> · 57건의 실측 T창 데이터 회귀분석 기반
         (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
         사용자 데이터 누적으로 지속 개선 중.
       </div>
