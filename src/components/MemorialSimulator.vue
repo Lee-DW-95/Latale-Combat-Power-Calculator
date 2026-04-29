@@ -2,14 +2,13 @@
 import { computed, ref } from 'vue';
 import { ALL_MEMORIALS, uniqueLabels } from '../data/memorialProbabilities.js';
 import {
-  runMonteCarlo,
+  computeStatistics,
   formatResult,
   perLineLabelProb,
   perLineLabelExpected,
   perCardLabelExpected,
   rollOnce,
   simulateUntilSingleCardReaches,
-  estimateSingleCardSuccessRate,
   maxPossibleSingleCard,
 } from '../utils/memorialSim.js';
 
@@ -17,7 +16,6 @@ const memorialKeys = Object.keys(ALL_MEMORIALS);
 const selectedMemorialKey = ref('CHOENPAM_SET');
 const selectedLabel = ref('');
 const targetValue = ref('');
-const runs = ref(10000);
 
 const isRunning = ref(false);
 const result = ref(null);
@@ -96,28 +94,20 @@ async function runSimulation() {
   await new Promise((r) => setTimeout(r, 30));
 
   try {
-    const mc = runMonteCarlo(
+    // 해석적 통계 계산 (기하분포 기반) — 빠른 p 추정 + 닫힌 수식
+    const stats = computeStatistics(
       selectedMemorial.value,
       selectedLabel.value,
-      target,
-      Number(runs.value) || 10000
-    );
-    // 단일 카드 성공률 추정 (이론치 산출)
-    const successRate = estimateSingleCardSuccessRate(
-      selectedMemorial.value,
-      selectedLabel.value,
-      target,
-      100_000
+      target
     );
     result.value = formatResult(
       selectedMemorial.value,
       selectedLabel.value,
       target,
-      mc,
-      successRate
+      stats
     );
 
-    // 1번 시도의 성공한 카드 캡처
+    // 1번 시도의 성공 카드 캡처 (예시 표시용)
     const sample = simulateUntilSingleCardReaches(
       selectedMemorial.value,
       selectedLabel.value,
@@ -215,19 +205,6 @@ const pctSmart = (p) => {
           </span>
         </label>
 
-        <label class="block">
-          <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            반복 횟수 (Monte Carlo)
-          </span>
-          <select
-            v-model="runs"
-            class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option :value="1000">1,000회 (빠름)</option>
-            <option :value="10000">10,000회 (권장)</option>
-            <option :value="50000">50,000회 (정밀, 느림)</option>
-          </select>
-        </label>
       </div>
 
       <div class="mt-4 flex flex-wrap gap-2">
@@ -357,7 +334,7 @@ const pctSmart = (p) => {
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
         한 카드 안에서 <strong class="text-indigo-600 dark:text-indigo-400">{{ selectedLabel }} 합 ≥ {{ result.target }}</strong>인 카드를 만나기까지 평균
         <strong>{{ fmt(result.mean) }}회</strong> 굴려야 합니다.
-        (단일 카드 성공률: <strong>{{ pctSmart(result.successRate) }}</strong> · 이론치: {{ fmt(result.theoretical) }}회)
+        (단일 카드 성공률: <strong>{{ pctSmart(result.successRate) }}</strong>)
       </p>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -390,7 +367,7 @@ const pctSmart = (p) => {
       <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
         💡 <strong>50% 안에</strong> = 절반의 사용자가 이 횟수 이내에 도달.
         <strong>90% 안에</strong> = 90% 사용자가 이 횟수 이내에 도달 (운 나쁜 케이스 대비).
-        <br />최단 {{ fmt(result.min) }}회 / 최장 {{ fmt(result.max) }}회 (시뮬 {{ fmt(result.runs) }}회 중<span v-if="result.failureCount > 0">, 실패 {{ fmt(result.failureCount) }}건</span>).
+        <br />최단 1회 가능 (성공률 {{ pctSmart(result.successRate) }}) · 매우 운 나쁜 0.1% 케이스: {{ fmt(result.p999) }}회.
       </p>
     </section>
 

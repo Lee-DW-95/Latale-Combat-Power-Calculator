@@ -66,8 +66,10 @@ function cardSumOf(lines, targetLabel) {
 
 // ============================================================
 // 1번 시도: 한 카드에서 목표 합 ≥ targetValue 인 카드를 만날 때까지
+// 응답시간 보장 위해 maxTries=100K로 cap (~100ms).
+// 못 찾으면 success=false 로 반환 (매우 희박한 목표 케이스).
 // ============================================================
-export function simulateUntilSingleCardReaches(memorial, targetLabel, targetValue, maxTries = 10_000_000) {
+export function simulateUntilSingleCardReaches(memorial, targetLabel, targetValue, maxTries = 100_000) {
   let tries = 0;
   while (tries < maxTries) {
     const lines = rollOnce(memorial);
@@ -81,50 +83,74 @@ export function simulateUntilSingleCardReaches(memorial, targetLabel, targetValu
 }
 
 // ============================================================
-// Monte Carlo
+// 단일 카드 성공 확률 추정 (빠른 표본 추출)
+//
+// 1차 200K 샘플 → 약 100ms.
+// success가 너무 적게 잡히면(< 30) 1M까지 확장 (~500ms 한계).
+// 그래도 부족하면 추정 한계로 인정하고 반환 (매우 희박한 케이스).
 // ============================================================
-export function runMonteCarlo(memorial, targetLabel, targetValue, runs = 10000) {
-  if (targetValue <= 0) {
-    return { runs: 0, mean: 0, p50: 0, p90: 0, p99: 0, min: 0, max: 0, failureCount: 0 };
-  }
+export function estimateSingleCardSuccessRate(memorial, targetLabel, targetValue) {
+  const PHASE1 = 200_000;
+  const PHASE2 = 1_000_000;
 
-  const samples = new Array(runs);
-  let sum = 0;
-  let failureCount = 0;
-  for (let i = 0; i < runs; i++) {
-    const r = simulateUntilSingleCardReaches(memorial, targetLabel, targetValue);
-    samples[i] = r.tries;
-    sum += r.tries;
-    if (!r.success) failureCount++;
-  }
-  samples.sort((a, b) => a - b);
-
-  const pct = (p) => samples[Math.min(runs - 1, Math.floor(runs * p))];
-
-  return {
-    runs,
-    mean: sum / runs,
-    p25: pct(0.25),
-    p50: pct(0.50),
-    p75: pct(0.75),
-    p90: pct(0.90),
-    p99: pct(0.99),
-    min: samples[0],
-    max: samples[runs - 1],
-    failureCount,
-  };
-}
-
-// ============================================================
-// 단일 카드 성공 확률을 빠르게 추정 (UI 정보용)
-// ============================================================
-export function estimateSingleCardSuccessRate(memorial, targetLabel, targetValue, samples = 100_000) {
   let success = 0;
-  for (let i = 0; i < samples; i++) {
+  for (let i = 0; i < PHASE1; i++) {
     const lines = rollOnce(memorial);
     if (cardSumOf(lines, targetLabel) >= targetValue) success++;
   }
-  return success / samples;
+
+  if (success < 30) {
+    const extra = PHASE2 - PHASE1;
+    let extraSuccess = 0;
+    for (let i = 0; i < extra; i++) {
+      const lines = rollOnce(memorial);
+      if (cardSumOf(lines, targetLabel) >= targetValue) extraSuccess++;
+    }
+    return (success + extraSuccess) / PHASE2;
+  }
+  return success / PHASE1;
+}
+
+// ============================================================
+// 기하분포 기반 해석적 통계 계산
+//
+// 각 카드 시도가 독립이고 단일 카드 성공 확률 p가 일정하면
+// "첫 성공까지 시도 횟수 X"는 기하분포(Geometric)를 따른다.
+//   E[X] = 1/p
+//   P(X ≤ k) = 1 - (1-p)^k
+//   분위수 k_q = ⌈ln(1-q) / ln(1-p)⌉
+//
+// Monte Carlo 10,000 × ~수천 카드 = 수천만 roll 을 우회.
+// p 추정만 수행 → 모든 통계는 닫힌 수식으로 즉시 산출.
+// ============================================================
+export function computeStatistics(memorial, targetLabel, targetValue) {
+  if (targetValue <= 0) {
+    return { successRate: 0, mean: 0, p25: 0, p50: 0, p75: 0, p90: 0, p99: 0, p999: 0 };
+  }
+
+  const p = estimateSingleCardSuccessRate(memorial, targetLabel, targetValue);
+
+  if (p <= 0) {
+    return {
+      successRate: 0,
+      mean: Infinity,
+      p25: Infinity, p50: Infinity, p75: Infinity, p90: Infinity, p99: Infinity, p999: Infinity,
+    };
+  }
+
+  const log1mp = Math.log(1 - p);
+  const quantile = (q) => Math.ceil(Math.log(1 - q) / log1mp);
+
+  return {
+    successRate: p,
+    mean: 1 / p,
+    p25: quantile(0.25),
+    p50: quantile(0.50),
+    p75: quantile(0.75),
+    p90: quantile(0.90),
+    p99: quantile(0.99),
+    p999: quantile(0.999),
+  };
 }
 
 // ============================================================
@@ -172,19 +198,15 @@ export function maxPossibleSingleCard(memorial, label) {
 // ============================================================
 // 결과 포맷
 // ============================================================
-export function formatResult(memorial, targetLabel, targetValue, mc, successRate) {
-  const theoretical = successRate > 0 ? 1 / successRate : Infinity;
+export function formatResult(memorial, targetLabel, targetValue, stats) {
+  const round1 = (n) => Number.isFinite(n) ? Math.round(n * 10) / 10 : Infinity;
   return {
     target: targetValue,
-    runs: mc.runs,
-    mean: Math.round(mc.mean * 10) / 10,
-    p50: mc.p50,
-    p90: mc.p90,
-    p99: mc.p99,
-    min: mc.min,
-    max: mc.max,
-    failureCount: mc.failureCount,
-    theoretical: Number.isFinite(theoretical) ? Math.round(theoretical) : Infinity,
-    successRate, // 0~1
+    successRate: stats.successRate,
+    mean: round1(stats.mean),
+    p50: stats.p50,
+    p90: stats.p90,
+    p99: stats.p99,
+    p999: stats.p999,
   };
 }
