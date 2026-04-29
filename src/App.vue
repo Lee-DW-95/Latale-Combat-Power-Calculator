@@ -121,7 +121,7 @@ function restoreFromHistory(entry) {
           <EfficiencyPanel :stats="stats" />
 
           <EquipmentCompare
-            v-model:stats="stats"
+            :stats="stats"
             v-model:slot="slot"
             v-model:old-equip="oldEquip"
             v-model:new-equip="newEquip"

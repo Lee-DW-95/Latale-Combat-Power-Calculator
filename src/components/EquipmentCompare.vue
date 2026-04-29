@@ -1,7 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { getStatLabel, pctPool } from '../utils/battlePower.js';
-import { EQUIP_ROW_DEFS, BASE_FIELD_DEFS, EQUIP_SLOTS } from '../data/statLabels.js';
+import { EQUIP_ROW_DEFS, EQUIP_SLOTS } from '../data/statLabels.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -10,20 +10,13 @@ const props = defineProps({
   newEquip: { type: Object, required: true },
 });
 const emit = defineEmits([
-  'update:stats',
   'update:slot',
   'update:oldEquip',
   'update:newEquip',
   'reset',
 ]);
 
-const showBase = ref(false);
 const type = computed(() => props.stats?.type || 'P');
-
-function setBase(key, raw) {
-  const num = raw === '' || raw === null ? 0 : Number(raw);
-  emit('update:stats', { ...props.stats, [key]: Number.isFinite(num) ? num : 0 });
-}
 
 function setOld(key, raw) {
   if (!key) return;
@@ -180,41 +173,5 @@ function formatPct(p) {
       </table>
     </div>
 
-    <!-- 기본값 (% 환산용) -->
-    <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
-      <button
-        type="button"
-        @click="showBase = !showBase"
-        class="flex items-center justify-between w-full text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
-      >
-        <span>📐 % 옵션 환산용 기본 스탯 (T창 추가 세부정보)</span>
-        <span class="text-xs text-slate-500 dark:text-slate-400">
-          {{ showBase ? '접기 ▲' : '펼치기 ▼' }}
-        </span>
-      </button>
-
-      <div v-if="showBase" class="mt-3">
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-          T창 <strong>추가 세부정보</strong> 패널의 우측 +값(녹색 숫자)을 입력하세요.
-          <br />예: "근력 +1,118,069 (506%)" → 기본 근력 = <strong>1,118,069</strong> ·
-          "크리티컬 데미지 +6,595 (46%)" → 기본 크댐 = <strong>6,595</strong>
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <label v-for="def in BASE_FIELD_DEFS" :key="def.key" class="block">
-            <span class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-              {{ def.label }}
-            </span>
-            <input
-              type="number"
-              :step="def.step"
-              :value="stats[def.key]"
-              @input="setBase(def.key, $event.target.value)"
-              :title="def.tooltip"
-              class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
-            />
-          </label>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
