@@ -28,3 +28,7 @@ coverage
 .env
 .env.local
 .env.*.local
+
+# Tooling artifacts
+.playwright-mcp/
+/latale-info-*.png
