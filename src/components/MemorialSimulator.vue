@@ -8,12 +8,11 @@ import {
   perLineLabelExpected,
   perCardLabelExpected,
   rollOnce,
-  simulateUntilTargetWithLog,
+  simulateUntilSingleCardReaches,
+  estimateSingleCardSuccessRate,
+  maxPossibleSingleCard,
 } from '../utils/memorialSim.js';
 
-// ============================================================
-// 상태
-// ============================================================
 const memorialKeys = Object.keys(ALL_MEMORIALS);
 const selectedMemorialKey = ref('CHOENPAM_SET');
 const selectedLabel = ref('');
@@ -23,16 +22,9 @@ const runs = ref(10000);
 const isRunning = ref(false);
 const result = ref(null);
 
-// 1회 굴림 결과 (참고용)
 const sampleRoll = ref(null);
+const sampleWinningCard = ref(null); // 시뮬에서 성공한 카드 정보
 
-// 1번 실행 상세 로그 (목표 도달 시뮬 결과에 함께 표시)
-const sampleRunLog = ref(null);
-const showFullLog = ref(false);
-
-// ============================================================
-// 파생
-// ============================================================
 const selectedMemorial = computed(() => ALL_MEMORIALS[selectedMemorialKey.value]);
 
 const availableLabels = computed(() =>
@@ -46,34 +38,31 @@ function onMemorialChange() {
     : labels[0] || '';
   result.value = null;
   sampleRoll.value = null;
+  sampleWinningCard.value = null;
 }
 
 if (availableLabels.value.length > 0 && !selectedLabel.value) {
   selectedLabel.value = availableLabels.value[0];
 }
 
-// ============================================================
-// 라벨 통계 (UI용)
-// ============================================================
 const labelStats = computed(() => {
   const m = selectedMemorial.value;
   if (!m || !selectedLabel.value) return null;
   const probPerLine = perLineLabelProb(m, selectedLabel.value);
   const expectedPerLine = perLineLabelExpected(m, selectedLabel.value);
   const expectedPerCard = perCardLabelExpected(m, selectedLabel.value);
-  // 평균 줄 수
   const avgLines = Object.entries(m.qdist)
     .reduce((s, [k, p]) => s + Number(k) * p, 0);
+  const maxSingleCard = maxPossibleSingleCard(m, selectedLabel.value);
   return {
     probPerLine,
     expectedPerLine,
     expectedPerCard,
     avgLines,
-    qdistEntries: Object.entries(m.qdist).map(([k, p]) => ({ k: Number(k), p })),
+    maxSingleCard,
   };
 });
 
-// 같은 라벨의 모든 tier (UI 표시)
 const labelTiers = computed(() => {
   const m = selectedMemorial.value;
   if (!m || !selectedLabel.value) return [];
@@ -89,16 +78,21 @@ const labelTiers = computed(() => {
     }));
 });
 
-// ============================================================
-// 액션
-// ============================================================
+// 목표값이 가능한지 체크 (불가능하면 사용자에게 안내)
+const targetFeasible = computed(() => {
+  if (!labelStats.value || !targetValue.value) return null;
+  const t = Number(targetValue.value);
+  if (!Number.isFinite(t) || t <= 0) return null;
+  return t <= labelStats.value.maxSingleCard;
+});
+
 async function runSimulation() {
   const target = Number(targetValue.value);
   if (!Number.isFinite(target) || target <= 0) return;
   if (!selectedMemorial.value || !selectedLabel.value) return;
+  if (targetFeasible.value === false) return;
 
   isRunning.value = true;
-  showFullLog.value = false;
   await new Promise((r) => setTimeout(r, 30));
 
   try {
@@ -108,55 +102,61 @@ async function runSimulation() {
       target,
       Number(runs.value) || 10000
     );
+    // 단일 카드 성공률 추정 (이론치 산출)
+    const successRate = estimateSingleCardSuccessRate(
+      selectedMemorial.value,
+      selectedLabel.value,
+      target,
+      100_000
+    );
     result.value = formatResult(
       selectedMemorial.value,
       selectedLabel.value,
       target,
-      mc
+      mc,
+      successRate
     );
 
-    // 1번의 실행 상세 로그 별도 캡처 (UI 표시용)
-    sampleRunLog.value = simulateUntilTargetWithLog(
+    // 1번 시도의 성공한 카드 캡처
+    const sample = simulateUntilSingleCardReaches(
       selectedMemorial.value,
       selectedLabel.value,
       target
     );
+    sampleWinningCard.value = sample;
   } finally {
     isRunning.value = false;
   }
 }
-
-// 샘플 로그에서 목표 옵션 등장 줄만 추출
-const targetHits = computed(() => {
-  if (!sampleRunLog.value) return [];
-  const hits = [];
-  for (const card of sampleRunLog.value.log) {
-    for (const line of card.lines) {
-      if (line.label === selectedLabel.value) {
-        hits.push({ cardNo: card.cardNo, value: line.value });
-      }
-    }
-  }
-  return hits;
-});
 
 function rollSample() {
   if (!selectedMemorial.value) return;
   sampleRoll.value = rollOnce(selectedMemorial.value);
 }
 
-const fmt = (n) => Number(n).toLocaleString('ko-KR');
+const fmt = (n) => {
+  if (!Number.isFinite(Number(n))) return '∞';
+  return Number(n).toLocaleString('ko-KR');
+};
 const pct = (p) => (p * 100).toFixed(3) + '%';
+const pctSmart = (p) => {
+  if (p >= 0.01) return (p * 100).toFixed(2) + '%';
+  if (p >= 0.0001) return (p * 100).toFixed(4) + '%';
+  return (p * 100).toExponential(2) + '%';
+};
 </script>
 
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
     <div class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
-      <strong>🎲 메모리얼 시뮬레이터</strong> · 원하는 옵션을 누적해서 목표값에 도달하기까지
-      <strong>몇 회 굴려야 하는지</strong>를 Monte Carlo 시뮬로 분석합니다.
+      <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 목표 옵션의 줄 값 합이 목표값 이상인 카드를 만나기까지
+      <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
       <br />
-      <strong class="text-xs">메커니즘</strong>: 한 카드 = 1~4줄 (세트 평균 2.2줄), 각 줄마다 옵션 풀에서 weight 비율로 선택 → [lo, hi] 범위 정수 균등 분포.
+      예: 목표 "최종 크리 6%" → 한 카드에서 [최종크 +3, 최종크 +3] 같이 합이 6 이상인 카드를 굴려서 만나야 함.
+      카드 간 누적이 아닙니다.
+      <br />
+      <strong class="text-xs">메커니즘</strong>: 한 카드 = 1~4줄 (세트 평균 2.2줄), 각 줄마다 옵션 풀에서 weight 비율로 선택 → [lo, hi] 정수 균등 분포.
       확률 데이터: <a href="https://latale.info/80" target="_blank" rel="noopener" class="underline hover:no-underline">latale.info/80</a> JS 코드 정확 포팅.
     </div>
 
@@ -196,15 +196,24 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
 
         <label class="block">
           <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            목표 누적값 (이 값 이상 누적 시 종료)
+            목표 합 (한 카드에서 ≥ 이 값)
+            <span v-if="labelStats" class="text-xs font-normal text-slate-400">
+              · 최대 가능: {{ labelStats.maxSingleCard }}
+            </span>
           </span>
           <input
             v-model="targetValue"
             type="number"
             step="any"
-            placeholder="예: 6 (= 6% 누적)"
+            placeholder="예: 6 (= 6% 한 카드)"
             class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
           />
+          <span
+            v-if="targetFeasible === false"
+            class="block mt-1 text-xs text-rose-600 dark:text-rose-400"
+          >
+            ⚠ 이 옵션의 단일 카드 최대 합({{ labelStats?.maxSingleCard }})을 초과해서 도달 불가능
+          </span>
         </label>
 
         <label class="block">
@@ -217,7 +226,7 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
           >
             <option :value="1000">1,000회 (빠름)</option>
             <option :value="10000">10,000회 (권장)</option>
-            <option :value="50000">50,000회 (정밀)</option>
+            <option :value="50000">50,000회 (정밀, 느림)</option>
           </select>
         </label>
       </div>
@@ -226,7 +235,7 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
         <button
           type="button"
           @click="runSimulation"
-          :disabled="isRunning || !targetValue || Number(targetValue) <= 0"
+          :disabled="isRunning || !targetValue || Number(targetValue) <= 0 || targetFeasible === false"
           class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
         >
           {{ isRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
@@ -241,7 +250,7 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
       </div>
     </section>
 
-    <!-- 1회 굴림 결과 -->
+    <!-- 1회 굴림 -->
     <section
       v-if="sampleRoll"
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
@@ -263,9 +272,6 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
           ▶ {{ line.label }} +{{ line.value }}
         </li>
       </ul>
-      <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-        💡 <strong>{{ selectedLabel }}</strong> 옵션은 노란 강조로 표시. 한 카드 = 1~4줄 (세트 메모리얼 평균 2.2줄).
-      </p>
     </section>
 
     <!-- 라벨 분포 / Tier 표 -->
@@ -277,7 +283,7 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
         📊 {{ selectedLabel }} 분포 정보
       </h2>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
           <div class="text-xs text-slate-500 dark:text-slate-400">한 줄당 등장 확률</div>
           <div class="text-xl font-bold text-slate-800 dark:text-slate-100 tabular-nums">
@@ -290,18 +296,22 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
             +{{ labelStats.expectedPerLine.toFixed(3) }}
           </div>
         </div>
-        <div class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 p-3 ring-1 ring-indigo-200 dark:ring-indigo-800">
-          <div class="text-xs text-indigo-600 dark:text-indigo-300">
-            한 카드당 기대값 (평균 {{ labelStats.avgLines.toFixed(1) }}줄)
-          </div>
-          <div class="text-xl font-bold text-indigo-700 dark:text-indigo-200 tabular-nums">
+        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+          <div class="text-xs text-slate-500 dark:text-slate-400">한 카드당 기대값</div>
+          <div class="text-xl font-bold text-slate-800 dark:text-slate-100 tabular-nums">
             +{{ labelStats.expectedPerCard.toFixed(3) }}
+          </div>
+        </div>
+        <div class="rounded-lg bg-rose-50 dark:bg-rose-950/40 p-3 ring-1 ring-rose-200 dark:ring-rose-800">
+          <div class="text-xs text-rose-600 dark:text-rose-300">단일 카드 최대 가능</div>
+          <div class="text-xl font-bold text-rose-700 dark:text-rose-200 tabular-nums">
+            +{{ labelStats.maxSingleCard }}
           </div>
         </div>
       </div>
 
       <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
-        Tier 구성 (선택된 라벨)
+        Tier 구성
       </h3>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -343,12 +353,12 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
     >
       <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        🎯 시뮬 결과
+        🎯 시뮬 결과 (단일 카드 합 도달)
       </h2>
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-        <strong class="text-indigo-600 dark:text-indigo-400">{{ selectedLabel }}</strong> 누적 +{{ result.target }} 도달까지 평균
+        한 카드 안에서 <strong class="text-indigo-600 dark:text-indigo-400">{{ selectedLabel }} 합 ≥ {{ result.target }}</strong>인 카드를 만나기까지 평균
         <strong>{{ fmt(result.mean) }}회</strong> 굴려야 합니다.
-        (이론치: {{ fmt(result.theoretical) }}회 — 카드당 평균 +{{ result.expectedPerCard }} 누적)
+        (단일 카드 성공률: <strong>{{ pctSmart(result.successRate) }}</strong> · 이론치: {{ fmt(result.theoretical) }}회)
       </p>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -381,92 +391,50 @@ const pct = (p) => (p * 100).toFixed(3) + '%';
       <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
         💡 <strong>50% 안에</strong> = 절반의 사용자가 이 횟수 이내에 도달.
         <strong>90% 안에</strong> = 90% 사용자가 이 횟수 이내에 도달 (운 나쁜 케이스 대비).
-        <br />최단 {{ fmt(result.min) }}회 / 최장 {{ fmt(result.max) }}회 (시뮬 {{ fmt(result.runs) }}회 중).
+        <br />최단 {{ fmt(result.min) }}회 / 최장 {{ fmt(result.max) }}회 (시뮬 {{ fmt(result.runs) }}회 중<span v-if="result.failureCount > 0">, 실패 {{ fmt(result.failureCount) }}건</span>).
       </p>
     </section>
 
-    <!-- 1번 실행 상세 로그 -->
+    <!-- 1번 시도의 성공한 카드 -->
     <section
-      v-if="sampleRunLog"
+      v-if="sampleWinningCard"
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
     >
       <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        📜 1번 실행 상세 — 총 {{ fmt(sampleRunLog.tries) }}회 굴려서 도달 (누적 {{ sampleRunLog.finalValue }})
+        🎉 1번 실행의 성공 카드 — {{ fmt(sampleWinningCard.tries) }}회차
       </h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-        시뮬 통계와는 별도로, <strong>한 번의 실제 진행을 그대로 재현</strong>한 결과입니다.
-        같은 조건이라도 매번 다른 결과가 나옵니다 (위 버튼 다시 누르면 재실행).
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        시뮬 통계와는 별도로, 한 번의 실제 진행을 그대로 재현한 결과입니다.
+        같은 조건이라도 매번 다른 회차가 나옵니다 (위 버튼 다시 누르면 재실행).
       </p>
 
-      <!-- 목표 옵션 등장 요약 -->
-      <div class="mb-4">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
-          🎯 {{ selectedLabel }} 등장 ({{ targetHits.length }}회)
-        </h3>
-        <div v-if="targetHits.length > 0" class="flex flex-wrap gap-2">
-          <span
-            v-for="(hit, i) in targetHits"
-            :key="i"
-            class="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 tabular-nums"
-          >
-            <span class="text-[11px] text-amber-600 dark:text-amber-400">
-              {{ hit.cardNo }}회차
-            </span>
-            <span class="font-bold">+{{ hit.value }}</span>
-          </span>
+      <div v-if="sampleWinningCard.success" class="space-y-3">
+        <div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 p-3">
+          <div class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
+            성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄, {{ selectedLabel }} 합 +{{ sampleWinningCard.cardSum }})
+          </div>
+          <ul class="space-y-1 font-mono text-xs">
+            <li
+              v-for="(line, i) in sampleWinningCard.winningLines"
+              :key="i"
+              :class="[
+                'tabular-nums',
+                line.label === selectedLabel
+                  ? 'text-amber-700 dark:text-amber-300 font-bold'
+                  : 'text-slate-600 dark:text-slate-400',
+              ]"
+            >
+              ▶ {{ line.label }} +{{ line.value }}
+              <span v-if="line.label === selectedLabel" class="text-[10px]">★</span>
+            </li>
+          </ul>
         </div>
-        <p v-else class="text-sm text-slate-500 dark:text-slate-400">
-          (이번 실행에서는 {{ selectedLabel }}이(가) 한 번도 등장하지 않았습니다.)
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          앞선 {{ fmt(sampleWinningCard.tries - 1) }}장의 카드는 모두 목표 미달. {{ fmt(sampleWinningCard.tries) }}회차에 위 카드 등장.
         </p>
       </div>
-
-      <!-- 전체 굴림 로그 (펼치기) -->
-      <div class="border-t border-slate-200 dark:border-slate-700 pt-3">
-        <button
-          type="button"
-          @click="showFullLog = !showFullLog"
-          class="flex items-center justify-between w-full text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
-        >
-          <span>📋 전체 굴림 로그 ({{ fmt(sampleRunLog.tries) }}장 × 평균 {{ (sampleRunLog.log.reduce((s, c) => s + c.lines.length, 0) / sampleRunLog.tries).toFixed(1) }}줄)</span>
-          <span class="text-xs text-slate-500 dark:text-slate-400">
-            {{ showFullLog ? '접기 ▲' : '펼치기 ▼' }}
-          </span>
-        </button>
-
-        <div v-if="showFullLog" class="mt-3 max-h-96 overflow-y-auto rounded-lg bg-slate-50 dark:bg-slate-900/50 ring-1 ring-slate-200 dark:ring-slate-700 p-3 font-mono text-xs space-y-2">
-          <div
-            v-for="card in sampleRunLog.log"
-            :key="card.cardNo"
-            :class="[
-              'rounded p-2',
-              card.addedThisCard > 0
-                ? 'bg-amber-100 dark:bg-amber-950/40 ring-1 ring-amber-300 dark:ring-amber-700'
-                : 'bg-white dark:bg-slate-800/50',
-            ]"
-          >
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">
-              [{{ card.cardNo }}회차] · {{ card.lines.length }}줄
-              <span v-if="card.addedThisCard > 0" class="text-amber-600 dark:text-amber-400 font-semibold">
-                · {{ selectedLabel }} +{{ card.addedThisCard }} (누적 {{ card.cumulative }})
-              </span>
-            </div>
-            <ul class="space-y-0.5">
-              <li
-                v-for="(line, j) in card.lines"
-                :key="j"
-                :class="[
-                  'tabular-nums',
-                  line.label === selectedLabel
-                    ? 'text-amber-700 dark:text-amber-300 font-semibold'
-                    : 'text-slate-600 dark:text-slate-400',
-                ]"
-              >
-                ▶ {{ line.label }} +{{ line.value }}
-                <span v-if="line.label === selectedLabel" class="text-[10px]">★</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div v-else class="text-sm text-rose-600 dark:text-rose-400">
+        ⚠ {{ fmt(sampleWinningCard.tries) }}회 굴렸지만 도달 실패 (maxTries 한도 초과).
       </div>
     </section>
   </div>

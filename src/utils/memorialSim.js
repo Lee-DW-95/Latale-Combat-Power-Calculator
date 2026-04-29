@@ -3,16 +3,14 @@
  *
  * 한 번 굴림 = 1 카드:
  *   1) Qdist 분포로 줄 수 K 결정 (1~4)
- *   2) K개의 줄 각각에 대해:
- *      - 모든 tier weight 합으로 정규화 → cumulative weight로 tier 선택
- *      - 선택된 tier의 [lo, hi] 안에서 정수 균등 분포로 값 결정
- *   3) 한 카드의 결과 = K개의 (label, value) 쌍
+ *   2) K개의 줄 각각에 대해 weight 정규화 후 tier 선택
+ *   3) 선택된 tier의 [lo, hi] 안에서 정수 균등 분포로 값 결정
  *
- * 사용자 시뮬:
- *   - 목표 옵션 라벨 + 목표 누적값 지정
- *   - 카드를 굴려가며 해당 라벨이 등장하면 값을 누적
- *   - 누적이 목표값에 도달하면 시도 종료
- *   - Monte Carlo로 N회 반복 → 분포 통계
+ * 시뮬 모드 (사용자 의도): 단일 카드 합 도달
+ *   - 한 카드에서 목표 옵션 줄들의 값 합이 목표 ≥ 일 때 성공
+ *   - 즉 동일 카드 안에서 같은 옵션이 여러 줄로 떴을 때만 누적
+ *   - 카드 간 누적 X (각 카드는 독립 시도)
+ *   - Monte Carlo: 평균 몇 회 굴려야 그런 카드를 만나는지
  */
 
 // ============================================================
@@ -29,15 +27,10 @@ function pickByQdist(qdist) {
     acc += qdist[k];
     if (r <= acc) return Number(k);
   }
-  // fallback: 마지막 키
   const keys = Object.keys(qdist);
   return Number(keys[keys.length - 1]);
 }
 
-/**
- * 모든 tier weight 합을 정규화해서 하나 선택.
- * latale.info 의 pickTierSet 그대로 포팅.
- */
 function pickTierByWeight(tiers) {
   const sumW = tiers.reduce((s, t) => s + t[2], 0);
   const r = Math.random() * sumW;
@@ -50,8 +43,7 @@ function pickTierByWeight(tiers) {
 }
 
 // ============================================================
-// 한 카드 1회 굴리기
-// returns: [{ label, value }, ...]
+// 한 카드 1회 굴리기 — [{ label, value }, ...]
 // ============================================================
 export function rollOnce(memorial) {
   const k = pickByQdist(memorial.qdist);
@@ -64,10 +56,7 @@ export function rollOnce(memorial) {
   return lines;
 }
 
-/**
- * 카드 1회 굴림 결과에서 특정 라벨의 값 합 추출.
- */
-function extractTargetValue(lines, targetLabel) {
+function cardSumOf(lines, targetLabel) {
   let sum = 0;
   for (const line of lines) {
     if (line.label === targetLabel) sum += line.value;
@@ -76,54 +65,37 @@ function extractTargetValue(lines, targetLabel) {
 }
 
 // ============================================================
-// 1번의 시도: 목표 라벨이 누적 targetValue 이상 도달까지 굴림
+// 1번 시도: 한 카드에서 목표 합 ≥ targetValue 인 카드를 만날 때까지
 // ============================================================
-export function simulateUntilTarget(memorial, targetLabel, targetValue, maxTries = 1_000_000) {
-  let acc = 0;
+export function simulateUntilSingleCardReaches(memorial, targetLabel, targetValue, maxTries = 10_000_000) {
   let tries = 0;
-  while (acc < targetValue && tries < maxTries) {
-    const lines = rollOnce(memorial);
-    acc += extractTargetValue(lines, targetLabel);
-    tries++;
-  }
-  return { tries, finalValue: acc };
-}
-
-/**
- * 위와 동일하나 모든 카드의 모든 줄을 로그로 반환 (UI 상세 표시용).
- * @returns {{ tries, finalValue, log }} log: [{ cardNo, lines, cumulative }]
- */
-export function simulateUntilTargetWithLog(memorial, targetLabel, targetValue, maxTries = 1_000_000) {
-  let acc = 0;
-  let tries = 0;
-  const log = [];
-  while (acc < targetValue && tries < maxTries) {
+  while (tries < maxTries) {
     const lines = rollOnce(memorial);
     tries++;
-    let addedThisCard = 0;
-    for (const line of lines) {
-      if (line.label === targetLabel) addedThisCard += line.value;
+    const cardSum = cardSumOf(lines, targetLabel);
+    if (cardSum >= targetValue) {
+      return { tries, cardSum, winningLines: lines, success: true };
     }
-    acc += addedThisCard;
-    log.push({ cardNo: tries, lines, addedThisCard, cumulative: acc });
   }
-  return { tries, finalValue: acc, log };
+  return { tries: maxTries, cardSum: 0, winningLines: [], success: false };
 }
 
 // ============================================================
-// Monte Carlo: N회 반복 → 분포 통계
+// Monte Carlo
 // ============================================================
 export function runMonteCarlo(memorial, targetLabel, targetValue, runs = 10000) {
   if (targetValue <= 0) {
-    return { runs: 0, mean: 0, p50: 0, p90: 0, p99: 0, min: 0, max: 0 };
+    return { runs: 0, mean: 0, p50: 0, p90: 0, p99: 0, min: 0, max: 0, failureCount: 0 };
   }
 
   const samples = new Array(runs);
   let sum = 0;
+  let failureCount = 0;
   for (let i = 0; i < runs; i++) {
-    const r = simulateUntilTarget(memorial, targetLabel, targetValue);
+    const r = simulateUntilSingleCardReaches(memorial, targetLabel, targetValue);
     samples[i] = r.tries;
     sum += r.tries;
+    if (!r.success) failureCount++;
   }
   samples.sort((a, b) => a - b);
 
@@ -139,12 +111,24 @@ export function runMonteCarlo(memorial, targetLabel, targetValue, runs = 10000) 
     p99: pct(0.99),
     min: samples[0],
     max: samples[runs - 1],
+    failureCount,
   };
 }
 
 // ============================================================
-// 라벨이 한 줄에 등장할 확률 (정규화 후) — UI 표시용
-// 한 카드에 여러 줄이라도 라벨 출현 빈도는 줄당 동일.
+// 단일 카드 성공 확률을 빠르게 추정 (UI 정보용)
+// ============================================================
+export function estimateSingleCardSuccessRate(memorial, targetLabel, targetValue, samples = 100_000) {
+  let success = 0;
+  for (let i = 0; i < samples; i++) {
+    const lines = rollOnce(memorial);
+    if (cardSumOf(lines, targetLabel) >= targetValue) success++;
+  }
+  return success / samples;
+}
+
+// ============================================================
+// 라벨 통계 (UI 표시용 — 분포 정보 카드)
 // ============================================================
 export function perLineLabelProb(memorial, label) {
   const sumW = memorial.tiers.reduce((s, t) => s + t[2], 0);
@@ -154,9 +138,6 @@ export function perLineLabelProb(memorial, label) {
   return sumW > 0 ? labelW / sumW : 0;
 }
 
-// ============================================================
-// 라벨의 줄당 기대값 (선택 시 lo~hi 균등 분포 평균 기여)
-// ============================================================
 export function perLineLabelExpected(memorial, label) {
   const sumW = memorial.tiers.reduce((s, t) => s + t[2], 0);
   if (sumW === 0) return 0;
@@ -169,9 +150,6 @@ export function perLineLabelExpected(memorial, label) {
   return exp;
 }
 
-/**
- * 한 카드당 라벨의 기대값 (= 줄당 기대값 × 평균 줄 수)
- */
 export function perCardLabelExpected(memorial, label) {
   const avgLines = Object.entries(memorial.qdist)
     .reduce((s, [k, p]) => s + Number(k) * p, 0);
@@ -179,11 +157,23 @@ export function perCardLabelExpected(memorial, label) {
 }
 
 // ============================================================
-// 결과 포맷 (UI용)
+// 최대 가능 단일 카드 합 (UI 가이드용)
+//   = 4줄 모두 그 라벨, 모두 max tier hi
 // ============================================================
-export function formatResult(memorial, targetLabel, targetValue, mc) {
-  const evCard = perCardLabelExpected(memorial, targetLabel);
-  const theoretical = evCard > 0 ? targetValue / evCard : Infinity;
+export function maxPossibleSingleCard(memorial, label) {
+  const tiersOfLabel = memorial.tiers.filter((t) => t[3] === label);
+  if (tiersOfLabel.length === 0) return 0;
+  const maxLineValue = Math.max(...tiersOfLabel.map((t) => t[1]));
+  // qdist 의 최대 줄 수
+  const maxK = Math.max(...Object.keys(memorial.qdist).map(Number));
+  return maxLineValue * maxK;
+}
+
+// ============================================================
+// 결과 포맷
+// ============================================================
+export function formatResult(memorial, targetLabel, targetValue, mc, successRate) {
+  const theoretical = successRate > 0 ? 1 / successRate : Infinity;
   return {
     target: targetValue,
     runs: mc.runs,
@@ -193,7 +183,8 @@ export function formatResult(memorial, targetLabel, targetValue, mc) {
     p99: mc.p99,
     min: mc.min,
     max: mc.max,
-    theoretical: Math.round(theoretical * 10) / 10,
-    expectedPerCard: Math.round(evCard * 1000) / 1000,
+    failureCount: mc.failureCount,
+    theoretical: Number.isFinite(theoretical) ? Math.round(theoretical) : Infinity,
+    successRate, // 0~1
   };
 }
