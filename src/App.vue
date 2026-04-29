@@ -16,7 +16,21 @@ import ResultDisplay from './components/ResultDisplay.vue';
 import CharacterList from './components/CharacterList.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import DarkModeToggle from './components/DarkModeToggle.vue';
+import MemorialSimulator from './components/MemorialSimulator.vue';
 
+// ============================================================
+// 탭 상태
+// ============================================================
+const activeTab = ref('calc'); // 'calc' | 'memorial'
+
+const TABS = [
+  { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
+  { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수' },
+];
+
+// ============================================================
+// 전투력 계산 탭 상태 (기존)
+// ============================================================
 const stats = ref(createEmptyStats('P'));
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
@@ -37,7 +51,6 @@ const { addEntry } = useHistory();
 let lastLoggedResultKey = '';
 watch(result, (val) => {
   if (!val) return;
-  // 동일 결과 중복 기록 방지: 변경된 입력의 fingerprint
   const fp = `${val.currentBP}|${val.newBP}|${JSON.stringify(oldEquip.value)}|${JSON.stringify(newEquip.value)}`;
   if (fp === lastLoggedResultKey) return;
   lastLoggedResultKey = fp;
@@ -89,61 +102,86 @@ function restoreFromHistory(entry) {
           />
           <div class="border-l border-slate-300 dark:border-slate-600 pl-3">
             <h1 class="text-base sm:text-lg font-extrabold text-indigo-700 dark:text-indigo-300 leading-tight">
-              전투력 비교 시뮬레이터
+              라테일 유틸리티
             </h1>
             <p class="text-[11px] text-slate-500 dark:text-slate-400">
-              장비 교체 시 전투력 변화를 미리 확인 (베타)
+              전투력 계산 · 메모리얼 시뮬 (베타)
             </p>
           </div>
         </div>
         <DarkModeToggle />
       </div>
+
+      <!-- 탭 네비 -->
+      <nav class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
+        <button
+          v-for="tab in TABS"
+          :key="tab.id"
+          type="button"
+          @click="activeTab = tab.id"
+          :class="[
+            'px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap',
+            activeTab === tab.id
+              ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-      <!-- 모델 정확도 안내 -->
-      <div
-        class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
-      >
-        <strong>ℹ️ 모델 정확도</strong> · 57건의 검증된 실측 T창 데이터 회귀분석 기반
-        (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-        <!-- 좌측: 입력 + 비교 + 결과 -->
-        <div class="space-y-5">
-          <StatInputForm v-model="stats" :battle-power="battlePower" />
-
-          <EfficiencyPanel :stats="stats" />
-
-          <EquipmentCompare
-            :stats="stats"
-            v-model:old-equip="oldEquip"
-            v-model:new-equip="newEquip"
-            @reset="resetEquipment"
-          />
-
-          <ResultDisplay :result="result" :type="stats.type" />
+      <!-- ───── 탭 1: 전투력 계산 ───── -->
+      <template v-if="activeTab === 'calc'">
+        <div
+          class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
+        >
+          <strong>ℹ️ 모델 정확도</strong> · 57건의 검증된 실측 T창 데이터 회귀분석 기반
+          (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
         </div>
 
-        <!-- 우측: 캐릭터 + 히스토리 -->
-        <aside class="space-y-5">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              현재 캐릭터 이름 (히스토리용)
-            </label>
-            <input
-              v-model="characterName"
-              type="text"
-              placeholder="예: 메인캐릭"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+          <!-- 좌측: 입력 + 비교 + 결과 -->
+          <div class="space-y-5">
+            <StatInputForm v-model="stats" :battle-power="battlePower" />
+
+            <EfficiencyPanel :stats="stats" />
+
+            <EquipmentCompare
+              :stats="stats"
+              v-model:old-equip="oldEquip"
+              v-model:new-equip="newEquip"
+              @reset="resetEquipment"
             />
+
+            <ResultDisplay :result="result" :type="stats.type" />
           </div>
 
-          <CharacterList :current-stats="stats" @load="loadStatsFromCharacter" />
-          <HistoryPanel @restore="restoreFromHistory" />
-        </aside>
-      </div>
+          <!-- 우측: 캐릭터 + 히스토리 -->
+          <aside class="space-y-5">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                현재 캐릭터 이름 (히스토리용)
+              </label>
+              <input
+                v-model="characterName"
+                type="text"
+                placeholder="예: 메인캐릭"
+                class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            <CharacterList :current-stats="stats" @load="loadStatsFromCharacter" />
+            <HistoryPanel @restore="restoreFromHistory" />
+          </aside>
+        </div>
+      </template>
+
+      <!-- ───── 탭 2: 메모리얼 시뮬 ───── -->
+      <template v-else-if="activeTab === 'memorial'">
+        <MemorialSimulator />
+      </template>
 
       <footer class="pt-4 text-center text-xs text-slate-400 dark:text-slate-500">
         <p>비공식 팬 도구 · 라테일은 액토즈소프트(Actoz Soft)의 IP입니다.</p>
