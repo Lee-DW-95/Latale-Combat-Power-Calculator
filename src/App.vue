@@ -21,7 +21,6 @@ const stats = ref(createEmptyStats('P'));
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
 const characterName = ref('');
-const contributeOptIn = ref(false); // Phase 2 활성화 예정
 
 const battlePower = computed(() => calculateBattlePower(stats.value));
 
@@ -106,9 +105,8 @@ function restoreFromHistory(entry) {
       <div
         class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
       >
-        <strong>ℹ️ 모델 정확도</strong> · 57건의 실측 T창 데이터 회귀분석 기반
+        <strong>ℹ️ 모델 정확도</strong> · 57건의 검증된 실측 T창 데이터 회귀분석 기반
         (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
-        사용자 데이터 누적으로 지속 개선 중.
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
@@ -126,28 +124,6 @@ function restoreFromHistory(entry) {
           />
 
           <ResultDisplay :result="result" :type="stats.type" />
-
-          <!-- 익명 데이터 기여 (Phase 2 비활성) -->
-          <section
-            class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-4"
-          >
-            <label class="flex items-start gap-3 cursor-not-allowed opacity-60">
-              <input
-                type="checkbox"
-                v-model="contributeOptIn"
-                disabled
-                class="mt-1 rounded"
-              />
-              <span class="text-sm">
-                <span class="block font-medium text-slate-700 dark:text-slate-200">
-                  내 T창 정보를 익명으로 기여하기 (Phase 2 예정)
-                </span>
-                <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  데이터가 누적될수록 공식 정확도가 개선됩니다. 개인정보는 수집하지 않습니다.
-                </span>
-              </span>
-            </label>
-          </section>
         </div>
 
         <!-- 우측: 캐릭터 + 히스토리 -->
