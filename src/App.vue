@@ -10,6 +10,7 @@ import {
 import { useHistory } from './composables/useHistory.js';
 
 import StatInputForm from './components/StatInputForm.vue';
+import EfficiencyPanel from './components/EfficiencyPanel.vue';
 import EquipmentCompare from './components/EquipmentCompare.vue';
 import ResultDisplay from './components/ResultDisplay.vue';
 import CharacterList from './components/CharacterList.vue';
@@ -116,6 +117,8 @@ function restoreFromHistory(entry) {
         <!-- 좌측: 입력 + 비교 + 결과 -->
         <div class="space-y-5">
           <StatInputForm v-model="stats" :battle-power="battlePower" />
+
+          <EfficiencyPanel :stats="stats" />
 
           <EquipmentCompare
             v-model:stats="stats"
