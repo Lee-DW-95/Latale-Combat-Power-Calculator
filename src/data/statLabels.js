@@ -86,6 +86,3 @@ export const EQUIP_ROW_DEFS = [
   { key: '보몬지', addKey: '보몬지', pctKey: null, addStep: 0.1, addUnit: '%' },
 ];
 
-export const EQUIP_SLOTS = [
-  '무기', '투구', '상의', '하의', '장갑', '신발', '망토', '반지', '귀걸이', '목걸이', '벨트', '기타',
-];

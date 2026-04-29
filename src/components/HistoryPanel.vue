@@ -42,7 +42,7 @@ const formatTime = (ts) => {
         <span class="truncate">
           <span class="text-xs text-slate-400 mr-2">{{ formatTime(h.timestamp) }}</span>
           <span class="font-medium text-slate-700 dark:text-slate-200">
-            {{ h.characterName }} · {{ h.slot }}
+            {{ h.characterName }}
           </span>
         </span>
         <span class="flex items-center gap-2">

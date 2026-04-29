@@ -29,12 +29,11 @@ function makeId() {
 }
 
 export function useHistory() {
-  function addEntry({ characterName, slot, stats, oldEquip, newEquip, result }) {
+  function addEntry({ characterName, stats, oldEquip, newEquip, result }) {
     const entry = {
       id: makeId(),
       timestamp: Date.now(),
       characterName: characterName || '이름없음',
-      slot: slot || '기타',
       stats,
       oldEquip,
       newEquip,

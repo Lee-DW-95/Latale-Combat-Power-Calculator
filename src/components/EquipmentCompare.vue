@@ -1,16 +1,14 @@
 <script setup>
 import { computed } from 'vue';
 import { getStatLabel, pctPool } from '../utils/battlePower.js';
-import { EQUIP_ROW_DEFS, EQUIP_SLOTS } from '../data/statLabels.js';
+import { EQUIP_ROW_DEFS } from '../data/statLabels.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
-  slot: { type: String, default: '무기' },
   oldEquip: { type: Object, required: true },
   newEquip: { type: Object, required: true },
 });
 const emit = defineEmits([
-  'update:slot',
   'update:oldEquip',
   'update:newEquip',
   'reset',
@@ -28,11 +26,6 @@ function setNew(key, raw) {
   const num = raw === '' || raw === null ? 0 : Number(raw);
   emit('update:newEquip', { ...props.newEquip, [key]: Number.isFinite(num) ? num : 0 });
 }
-
-const slotProxy = computed({
-  get: () => props.slot,
-  set: (v) => emit('update:slot', v),
-});
 
 // 라벨 표시 (예: "근력 (%)" 같은 단위 처리)
 function rowLabel(def) {
@@ -60,24 +53,13 @@ function formatPct(p) {
   <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
     <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
       <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">🛡️ 장비 비교</h2>
-      <div class="flex items-center gap-3">
-        <label class="text-sm text-slate-600 dark:text-slate-300">
-          부위:
-          <select
-            v-model="slotProxy"
-            class="ml-2 rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm"
-          >
-            <option v-for="s in EQUIP_SLOTS" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          @click="emit('reset')"
-          class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
-          초기화
-        </button>
-      </div>
+      <button
+        type="button"
+        @click="emit('reset')"
+        class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+      >
+        초기화
+      </button>
     </header>
 
     <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
@@ -88,6 +70,12 @@ function formatPct(p) {
       📐 <strong>새 표시값 = (기본값 + 가산옵션) × (1 + 누적% + %옵션)</strong>
       — 같은 부적이라도 <strong>본인의 기본값과 누적%</strong>에 따라 변화량이 달라집니다.
       스탯명 옆 <span class="text-indigo-500 dark:text-indigo-400">파란 (+X%)</span>이 자동 계산된 현재 누적%입니다.
+      <br />
+      ※ <strong>% 옵션</strong> 컬럼은 게임의 <strong>"최종 크리티컬 데미지 %"</strong>처럼 누적 풀에 더해지는 값입니다
+      (부적의 "크댐 +5%" 옵션이라면 그대로 5 입력).
+      <br />
+      ※ 크리/최소/최대 데미지는 게임 내에서 기본 스탯이 % 형태로 표기될 수 있으나
+      (예: "크리티컬 데미지 135%"), 본 도구는 T창 능력치 세부정보의 영역값 숫자(예: 9,628)를 그대로 입력받습니다.
     </p>
 
     <div class="overflow-x-auto">
@@ -101,9 +89,13 @@ function formatPct(p) {
           <tr class="text-left text-slate-400 dark:text-slate-500 text-[11px]">
             <th></th>
             <th class="py-1 px-2 font-normal">가산값</th>
-            <th class="py-1 px-2 font-normal">% 옵션</th>
+            <th class="py-1 px-2 font-normal" title="누적% 풀에 더해지는 최종 % (예: 크리티컬 데미지 +5% 부적이면 5)">
+              % 옵션 (최종)
+            </th>
             <th class="py-1 px-2 font-normal">가산값</th>
-            <th class="py-1 px-2 font-normal">% 옵션</th>
+            <th class="py-1 px-2 font-normal" title="누적% 풀에 더해지는 최종 % (예: 크리티컬 데미지 +5% 부적이면 5)">
+              % 옵션 (최종)
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -140,7 +132,7 @@ function formatPct(p) {
                 step="1"
                 :value="oldEquip[def.pctKey]"
                 @input="setOld(def.pctKey, $event.target.value)"
-                placeholder="%"
+                placeholder="최종 %"
                 class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
               />
               <span v-else class="block text-center text-slate-400 dark:text-slate-600">—</span>
@@ -163,7 +155,7 @@ function formatPct(p) {
                 step="1"
                 :value="newEquip[def.pctKey]"
                 @input="setNew(def.pctKey, $event.target.value)"
-                placeholder="%"
+                placeholder="최종 %"
                 class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
               />
               <span v-else class="block text-center text-slate-400 dark:text-slate-600">—</span>

@@ -18,7 +18,6 @@ import HistoryPanel from './components/HistoryPanel.vue';
 import DarkModeToggle from './components/DarkModeToggle.vue';
 
 const stats = ref(createEmptyStats('P'));
-const slot = ref('무기');
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
 const characterName = ref('');
@@ -40,12 +39,11 @@ let lastLoggedResultKey = '';
 watch(result, (val) => {
   if (!val) return;
   // 동일 결과 중복 기록 방지: 변경된 입력의 fingerprint
-  const fp = `${val.currentBP}|${val.newBP}|${slot.value}|${JSON.stringify(oldEquip.value)}|${JSON.stringify(newEquip.value)}`;
+  const fp = `${val.currentBP}|${val.newBP}|${JSON.stringify(oldEquip.value)}|${JSON.stringify(newEquip.value)}`;
   if (fp === lastLoggedResultKey) return;
   lastLoggedResultKey = fp;
   addEntry({
     characterName: characterName.value || '이름없음',
-    slot: slot.value,
     stats: { ...stats.value },
     oldEquip: { ...oldEquip.value },
     newEquip: { ...newEquip.value },
@@ -73,7 +71,6 @@ function restoreFromHistory(entry) {
   stats.value = { ...createEmptyStats(entry.stats.type || 'P'), ...entry.stats };
   oldEquip.value = { ...createEmptyEquipment(), ...entry.oldEquip };
   newEquip.value = { ...createEmptyEquipment(), ...entry.newEquip };
-  slot.value = entry.slot || '무기';
   characterName.value = entry.characterName === '이름없음' ? '' : entry.characterName;
 }
 </script>
@@ -123,7 +120,6 @@ function restoreFromHistory(entry) {
 
           <EquipmentCompare
             :stats="stats"
-            v-model:slot="slot"
             v-model:old-equip="oldEquip"
             v-model:new-equip="newEquip"
             @reset="resetEquipment"
