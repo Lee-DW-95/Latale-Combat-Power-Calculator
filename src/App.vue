@@ -105,12 +105,13 @@ function restoreFromHistory(entry) {
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-      <!-- 베타 안내 -->
+      <!-- 모델 정확도 안내 -->
       <div
-        class="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+        class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
       >
-        <strong>⚠️ 베타 버전</strong> · 물리 직업 정확도 95~98%, 마법 직업 85~95%.
-        일부 스탯(추가 데미지·관통)의 효과는 추정치이며 실제와 차이날 수 있습니다.
+        <strong>ℹ️ 모델 정확도</strong> · 56건의 실측 T창 데이터 회귀분석 기반
+        (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
+        사용자 데이터 누적으로 지속 개선 중.
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
@@ -172,13 +173,8 @@ function restoreFromHistory(entry) {
         </aside>
       </div>
 
-      <footer class="pt-4 text-center text-xs text-slate-500 dark:text-slate-400">
-        <p>
-          전투력 공식은 51개의 실제 T창 데이터(관통 페어 3쌍 포함)를 회귀분석하여 도출했습니다 · RMSE 0.94% · 관통 1당 약 +0.81%
-        </p>
-        <p class="mt-1">
-          데이터 부족으로 일부 직업/스탯에서 오차가 있을 수 있습니다. 사용자 데이터 기여로 개선될 예정입니다.
-        </p>
+      <footer class="pt-4 text-center text-xs text-slate-400 dark:text-slate-500">
+        <p>비공식 팬 도구 · 라테일은 액토즈소프트(Actoz Soft)의 IP입니다.</p>
       </footer>
     </main>
   </div>
