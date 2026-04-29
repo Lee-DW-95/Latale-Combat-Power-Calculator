@@ -1,21 +1,23 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { ALL_MEMORIALS, uniqueLabels } from '../data/memorialProbabilities.js';
+import {
+  ALL_MEMORIALS,
+  uniqueBaseLabels,
+  lineContributesTo,
+} from '../data/memorialProbabilities.js';
 import {
   computeStatistics,
   formatResult,
-  perLineLabelProb,
-  perLineLabelExpected,
-  perCardLabelExpected,
   rollOnce,
   simulateUntilSingleCardReaches,
   maxPossibleSingleCard,
 } from '../utils/memorialSim.js';
 
+const MAX_TARGETS = 4;
+
 const memorialKeys = Object.keys(ALL_MEMORIALS);
 const selectedMemorialKey = ref('CHOENPAM_SET');
-const selectedLabel = ref('');
-const targetValue = ref('');
+const targets = ref([{ base: '', value: '' }]);
 
 const isRunning = ref(false);
 const result = ref(null);
@@ -26,93 +28,85 @@ const sampleWinningCard = ref(null); // 시뮬에서 성공한 카드 정보
 const selectedMemorial = computed(() => ALL_MEMORIALS[selectedMemorialKey.value]);
 
 const availableLabels = computed(() =>
-  selectedMemorial.value ? uniqueLabels(selectedMemorial.value) : []
+  selectedMemorial.value ? uniqueBaseLabels(selectedMemorial.value) : []
 );
 
 function onMemorialChange() {
   const labels = availableLabels.value;
-  selectedLabel.value = labels.includes(selectedLabel.value)
-    ? selectedLabel.value
-    : labels[0] || '';
+  for (const t of targets.value) {
+    if (!labels.includes(t.base)) t.base = labels[0] || '';
+  }
   result.value = null;
   sampleRoll.value = null;
   sampleWinningCard.value = null;
 }
 
-if (availableLabels.value.length > 0 && !selectedLabel.value) {
-  selectedLabel.value = availableLabels.value[0];
+if (availableLabels.value.length > 0 && !targets.value[0].base) {
+  targets.value[0].base = availableLabels.value[0];
 }
 
-const labelStats = computed(() => {
+function addTarget() {
+  if (targets.value.length >= MAX_TARGETS) return;
+  targets.value.push({
+    base: availableLabels.value[0] || '',
+    value: '',
+  });
+}
+
+function removeTarget(idx) {
+  if (targets.value.length <= 1) return;
+  targets.value.splice(idx, 1);
+}
+
+// 유효 목표만 추출 (옵션 선택 + 양수 값)
+const validTargets = computed(() =>
+  targets.value
+    .filter((t) => t.base && Number(t.value) > 0)
+    .map((t) => ({ base: t.base, value: Number(t.value) }))
+);
+
+// 각 목표 행별 단독 가능성 (maxSingleCard 초과 여부)
+const targetFeasibilities = computed(() => {
   const m = selectedMemorial.value;
-  if (!m || !selectedLabel.value) return null;
-  const probPerLine = perLineLabelProb(m, selectedLabel.value);
-  const expectedPerLine = perLineLabelExpected(m, selectedLabel.value);
-  const expectedPerCard = perCardLabelExpected(m, selectedLabel.value);
-  const avgLines = Object.entries(m.qdist)
-    .reduce((s, [k, p]) => s + Number(k) * p, 0);
-  const maxSingleCard = maxPossibleSingleCard(m, selectedLabel.value);
-  return {
-    probPerLine,
-    expectedPerLine,
-    expectedPerCard,
-    avgLines,
-    maxSingleCard,
-  };
+  if (!m) return [];
+  return targets.value.map((t) => {
+    if (!t.base || !t.value) return { feasible: null, max: null };
+    const v = Number(t.value);
+    if (!Number.isFinite(v) || v <= 0) return { feasible: null, max: null };
+    const max = maxPossibleSingleCard(m, t.base);
+    return { feasible: v <= max, max };
+  });
 });
 
-const labelTiers = computed(() => {
-  const m = selectedMemorial.value;
-  if (!m || !selectedLabel.value) return [];
-  const sumW = m.tiers.reduce((s, t) => s + t[2], 0);
-  return m.tiers
-    .filter((t) => t[3] === selectedLabel.value)
-    .map(([lo, hi, w]) => ({
-      lo,
-      hi,
-      weight: w,
-      relProb: sumW > 0 ? w / sumW : 0,
-      meanVal: (lo + hi) / 2,
-    }));
-});
+const allTargetsFeasible = computed(() =>
+  targetFeasibilities.value.every((f) => f.feasible !== false)
+);
 
-// 목표값이 가능한지 체크 (불가능하면 사용자에게 안내)
-const targetFeasible = computed(() => {
-  if (!labelStats.value || !targetValue.value) return null;
-  const t = Number(targetValue.value);
-  if (!Number.isFinite(t) || t <= 0) return null;
-  return t <= labelStats.value.maxSingleCard;
-});
+// 목표 옵션 베이스 집합 (활성 줄 하이라이트용)
+const activeTargetBases = computed(() =>
+  validTargets.value.map((t) => t.base)
+);
+
+function lineHighlights(lineLabel) {
+  return activeTargetBases.value.some((base) => lineContributesTo(lineLabel, base));
+}
 
 async function runSimulation() {
-  const target = Number(targetValue.value);
-  if (!Number.isFinite(target) || target <= 0) return;
-  if (!selectedMemorial.value || !selectedLabel.value) return;
-  if (targetFeasible.value === false) return;
+  const ts = validTargets.value;
+  if (ts.length === 0) return;
+  if (!selectedMemorial.value) return;
+  if (!allTargetsFeasible.value) return;
 
   isRunning.value = true;
   await new Promise((r) => setTimeout(r, 30));
 
   try {
     // 해석적 통계 계산 (기하분포 기반) — 빠른 p 추정 + 닫힌 수식
-    const stats = computeStatistics(
-      selectedMemorial.value,
-      selectedLabel.value,
-      target
-    );
-    result.value = formatResult(
-      selectedMemorial.value,
-      selectedLabel.value,
-      target,
-      stats
-    );
+    const stats = computeStatistics(selectedMemorial.value, ts);
+    result.value = formatResult(selectedMemorial.value, ts, stats);
 
     // 1번 시도의 성공 카드 캡처 (예시 표시용)
-    const sample = simulateUntilSingleCardReaches(
-      selectedMemorial.value,
-      selectedLabel.value,
-      target
-    );
+    const sample = simulateUntilSingleCardReaches(selectedMemorial.value, ts);
     sampleWinningCard.value = sample;
   } finally {
     isRunning.value = false;
@@ -128,7 +122,6 @@ const fmt = (n) => {
   if (!Number.isFinite(Number(n))) return '∞';
   return Number(n).toLocaleString('ko-KR');
 };
-const pct = (p) => (p * 100).toFixed(3) + '%';
 const pctSmart = (p) => {
   if (p >= 0.01) return (p * 100).toFixed(2) + '%';
   if (p >= 0.0001) return (p * 100).toFixed(4) + '%';
@@ -140,11 +133,12 @@ const pctSmart = (p) => {
   <div class="space-y-5">
     <!-- 안내 -->
     <div class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
-      <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 목표 옵션의 줄 값 합이 목표값 이상인 카드를 만나기까지
-      <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
+      <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 설정한 모든 목표를
+      <strong>동시에</strong> 만족하는 카드를 만나기까지 <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
       <br />
-      예: 목표 "최종 크리 6%" → 한 카드에서 [최종크 +3, 최종크 +3] 같이 합이 6 이상인 카드를 굴려서 만나야 함.
-      카드 간 누적이 아닙니다.
+      예: 목표 "최종 크리 대미지 3" + "최종 최대 대미지 2" → 한 카드에서 두 조건이 모두 충족돼야 성공.
+      같은 옵션의 모든 티어가 합산되며, <strong>올스탯 라인은 다른 스탯 목표에도 기여</strong>하고
+      한 줄이 여러 목표에 동시에 기여할 수 있습니다 (예: 올스탯 +2 → 근력·방어력 두 목표 동시 +2).
       <br />
       <strong class="text-xs">메커니즘</strong>: 한 카드 = 1~4줄 (세트 평균 2.2줄), 각 줄마다 옵션 풀에서 weight 비율로 선택 → [lo, hi] 정수 균등 분포.
     </div>
@@ -153,65 +147,87 @@ const pctSmart = (p) => {
     <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
       <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">⚙️ 시뮬 조건</h2>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label class="block">
-          <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            메모리얼 종류
-          </span>
-          <select
-            v-model="selectedMemorialKey"
-            @change="onMemorialChange"
-            class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option v-for="key in memorialKeys" :key="key" :value="key">
-              {{ ALL_MEMORIALS[key].name }}
-            </option>
-          </select>
-        </label>
+      <label class="block mb-4">
+        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+          메모리얼 종류
+        </span>
+        <select
+          v-model="selectedMemorialKey"
+          @change="onMemorialChange"
+          class="w-full md:w-1/2 rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+        >
+          <option v-for="key in memorialKeys" :key="key" :value="key">
+            {{ ALL_MEMORIALS[key].name }}
+          </option>
+        </select>
+      </label>
 
-        <label class="block">
-          <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            목표 옵션
-          </span>
+      <div class="mb-2 flex items-center justify-between">
+        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          목표 옵션 (최대 4개 — 한 카드 안에서 모두 동시 만족)
+        </span>
+        <button
+          type="button"
+          @click="addTarget"
+          :disabled="targets.length >= 4"
+          class="text-xs rounded-md ring-1 ring-indigo-300 dark:ring-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
+        >
+          + 옵션 추가
+        </button>
+      </div>
+
+      <div class="space-y-2 mb-4">
+        <div
+          v-for="(t, i) in targets"
+          :key="i"
+          class="grid grid-cols-[1fr_140px_auto] gap-2 items-start"
+        >
           <select
-            v-model="selectedLabel"
+            v-model="t.base"
             class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
           >
             <option v-for="lbl in availableLabels" :key="lbl" :value="lbl">
               {{ lbl }}
             </option>
           </select>
-        </label>
-
-        <label class="block">
-          <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            목표 합 (한 카드에서 ≥ 이 값)
-            <span v-if="labelStats" class="text-xs font-normal text-slate-400">
-              · 최대 가능: {{ labelStats.maxSingleCard }}
+          <div>
+            <input
+              v-model="t.value"
+              type="number"
+              step="any"
+              placeholder="목표 합 (≥)"
+              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
+            <span
+              v-if="targetFeasibilities[i]?.feasible === false"
+              class="block mt-1 text-xs text-rose-600 dark:text-rose-400"
+            >
+              ⚠ 단일 카드 최대 {{ targetFeasibilities[i].max }} 초과
             </span>
-          </span>
-          <input
-            v-model="targetValue"
-            type="number"
-            step="any"
-            placeholder="예: 6 (= 6% 한 카드)"
-            class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          />
-          <span
-            v-if="targetFeasible === false"
-            class="block mt-1 text-xs text-rose-600 dark:text-rose-400"
+            <span
+              v-else-if="targetFeasibilities[i]?.max != null"
+              class="block mt-1 text-xs text-slate-400"
+            >
+              최대 가능: {{ targetFeasibilities[i].max }}
+            </span>
+          </div>
+          <button
+            type="button"
+            @click="removeTarget(i)"
+            :disabled="targets.length <= 1"
+            class="rounded-md ring-1 ring-slate-300 dark:ring-slate-600 text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
+            title="이 옵션 제거"
           >
-            ⚠ 이 옵션의 단일 카드 최대 합({{ labelStats?.maxSingleCard }})을 초과해서 도달 불가능
-          </span>
-        </label>
-
+            ✕
+          </button>
+        </div>
       </div>
 
-      <div class="mt-4 flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2">
         <button
           type="button"
           @click="runSimulation"
-          :disabled="isRunning || !targetValue || Number(targetValue) <= 0 || targetFeasible === false"
+          :disabled="isRunning || validTargets.length === 0 || !allTargetsFeasible"
           class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
         >
           {{ isRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
@@ -240,7 +256,7 @@ const pctSmart = (p) => {
           :key="i"
           :class="[
             'rounded-md px-3 py-2 text-sm tabular-nums',
-            line.label === selectedLabel
+            lineHighlights(line.label)
               ? 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 font-semibold text-amber-800 dark:text-amber-200'
               : 'bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300',
           ]"
@@ -250,78 +266,6 @@ const pctSmart = (p) => {
       </ul>
     </section>
 
-    <!-- 라벨 분포 / Tier 표 -->
-    <section
-      v-if="labelStats && labelTiers.length > 0"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
-    >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        📊 {{ selectedLabel }} 분포 정보
-      </h2>
-
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-          <div class="text-xs text-slate-500 dark:text-slate-400">한 줄당 등장 확률</div>
-          <div class="text-xl font-bold text-slate-800 dark:text-slate-100 tabular-nums">
-            {{ pct(labelStats.probPerLine) }}
-          </div>
-        </div>
-        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-          <div class="text-xs text-slate-500 dark:text-slate-400">한 줄당 기대값</div>
-          <div class="text-xl font-bold text-slate-800 dark:text-slate-100 tabular-nums">
-            +{{ labelStats.expectedPerLine.toFixed(3) }}
-          </div>
-        </div>
-        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-          <div class="text-xs text-slate-500 dark:text-slate-400">한 카드당 기대값</div>
-          <div class="text-xl font-bold text-slate-800 dark:text-slate-100 tabular-nums">
-            +{{ labelStats.expectedPerCard.toFixed(3) }}
-          </div>
-        </div>
-        <div class="rounded-lg bg-rose-50 dark:bg-rose-950/40 p-3 ring-1 ring-rose-200 dark:ring-rose-800">
-          <div class="text-xs text-rose-600 dark:text-rose-300">단일 카드 최대 가능</div>
-          <div class="text-xl font-bold text-rose-700 dark:text-rose-200 tabular-nums">
-            +{{ labelStats.maxSingleCard }}
-          </div>
-        </div>
-      </div>
-
-      <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
-        Tier 구성
-      </h3>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-slate-500 dark:text-slate-400 text-xs">
-              <th class="py-1 pr-3 text-left font-medium">범위 [lo ~ hi]</th>
-              <th class="py-1 pr-3 text-right font-medium">상대 weight</th>
-              <th class="py-1 pr-3 text-right font-medium">한 줄 등장 확률</th>
-              <th class="py-1 pr-3 text-right font-medium">균등 분포 평균값</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(t, i) in labelTiers"
-              :key="i"
-              class="border-t border-slate-100 dark:border-slate-700"
-            >
-              <td class="py-1.5 pr-3 tabular-nums text-slate-700 dark:text-slate-200">
-                +{{ t.lo }} ~ +{{ t.hi }}
-              </td>
-              <td class="py-1.5 pr-3 tabular-nums text-right text-slate-700 dark:text-slate-200">
-                {{ t.weight.toFixed(6) }}
-              </td>
-              <td class="py-1.5 pr-3 tabular-nums text-right text-slate-700 dark:text-slate-200">
-                {{ pct(t.relProb) }}
-              </td>
-              <td class="py-1.5 pr-3 tabular-nums text-right text-slate-700 dark:text-slate-200">
-                +{{ t.meanVal.toFixed(1) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
 
     <!-- 시뮬 결과 -->
     <section
@@ -329,13 +273,18 @@ const pctSmart = (p) => {
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
     >
       <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        🎯 시뮬 결과 (단일 카드 합 도달)
+        🎯 시뮬 결과 (단일 카드 동시 만족)
       </h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-        한 카드 안에서 <strong class="text-indigo-600 dark:text-indigo-400">{{ selectedLabel }} 합 ≥ {{ result.target }}</strong>인 카드를 만나기까지 평균
-        <strong>{{ fmt(result.mean) }}회</strong> 굴려야 합니다.
+      <div class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+        한 카드 안에서 다음 목표를 <strong>모두 동시 만족</strong>하는 카드를 만나기까지
+        평균 <strong>{{ fmt(result.mean) }}회</strong> 굴려야 합니다.
         (단일 카드 성공률: <strong>{{ pctSmart(result.successRate) }}</strong>)
-      </p>
+        <ul class="mt-1.5 space-y-0.5">
+          <li v-for="(t, i) in result.targets" :key="i" class="text-indigo-600 dark:text-indigo-400 font-medium">
+            ▸ {{ t.base }} 합 ≥ {{ t.value }}
+          </li>
+        </ul>
+      </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-800 p-3">
@@ -387,23 +336,32 @@ const pctSmart = (p) => {
       <div v-if="sampleWinningCard.success" class="space-y-3">
         <div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 p-3">
           <div class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
-            성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄, {{ selectedLabel }} 합 +{{ sampleWinningCard.cardSum }})
+            성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄)
           </div>
-          <ul class="space-y-1 font-mono text-xs">
+          <ul class="space-y-1 font-mono text-xs mb-3">
             <li
               v-for="(line, i) in sampleWinningCard.winningLines"
               :key="i"
               :class="[
                 'tabular-nums',
-                line.label === selectedLabel
+                lineHighlights(line.label)
                   ? 'text-amber-700 dark:text-amber-300 font-bold'
                   : 'text-slate-600 dark:text-slate-400',
               ]"
             >
               ▶ {{ line.label }} +{{ line.value }}
-              <span v-if="line.label === selectedLabel" class="text-[10px]">★</span>
+              <span v-if="lineHighlights(line.label)" class="text-[10px]">★</span>
             </li>
           </ul>
+          <div class="text-xs space-y-0.5 border-t border-amber-200 dark:border-amber-800 pt-2">
+            <div
+              v-for="(s, i) in sampleWinningCard.sums"
+              :key="i"
+              class="text-amber-800 dark:text-amber-200"
+            >
+              ✓ <strong>{{ s.base }}</strong> 합 +{{ s.sum }} (목표 ≥ {{ s.value }})
+            </div>
+          </div>
         </div>
         <p class="text-xs text-slate-500 dark:text-slate-400">
           앞선 {{ fmt(sampleWinningCard.tries - 1) }}장의 카드는 모두 목표 미달. {{ fmt(sampleWinningCard.tries) }}회차에 위 카드 등장.
