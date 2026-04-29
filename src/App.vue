@@ -83,13 +83,21 @@ function restoreFromHistory(entry) {
       class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        <div>
-          <h1 class="text-lg sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-300">
-            🎮 라테일 전투력 비교 시뮬레이터
-          </h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
-            장비 교체 시 전투력 변화를 미리 확인 (베타)
-          </p>
+        <div class="flex items-center gap-3">
+          <img
+            src="/assets/latale/logo-latale.png"
+            alt="LaTale"
+            class="h-10 sm:h-12 w-auto select-none"
+            draggable="false"
+          />
+          <div class="border-l border-slate-300 dark:border-slate-600 pl-3">
+            <h1 class="text-base sm:text-lg font-extrabold text-indigo-700 dark:text-indigo-300 leading-tight">
+              전투력 비교 시뮬레이터
+            </h1>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+              장비 교체 시 전투력 변화를 미리 확인 (베타)
+            </p>
+          </div>
         </div>
         <DarkModeToggle />
       </div>

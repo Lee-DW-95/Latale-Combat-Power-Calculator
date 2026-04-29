@@ -45,24 +45,38 @@ const formatBP = (n) => n.toLocaleString('ko-KR');
           type="button"
           @click="setType('P')"
           :class="[
-            'px-4 py-2 text-sm font-medium transition',
+            'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition',
             stats.type === 'P'
               ? 'bg-indigo-600 text-white'
               : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
           ]"
         >
+          <img
+            src="/assets/latale/roguemaster.png"
+            alt="로그마스터"
+            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-slate-200 dark:bg-slate-700"
+            style="object-position: 50% 12%"
+            draggable="false"
+          />
           물리
         </button>
         <button
           type="button"
           @click="setType('M')"
           :class="[
-            'px-4 py-2 text-sm font-medium transition border-l border-slate-300 dark:border-slate-600',
+            'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition border-l border-slate-300 dark:border-slate-600',
             stats.type === 'M'
               ? 'bg-indigo-600 text-white'
               : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
           ]"
         >
+          <img
+            src="/assets/latale/rainia.png"
+            alt="레이니아"
+            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-slate-200 dark:bg-slate-700"
+            style="object-position: 50% 22%"
+            draggable="false"
+          />
           마법
         </button>
       </div>

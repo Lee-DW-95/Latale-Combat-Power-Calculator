@@ -39,8 +39,9 @@ const sortedContribs = computed(() => {
   >
     <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">📊 결과</h2>
 
-    <div v-if="!result" class="text-sm text-slate-500 dark:text-slate-400">
-      현재/새 장비 옵션을 입력하면 결과가 여기 표시됩니다.
+    <div v-if="!result" class="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 py-2">
+      <img src="/assets/latale/char-82.png" alt="" class="w-12 h-12 rounded-full ring-1 ring-indigo-200 dark:ring-slate-600 shrink-0" draggable="false" />
+      <span>현재/새 장비 옵션을 입력하면 결과가 여기 표시됩니다.</span>
     </div>
 
     <div v-else>

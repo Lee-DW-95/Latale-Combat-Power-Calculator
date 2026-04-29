@@ -18,7 +18,10 @@ const formatTime = (ts) => {
     class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
   >
     <header class="flex items-center justify-between mb-3">
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">🕘 비교 히스토리</h2>
+      <h2 class="flex items-center gap-2 text-lg font-bold text-slate-800 dark:text-slate-100">
+        <img src="/assets/latale/char-56.png" alt="" class="w-7 h-7 rounded-full ring-1 ring-indigo-200 dark:ring-slate-600" draggable="false" />
+        비교 히스토리
+      </h2>
       <button
         v-if="history.length > 0"
         type="button"

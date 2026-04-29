@@ -336,7 +336,7 @@ export function createEmptyStats(type = 'P') {
     // 표시값 (T창 능력치 세부정보)
     주스탯: 0,
     공격력: 0,
-    관통: 99,
+    관통: 0,
     크댐: 0,
     최소뎀: 0,
     최대뎀: 0,

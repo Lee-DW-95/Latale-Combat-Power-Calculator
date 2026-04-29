@@ -40,7 +40,10 @@ function onDelete(id) {
   <section
     class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
   >
-    <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">👤 캐릭터</h2>
+    <h2 class="flex items-center gap-2 text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
+      <img src="/assets/latale/char-75.png" alt="" class="w-7 h-7 rounded-full ring-1 ring-indigo-200 dark:ring-slate-600" draggable="false" />
+      캐릭터
+    </h2>
 
     <div class="flex gap-2 mb-3">
       <input
