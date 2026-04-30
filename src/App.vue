@@ -17,15 +17,17 @@ import CharacterList from './components/CharacterList.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import DarkModeToggle from './components/DarkModeToggle.vue';
 import MemorialSimulator from './components/MemorialSimulator.vue';
+import EnchantSimulator from './components/EnchantSimulator.vue';
 
 // ============================================================
 // 탭 상태
 // ============================================================
-const activeTab = ref('calc'); // 'calc' | 'memorial'
+const activeTab = ref('calc'); // 'calc' | 'memorial' | 'enchant'
 
 const TABS = [
   { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
   { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수' },
+  { id: 'enchant', label: '🔨 인챈트 시뮬', desc: '장비 인챈트 / 특수장비 강화' },
 ];
 
 // ============================================================
@@ -181,6 +183,11 @@ function restoreFromHistory(entry) {
       <!-- ───── 탭 2: 메모리얼 시뮬 ───── -->
       <template v-else-if="activeTab === 'memorial'">
         <MemorialSimulator />
+      </template>
+
+      <!-- ───── 탭 3: 인챈트 시뮬 ───── -->
+      <template v-else-if="activeTab === 'enchant'">
+        <EnchantSimulator />
       </template>
 
       <footer class="pt-4 text-center text-xs text-slate-400 dark:text-slate-500">
