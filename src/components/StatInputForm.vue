@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { getStatLabel } from '../utils/battlePower.js';
 import { STAT_FIELD_DEFS, BASE_FIELD_DEFS } from '../data/statLabels.js';
+import { fmt as formatBP } from '../utils/format.js';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -22,8 +23,6 @@ function setField(key, raw) {
   const num = raw === '' || raw === null ? 0 : Number(raw);
   emit('update:modelValue', { ...props.modelValue, [key]: Number.isFinite(num) ? num : 0 });
 }
-
-const formatBP = (n) => n.toLocaleString('ko-KR');
 
 // 기본 스탯 입력 진행도 (0~8개 입력 카운트)
 const baseFilledCount = computed(() =>

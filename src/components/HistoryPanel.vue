@@ -1,10 +1,10 @@
 <script setup>
 import { useHistory } from '../composables/useHistory.js';
+import { fmtRound as fmt } from '../utils/format.js';
 
 const emit = defineEmits(['restore']);
 const { history, deleteEntry, clearAll } = useHistory();
 
-const fmt = (n) => Math.round(n).toLocaleString('ko-KR');
 const formatTime = (ts) => {
   const d = new Date(ts);
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(

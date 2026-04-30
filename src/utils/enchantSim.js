@@ -22,22 +22,26 @@ import {
   SPECIAL_ENCHANT_MAX_LEVEL,
   rangeFor,
 } from '../data/enchantData.js';
+import { rollInt, rollValue } from './random.js';
+import { sortNum, quantile, mean } from './stats.js';
+import { ENCHANT_SIM } from './simConstants.js';
 
 // ============================================================
-// 헬퍼
+// 시뮬 결과 분포 → 평균/P50/P90/P99 통계 객체 빌더
+// (computeNormalStats / computeTargetStats 공통)
 // ============================================================
-function rollInt(lo, hi) {
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
-}
-
-// step 정수면 정수 균등, 소수(0.1 등)면 step 단위 균등 분포
-function rollValue(lo, hi, step) {
-  if (!step || step >= 1) return rollInt(lo, hi);
-  const n = Math.round((hi - lo) / step) + 1;
-  const i = Math.floor(Math.random() * n);
-  const v = lo + i * step;
-  // 부동소수점 오차 보정 (소수 첫째자리)
-  return Math.round(v * 10) / 10;
+function buildDistributionStats(samples) {
+  const keys = Object.keys(samples);
+  const sorted = {};
+  const out = { mean: {}, p50: {}, p90: {}, p99: {} };
+  for (const k of keys) {
+    sorted[k] = sortNum(samples[k]);
+    out.mean[k] = mean(samples[k]);
+    out.p50[k] = quantile(sorted[k], 0.50);
+    out.p90[k] = quantile(sorted[k], 0.90);
+    out.p99[k] = quantile(sorted[k], 0.99);
+  }
+  return out;
 }
 
 // ============================================================
@@ -79,7 +83,12 @@ export function tryNormalEnchant(part, optionKey, enchantTypeKey, stage = 'base'
 // 매 시도마다 part.options 에서 아직 슬롯에 안 들어간 옵션을 순서대로 골라 시도한다.
 // 시도 실패 → 장비 파괴 → 모든 슬롯 사라짐 → 첫 옵션부터 다시.
 // ============================================================
-export function simulateUntilFull(part, enchantTypeKey, stage = 'base', maxAttempts = 100_000) {
+export function simulateUntilFull(
+  part,
+  enchantTypeKey,
+  stage = 'base',
+  maxAttempts = ENCHANT_SIM.FULL_MAX_ATTEMPTS,
+) {
   let tries = 0;
   let hammerUsed = 0;
   let elyUsed = 0;
@@ -119,64 +128,31 @@ export function simulateUntilFull(part, enchantTypeKey, stage = 'base', maxAttem
 // 일반 장비 인챈트 — 통계 (Monte Carlo)
 //   풀강(slotMax)까지 도달하는 시도 횟수의 분포·평균
 // ============================================================
-export function computeNormalStats(part, enchantTypeKey, stage = 'base', runs = 2000) {
-  const triesArr = [];
-  const hammerArr = [];
-  const elyArr = [];
-  const destroyedArr = [];
+export function computeNormalStats(
+  part,
+  enchantTypeKey,
+  stage = 'base',
+  runs = ENCHANT_SIM.FULL_MC_RUNS,
+) {
+  const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
   let completedCount = 0;
 
   for (let i = 0; i < runs; i++) {
-    const r = simulateUntilFull(part, enchantTypeKey, stage, 50_000);
+    const r = simulateUntilFull(part, enchantTypeKey, stage, ENCHANT_SIM.FULL_MC_INNER_CAP);
     if (r.completed) {
       completedCount++;
-      triesArr.push(r.tries);
-      hammerArr.push(r.hammerUsed);
-      elyArr.push(r.elyUsed);
-      destroyedArr.push(r.destroyed);
+      samples.tries.push(r.tries);
+      samples.hammer.push(r.hammerUsed);
+      samples.ely.push(r.elyUsed);
+      samples.destroyed.push(r.destroyed);
     }
   }
 
-  if (completedCount === 0) {
-    return null;
-  }
-
-  const sortNum = (a) => [...a].sort((x, y) => x - y);
-  const q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))];
-  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-
-  const triesSorted = sortNum(triesArr);
-  const hammerSorted = sortNum(hammerArr);
-  const elySorted = sortNum(elyArr);
-  const destroyedSorted = sortNum(destroyedArr);
-
+  if (completedCount === 0) return null;
   return {
     completedRate: completedCount / runs,
-    mean: {
-      tries: mean(triesArr),
-      hammer: mean(hammerArr),
-      ely: mean(elyArr),
-      destroyed: mean(destroyedArr),
-    },
-    p50: {
-      tries: q(triesSorted, 0.5),
-      hammer: q(hammerSorted, 0.5),
-      ely: q(elySorted, 0.5),
-      destroyed: q(destroyedSorted, 0.5),
-    },
-    p90: {
-      tries: q(triesSorted, 0.9),
-      hammer: q(hammerSorted, 0.9),
-      ely: q(elySorted, 0.9),
-      destroyed: q(destroyedSorted, 0.9),
-    },
-    p99: {
-      tries: q(triesSorted, 0.99),
-      hammer: q(hammerSorted, 0.99),
-      ely: q(elySorted, 0.99),
-      destroyed: q(destroyedSorted, 0.99),
-    },
     runs: completedCount,
+    ...buildDistributionStats(samples),
   };
 }
 
@@ -193,7 +169,13 @@ export function computeNormalStats(part, enchantTypeKey, stage = 'base', runs = 
 // 추첨 값 미달 시 장비 포기는 "리롤 시스템 없음" 가정. 실제 게임 메커니즘이
 // 다르면 (예: 같은 슬롯 재인챈트 가능) 추후 모델 변경 필요.
 // ============================================================
-export function simulateUntilTargetMet(part, targets, enchantTypeKey, stage = 'base', maxAttempts = 200_000) {
+export function simulateUntilTargetMet(
+  part,
+  targets,
+  enchantTypeKey,
+  stage = 'base',
+  maxAttempts = ENCHANT_SIM.TARGET_MAX_ATTEMPTS,
+) {
   let tries = 0;
   let hammerUsed = 0;
   let elyUsed = 0;
@@ -244,62 +226,38 @@ export function simulateUntilTargetMet(part, targets, enchantTypeKey, stage = 'b
 // ============================================================
 // 일반 장비 인챈트 — 목표 도달 통계 (Monte Carlo)
 // ============================================================
-export function computeTargetStats(part, targets, enchantTypeKey, stage = 'base', runs = 1000) {
-  const triesArr = [];
-  const hammerArr = [];
-  const elyArr = [];
-  const destroyedArr = [];
+export function computeTargetStats(
+  part,
+  targets,
+  enchantTypeKey,
+  stage = 'base',
+  runs = ENCHANT_SIM.TARGET_MC_RUNS,
+) {
+  const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
   let completedCount = 0;
 
   for (let i = 0; i < runs; i++) {
-    const r = simulateUntilTargetMet(part, targets, enchantTypeKey, stage, 100_000);
+    const r = simulateUntilTargetMet(
+      part,
+      targets,
+      enchantTypeKey,
+      stage,
+      ENCHANT_SIM.TARGET_MC_INNER_CAP,
+    );
     if (r.completed) {
       completedCount++;
-      triesArr.push(r.tries);
-      hammerArr.push(r.hammerUsed);
-      elyArr.push(r.elyUsed);
-      destroyedArr.push(r.destroyed);
+      samples.tries.push(r.tries);
+      samples.hammer.push(r.hammerUsed);
+      samples.ely.push(r.elyUsed);
+      samples.destroyed.push(r.destroyed);
     }
   }
 
   if (completedCount === 0) return null;
-
-  const sortNum = (a) => [...a].sort((x, y) => x - y);
-  const q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))];
-  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-
-  const triesSorted = sortNum(triesArr);
-  const hammerSorted = sortNum(hammerArr);
-  const elySorted = sortNum(elyArr);
-  const destroyedSorted = sortNum(destroyedArr);
-
   return {
     completedRate: completedCount / runs,
     runs: completedCount,
-    mean: {
-      tries: mean(triesArr),
-      hammer: mean(hammerArr),
-      ely: mean(elyArr),
-      destroyed: mean(destroyedArr),
-    },
-    p50: {
-      tries: q(triesSorted, 0.5),
-      hammer: q(hammerSorted, 0.5),
-      ely: q(elySorted, 0.5),
-      destroyed: q(destroyedSorted, 0.5),
-    },
-    p90: {
-      tries: q(triesSorted, 0.9),
-      hammer: q(hammerSorted, 0.9),
-      ely: q(elySorted, 0.9),
-      destroyed: q(destroyedSorted, 0.9),
-    },
-    p99: {
-      tries: q(triesSorted, 0.99),
-      hammer: q(hammerSorted, 0.99),
-      ely: q(elySorted, 0.99),
-      destroyed: q(destroyedSorted, 0.99),
-    },
+    ...buildDistributionStats(samples),
   };
 }
 

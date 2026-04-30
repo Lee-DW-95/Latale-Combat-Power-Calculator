@@ -15,23 +15,12 @@
  */
 
 import { lineContributesTo } from '../data/memorialProbabilities.js';
+import { rollValue } from './random.js';
+import { MEMORIAL_SIM } from './simConstants.js';
 
 // ============================================================
 // 헬퍼
 // ============================================================
-function rollInt(lo, hi) {
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
-}
-
-// step이 정수면 균등 정수 분포, 소수면 step 단위 균등 분포 (예: 0.1, 0.2, ...).
-function rollValue(lo, hi, step) {
-  if (!step || step >= 1) return rollInt(lo, hi);
-  const n = Math.round((hi - lo) / step) + 1;
-  const i = Math.floor(Math.random() * n);
-  const v = lo + i * step;
-  return Math.round(v * 10) / 10;
-}
-
 function pickByQdist(qdist) {
   const r = Math.random();
   let acc = 0;
@@ -115,7 +104,11 @@ function perTargetSums(lines, targets) {
 // 못 찾으면 success=false 로 반환 (매우 희박한 목표 케이스).
 // targets = [{ base, value }, ...]
 // ============================================================
-export function simulateUntilSingleCardReaches(memorial, targets, maxTries = 100_000) {
+export function simulateUntilSingleCardReaches(
+  memorial,
+  targets,
+  maxTries = MEMORIAL_SIM.SAMPLE_MAX_TRIES,
+) {
   let tries = 0;
   while (tries < maxTries) {
     const lines = rollOnce(memorial);
@@ -140,8 +133,7 @@ export function simulateUntilSingleCardReaches(memorial, targets, maxTries = 100
 // 그래도 부족하면 추정 한계로 인정하고 반환 (매우 희박한 케이스).
 // ============================================================
 export function estimateSingleCardSuccessRate(memorial, targets) {
-  const PHASE1 = 200_000;
-  const PHASE2 = 1_000_000;
+  const { ESTIMATE_PHASE1: PHASE1, ESTIMATE_PHASE2: PHASE2, ESTIMATE_PHASE2_THRESHOLD } = MEMORIAL_SIM;
 
   let success = 0;
   for (let i = 0; i < PHASE1; i++) {
@@ -149,7 +141,7 @@ export function estimateSingleCardSuccessRate(memorial, targets) {
     if (cardMeetsAllTargets(lines, targets)) success++;
   }
 
-  if (success < 30) {
+  if (success < ESTIMATE_PHASE2_THRESHOLD) {
     const extra = PHASE2 - PHASE1;
     let extraSuccess = 0;
     for (let i = 0; i < extra; i++) {

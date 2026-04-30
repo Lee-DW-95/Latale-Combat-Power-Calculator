@@ -21,6 +21,8 @@ import {
   simulateUntilTargetMet,
   levelUpSpecial,
 } from '../utils/enchantSim.js';
+import { fmt, fmt1, pct } from '../utils/format.js';
+import { ENCHANT_SIM } from '../utils/simConstants.js';
 
 // ============================================================
 // 모드
@@ -105,29 +107,29 @@ const canRunTargetSim = computed(() =>
   validTargets.value.length > 0 && !targetTooMany.value && !isTargetSimRunning.value
 );
 
-// 카테고리 변경 시 첫 부위로
+// 카테고리/부위 변경 시 공통 초기화 — 슬롯·로그·통계·선택·목표 리셋
+function resetForPartChange() {
+  resetNormal();
+  normalSelectedOption.value = '';
+  initTargetSettings(normalPart.value);
+  targetStats.value = null;
+  targetSampleRun.value = null;
+}
+
+// 카테고리 변경 시: 첫 부위로 + 인챈트 종류 호환 체크 + 공통 초기화
 watch(normalCatKey, (newCat) => {
   const list = partKeys(newCat);
   normalPartKey.value = list[0] ?? '';
+  // 새 카테고리에서 현재 인챈트 종류가 없으면 normal로 fallback
   const types = availableEnchantTypes(newCat);
   if (!types.includes(normalEnchantType.value)) {
     normalEnchantType.value = 'normal';
   }
-  resetNormal();
-  normalSelectedOption.value = '';
-  initTargetSettings(getPart(newCat, list[0] ?? ''));
-  targetStats.value = null;
-  targetSampleRun.value = null;
+  resetForPartChange();
 });
 
-// 부위 변경 시 슬롯·로그·통계·선택·목표 모두 초기화
-watch(normalPartKey, (newPart) => {
-  resetNormal();
-  normalSelectedOption.value = '';
-  initTargetSettings(getPart(normalCatKey.value, newPart));
-  targetStats.value = null;
-  targetSampleRun.value = null;
-});
+// 부위 변경 시: 공통 초기화
+watch(normalPartKey, resetForPartChange);
 
 async function analyzeTargetSim() {
   if (!canRunTargetSim.value) return;
@@ -219,7 +221,7 @@ function runNormalOnce() {
 
 function runNormalUntilFull() {
   let safety = 0;
-  while (!normalIsFull.value && safety < 5000) {
+  while (!normalIsFull.value && safety < ENCHANT_SIM.AUTO_RUN_SAFETY_CAP) {
     runNormalOnce();
     safety++;
   }
@@ -406,12 +408,6 @@ function gradeBarColor(p) {
   return 'bg-slate-400 dark:bg-slate-500';
 }
 
-// ============================================================
-// 포맷터
-// ============================================================
-const fmt = (n) => Number(n ?? 0).toLocaleString('ko-KR');
-const fmt1 = (n) => Number.isFinite(Number(n)) ? Number(n).toFixed(1) : '0';
-const pct = (p) => (p * 100).toFixed(1) + '%';
 // 옵션 범위 텍스트 — Lv2 기본 + 풀강 환산 범위 부가
 function rangeText(opt) {
   const fmtN = (n) => (opt.step && opt.step < 1) ? fmt1(n) : fmt(n);

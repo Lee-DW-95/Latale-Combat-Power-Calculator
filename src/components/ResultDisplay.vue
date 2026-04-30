@@ -1,13 +1,13 @@
 <script setup>
 import { computed } from 'vue';
 import { getStatLabel } from '../utils/battlePower.js';
+import { fmtRound as fmt } from '../utils/format.js';
 
 const props = defineProps({
   result: { type: Object, default: null },
   type: { type: String, default: 'P' },
 });
 
-const fmt = (n) => Math.round(n).toLocaleString('ko-KR');
 const signed = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
 const arrow = computed(() => {

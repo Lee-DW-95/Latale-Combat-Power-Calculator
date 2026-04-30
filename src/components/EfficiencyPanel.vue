@@ -7,6 +7,7 @@ import {
   equipDelta,
   STAT_KEYS,
 } from '../utils/battlePower.js';
+import { fmtRound as fmt } from '../utils/format.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -116,7 +117,6 @@ function pickStat(key) {
   simStat.value = key;
 }
 
-const fmt = (n) => Math.round(n).toLocaleString('ko-KR');
 const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 </script>
 

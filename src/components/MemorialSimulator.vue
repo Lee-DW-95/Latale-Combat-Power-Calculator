@@ -12,6 +12,7 @@ import {
   simulateUntilSingleCardReaches,
   maxPossibleSingleCard,
 } from '../utils/memorialSim.js';
+import { fmtInf as fmt, pctSmart } from '../utils/format.js';
 
 const MAX_TARGETS = 4;
 
@@ -118,15 +119,6 @@ function rollSample() {
   sampleRoll.value = rollOnce(selectedMemorial.value);
 }
 
-const fmt = (n) => {
-  if (!Number.isFinite(Number(n))) return '∞';
-  return Number(n).toLocaleString('ko-KR');
-};
-const pctSmart = (p) => {
-  if (p >= 0.01) return (p * 100).toFixed(2) + '%';
-  if (p >= 0.0001) return (p * 100).toFixed(4) + '%';
-  return (p * 100).toExponential(2) + '%';
-};
 </script>
 
 <template>
