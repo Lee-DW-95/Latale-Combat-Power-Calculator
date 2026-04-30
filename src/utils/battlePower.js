@@ -120,7 +120,7 @@ export function calculateBattlePower(stats) {
   const geunmaMultiplier = 1 + Number(stats.근마효율 || 0) * params.K_geunma;
   const penetrationMultiplier = 1 + Number(stats.관통 || 0) / params.D_pen;
 
-  const battlePower =
+  let battlePower =
     attackBase *
     critMultiplier *
     dmgMultiplier *
@@ -129,7 +129,32 @@ export function calculateBattlePower(stats) {
     penetrationMultiplier *
     params.base;
 
+  // 조건부 환산 — 활성화된 옵션만 BP 에 곱셈 항으로 적용.
+  // 모든 플래그 OFF 면 multiplier=1 → BP 영향 없음 (회귀 테스트 보존).
+  battlePower *= conditionalMultiplier(stats);
+
   return Math.round(battlePower);
+}
+
+// ============================================================
+// 조건부 대미지 환산 — 백어택/근거리/상태이상 % × 활성 플래그
+//   각 옵션은 개별로 ON/OFF 가능: 시나리오별 대미지 비교용.
+//   활성 플래그가 false 또는 미정의 → 그 옵션 미반영.
+// ============================================================
+export function conditionalMultiplier(stats) {
+  const back = stats?.백어택활성 ? Number(stats?.백어택 || 0) / 100 : 0;
+  const close = stats?.근거리활성 ? Number(stats?.근거리 || 0) / 100 : 0;
+  const status = stats?.상태대미지활성 ? Number(stats?.상태대미지 || 0) / 100 : 0;
+  return (1 + back) * (1 + close) * (1 + status);
+}
+
+// 임의 활성 플래그 조합으로 multiplier 계산 (시나리오 비교용)
+//   activeMap = { 백어택: bool, 근거리: bool, 상태이상: bool }
+export function conditionalMultiplierWith(stats, activeMap = {}) {
+  const back = activeMap.백어택 ? Number(stats?.백어택 || 0) / 100 : 0;
+  const close = activeMap.근거리 ? Number(stats?.근거리 || 0) / 100 : 0;
+  const status = activeMap.상태이상 ? Number(stats?.상태대미지 || 0) / 100 : 0;
+  return (1 + back) * (1 + close) * (1 + status);
 }
 
 export const STAT_KEYS = Object.freeze([
@@ -357,6 +382,15 @@ export function createEmptyStats(type = 'P') {
     기본_고댐: 0,
     기본_일몬추: 0,
     기본_보몬추: 0,
+    // 조건부 대미지 환산 — 게임 공식 BP에는 포함 안 되지만 사용자가 "조건 충족 시"
+    // 환산값을 보고 싶을 때 사용. 옵션별 개별 활성 플래그로 시나리오별 비교 가능.
+    // 모든 플래그 false 가 기본 → BP 영향 없음 (회귀 보존).
+    백어택: 0,           // %
+    백어택활성: false,
+    근거리: 0,           // %
+    근거리활성: false,
+    상태대미지: 0,       // %
+    상태대미지활성: false,
   };
 }
 
