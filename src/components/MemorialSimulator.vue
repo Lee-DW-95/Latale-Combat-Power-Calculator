@@ -334,30 +334,30 @@ const pctSmart = (p) => {
       </p>
 
       <div v-if="sampleWinningCard.success" class="space-y-3">
-        <div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 p-3">
-          <div class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
+        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/60 ring-1 ring-emerald-400 dark:ring-emerald-600 p-3">
+          <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
             성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄)
           </div>
-          <ul class="space-y-1 font-mono text-xs mb-3">
+          <ul class="space-y-1 font-mono text-sm mb-3">
             <li
               v-for="(line, i) in sampleWinningCard.winningLines"
               :key="i"
               :class="[
                 'tabular-nums',
                 lineHighlights(line.label)
-                  ? 'text-amber-700 dark:text-amber-300 font-bold'
-                  : 'text-slate-600 dark:text-slate-400',
+                  ? 'text-emerald-700 dark:text-emerald-300 font-bold'
+                  : 'text-slate-700 dark:text-slate-200',
               ]"
             >
               ▶ {{ line.label }} +{{ line.value }}
               <span v-if="lineHighlights(line.label)" class="text-[10px]">★</span>
             </li>
           </ul>
-          <div class="text-xs space-y-0.5 border-t border-amber-200 dark:border-amber-800 pt-2">
+          <div class="text-xs space-y-0.5 border-t border-emerald-200 dark:border-emerald-800 pt-2">
             <div
               v-for="(s, i) in sampleWinningCard.sums"
               :key="i"
-              class="text-amber-800 dark:text-amber-200"
+              class="text-emerald-700 dark:text-emerald-300 font-medium"
             >
               ✓ <strong>{{ s.base }}</strong> 합 +{{ s.sum }} (목표 ≥ {{ s.value }})
             </div>

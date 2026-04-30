@@ -54,6 +54,17 @@ function pickTierByWeight(tiers) {
   return tiers[tiers.length - 1];
 }
 
+// 라벨에 [N] 프리픽스가 없으면 같은 라벨 그룹 내 순번을 계산해 부여.
+// 같은 라벨이 1개뿐이면 단계 구분이 없으므로 그대로 둔다.
+function decorateLabelWithTier(tiers, pickedTier, label) {
+  if (/^\[\d+\]/.test(label)) return label;
+  const sameLabel = tiers.filter((t) => t[3] === label);
+  if (sameLabel.length <= 1) return label;
+  const idx = sameLabel.indexOf(pickedTier);
+  if (idx < 0) return label;
+  return `[${idx + 1}] ${label}`;
+}
+
 // ============================================================
 // 한 카드 1회 굴리기 — [{ label, value }, ...]
 // tier 형식: [lo, hi, weight, label, step?] — step 생략 시 정수 균등
@@ -62,9 +73,11 @@ export function rollOnce(memorial) {
   const k = pickByQdist(memorial.qdist);
   const lines = [];
   for (let i = 0; i < k; i++) {
-    const [lo, hi, , label, step] = pickTierByWeight(memorial.tiers);
+    const pickedTier = pickTierByWeight(memorial.tiers);
+    const [lo, hi, , label, step] = pickedTier;
     const value = rollValue(lo, hi, step);
-    lines.push({ label, value });
+    const displayLabel = decorateLabelWithTier(memorial.tiers, pickedTier, label);
+    lines.push({ label: displayLabel, value });
   }
   return lines;
 }
