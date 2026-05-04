@@ -97,38 +97,51 @@ export function effectiveMinDmg(minDmg, maxDmg) {
 }
 
 /**
- * 직접/소환 타격 BP 분리 — 20건 제약 선형 회귀 (P 18건 + M 2건).
+ * 직접/소환 타격 BP 분리 — 22건 제약 4-param 선형 회귀 (P 20건 + M 2건).
  *
- *   모델: ab = α·근력 + β·공격력 + K2·고댐 + K_mon·추가댐
+ *   모델: ab = α·근력 + β·공격력 + γ·고댐 + δ·추가댐
  *
- *   제약(constraint): 평균 BP = (ab_d + ab_s) / 2 = K0·근력 + K1·공격력 + ...
- *     → α_d + α_s = 2·K0,  β_d + β_s = 2·K1
- *     → 60건 평균 BP 정확도(RMSE 0.315%) 그대로 보존
+ *   제약(constraint): 평균 BP = (ab_d + ab_s) / 2 = K0·근력 + K1·공격력 + K2·고댐 + K_mon·추가댐
+ *     → 4쌍 모두 합이 2·K{0,1,2,mon}
+ *     → 59건 평균 BP RMSE(0.315%) 무손실 보존
  *
- *   직/소 차이만 OLS로 학습:
- *     ab_d - ab_s = -2u·근력 + 2v·공격력
- *     u = 0.69167, v = 73.951
+ *   직/소 차이만 OLS 로 학습 (4-param):
+ *     ab_d - ab_s = -2u·근력 + 2v·공격력 - 2w·고댐 - 2x·추가댐
+ *     u = 0.62744 / v = 84.3042 / w = 0.88663 / x = 0.15750
  *
  *   가중치:
- *     α_d = K0 - u,  α_s = K0 + u    (근력은 소환 비중 ↑)
- *     β_d = K1 + v,  β_s = K1 - v    (공격력은 직접 비중 ↑)
+ *     α_d = K0 - u,  α_s = K0 + u       (근력은 소환 비중 ↑)
+ *     β_d = K1 + v,  β_s = K1 - v       (공격력은 직접 비중 ↑)
+ *     γ_d = K2 - w,  γ_s = K2 + w       (고댐은 소환 비중 ↑)
+ *     δ_d = K_mon - x, δ_s = K_mon + x  (추가댐은 소환 비중 ↑)
  *
- *   설계 결정 — 비선형 cross-term을 빼고 선형으로 가는 이유:
- *     비선형(cross-term) 자유 회귀는 split RMSE 살짝 좋지만(직 0.81%/소 0.47%)
- *     60건 평균 BP RMSE 0.315% → 0.466% 로 악화. 일반화 손실이 큼.
- *     자료6/자료7 처럼 직≈소 outlier는 (주스탯·공격력) 만으로는 분리 불가.
+ *   2-param(u,v) → 4-param(u,v,w,x) 확장 효과 (22건 split 데이터):
+ *     직 RMSE 1.014% → 0.814% (-0.20pp, 약 -20% 상대 개선)
+ *     소 RMSE 0.598% → 0.659% (+0.06pp 미세 악화)
+ *     평 RMSE 0.462% 그대로 (평균 제약 보장)
  *
- *   20건 정확도:
- *     직 RMSE 0.92%, 소 0.54%, 평 0.41% (모든 60건 평균 0.315%)
- *     순서(직≷소) 19/20 정확 (자료7만 미세하게 뒤집힘)
+ *   해석: 고댐·추가댐은 소환물 대미지에도 반영되므로 직접 BP 에서는 가중치 ↓.
+ *     특히 고댐: K2-w = 0.394 (직), K2+w = 2.168 (소) — 소환 가중 5.5배.
+ *
+ *   설계 결정 — 비선형 cross-term은 여전히 배제:
+ *     자유 cross-term 회귀는 split RMSE 살짝 좋지만(직 0.81%/소 0.47%)
+ *     평균 BP RMSE 0.315% → 0.466% 로 악화 → 일반화 손실 큼.
+ *     자료6/자료7 처럼 직≈소 또는 부호 뒤집힌 outlier 는 outlier 제거를 해도
+ *     OLS 결과가 거의 변하지 않음 (양쪽 잔차 상쇄) → 데이터 자체 한계, 모델 문제 아님.
+ *
+ *   22건 정확도 (4-param):
+ *     직 RMSE 0.81%, 소 0.66%, 평 0.46%
+ *     순서(직≷소) 21/22 정확 (자료7 부호 뒤집힘은 잔존 — 선형 표현 불가)
  *
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   근마효율 가설 A: 직접/소환 양쪽에 동일 곱셈 (실측 ΔBP -6,742 와 부합).
  *
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-const SPLIT_U = 0.69167;  // 근력 split (직접 = K0 - u, 소환 = K0 + u)
-const SPLIT_V = 73.951;   // 공격력 split (직접 = K1 + v, 소환 = K1 - v)
+const SPLIT_U = 0.62744;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 84.3042;  // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W = 0.88663;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X = 0.15750;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × geunmaMult × penMult × base
 //   기존 V_BIG3 공식 그대로. 직접/소환 공통.
@@ -154,7 +167,7 @@ function multiplierFor(stats) {
 }
 
 // attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
-//   세 모드 모두 K0/K1 기반. direct/summon 은 (u, v) 만큼 split 적용.
+//   세 모드 모두 K0/K1/K2/K_mon 기반. direct/summon 은 (u, v, w, x) 만큼 4-param split 적용.
 //   평균 = (direct + summon)/2 = avg (자동 보존, 별도 회귀 불필요).
 function attackBaseFor(stats, mode = 'avg') {
   if (!stats) return 0;
@@ -166,14 +179,20 @@ function attackBaseFor(stats, mode = 'avg') {
 
   let alpha = params.K0;
   let beta = params.K1;
+  let gamma = params.K2;
+  let delta = params.K_mon;
   if (mode === 'direct') {
     alpha -= SPLIT_U;
     beta += SPLIT_V;
+    gamma -= SPLIT_W;
+    delta -= SPLIT_X;
   } else if (mode === 'summon') {
     alpha += SPLIT_U;
     beta -= SPLIT_V;
+    gamma += SPLIT_W;
+    delta += SPLIT_X;
   }
-  return alpha * 주스탯 + beta * 공격력 + params.K2 * 고댐 + params.K_mon * 추가댐;
+  return alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐;
 }
 
 /**
