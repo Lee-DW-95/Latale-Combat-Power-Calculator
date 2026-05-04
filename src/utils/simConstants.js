@@ -35,3 +35,16 @@ export const MEMORIAL_SIM = Object.freeze({
   // 1차에서 success 가 이 수치 미만이면 2차 확장
   ESTIMATE_PHASE2_THRESHOLD: 30,
 });
+
+// ============================================================
+// 각성석 시뮬
+//   메모리얼 대비 옵션 풀이 넓어(20종) 한 카드에 특정 옵션이 등장할 확률 자체가 낮음.
+//   특히 신비 전용 + 다중 조건 + 고티어/고값 조합은 p ~ 1e-6 수준까지 떨어지므로
+//   1번 실행 캡처는 100만회까지 허용. (대략 4~6초, UI는 spinner 로 처리)
+// ============================================================
+export const AWAKENING_SIM = Object.freeze({
+  SAMPLE_MAX_TRIES: 1_000_000,
+  ESTIMATE_PHASE1: 200_000,
+  ESTIMATE_PHASE2: 2_000_000,
+  ESTIMATE_PHASE2_THRESHOLD: 30,
+});

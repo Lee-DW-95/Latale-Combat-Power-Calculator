@@ -18,11 +18,34 @@
 export const SET_QDIST = { 1: 0.30, 2: 0.30, 3: 0.30, 4: 0.10 };
 
 // ============================================================
+// 1회 굴림당 재화 소모 (출처: latale.info/80)
+//   frag    = 메모리얼 조각 (Memorial_1)
+//   crystal = 메모리얼 결정 (Memorial_2 — 일종의 초기화 결정)
+//   일반 메모리얼은 원본 사이트에서 "10회 일괄"로 돌려서 10회당 표시.
+//   여기선 1회당으로 환산 (예: 10회당 5개 → 1회당 0.5).
+// ============================================================
+const COST = {
+  MUWEN_NORMAL:    { frag: 0.5, crystal: 0.5 },
+  MUWEN_SET:       { frag: 20,  crystal: 3 },
+  HEUKWOL_NORMAL:  { frag: 2,   crystal: 0.5 },
+  HEUKWOL_SET:     { frag: 40,  crystal: 3 },
+  LEVI_NORMAL:     { frag: 0.5, crystal: 0.5 },
+  LEVI_SET:        { frag: 20,  crystal: 3 },
+  CHOENPAM_NORMAL: { frag: 2,   crystal: 0.5 },
+  CHOENPAM_SET:    { frag: 40,  crystal: 3 },
+  SYAM_NORMAL:     { frag: 4,   crystal: 1 },
+  SYAM_SET:        { frag: 40,  crystal: 3 },
+  LZPA_SET:        { frag: 30,  crystal: 3 },
+  GENEPE_SET:      { frag: 40,  crystal: 3 },
+};
+
+// ============================================================
 // 무웬 메모리얼 - 일반
 // ============================================================
 export const MUWEN_NORMAL = {
   name: '무웬 메모리얼 - 일반',
   type: 'normal',  // 1줄 고정
+  cost: COST.MUWEN_NORMAL,
   qdist: { 1: 1.0 },
   tiers: [
     [10,100,0.06,'[1] 근력/마법력'],[50,200,0.05,'[2] 근력/마법력'],[100,400,0.035,'[3] 근력/마법력'],[150,700,0.015,'[4] 근력/마법력'],[200,1500,0.007,'[5] 근력/마법력'],
@@ -40,6 +63,7 @@ export const MUWEN_NORMAL = {
 export const MUWEN_SET = {
   name: '무웬 메모리얼 - 세트',
   type: 'set',
+  cost: COST.MUWEN_SET,
   qdist: SET_QDIST,
   tiers: [
     [1,2,0.10,'[1] 근력/마법력'],[2,4,0.05,'[2] 근력/마법력'],[3,6,0.017,'[3] 근력/마법력'],
@@ -57,6 +81,7 @@ export const MUWEN_SET = {
 export const HEUKWOL_NORMAL = {
   name: '흑월공주 메모리얼 - 일반',
   type: 'normal',
+  cost: COST.HEUKWOL_NORMAL,
   qdist: { 1: 1.0 },
   tiers: [
     [10,150,0.06,'[1] 방어력'],[50,300,0.05,'[2] 방어력'],[100,600,0.035,'[3] 방어력'],[150,1050,0.015,'[4] 방어력'],[200,1500,0.007,'[5] 방어력'],
@@ -74,6 +99,7 @@ export const HEUKWOL_NORMAL = {
 export const HEUKWOL_SET = {
   name: '흑월공주 메모리얼 - 세트',
   type: 'set',
+  cost: COST.HEUKWOL_SET,
   qdist: SET_QDIST,
   tiers: [
     [1,3,0.10,'[1] 방어력'],[2,7,0.06,'[2] 방어력'],[3,13,0.022,'[3] 방어력'],
@@ -91,6 +117,7 @@ export const HEUKWOL_SET = {
 export const LEVI_NORMAL = {
   name: '레비 메모리얼 - 일반',
   type: 'normal',
+  cost: COST.LEVI_NORMAL,
   qdist: { 1: 1.0 },
   tiers: [
     [10,150,0.06,'고정 대미지'],
@@ -127,6 +154,7 @@ export const LEVI_NORMAL = {
 export const LEVI_SET = {
   name: '레비 메모리얼 - 세트',
   type: 'set',
+  cost: COST.LEVI_SET,
   qdist: SET_QDIST,
   tiers: [
     [1,1,0.051335,'고정 대미지%'],
@@ -174,6 +202,7 @@ export const LEVI_SET = {
 export const CHOENPAM_NORMAL = {
   name: '초엔팜 메모리얼 - 일반',
   type: 'normal',
+  cost: COST.CHOENPAM_NORMAL,
   qdist: { 1: 1.0 },
   tiers: [
     [10,225,0.06,'고정 대미지'],
@@ -210,6 +239,7 @@ export const CHOENPAM_NORMAL = {
 export const CHOENPAM_SET = {
   name: '초엔팜 메모리얼 - 세트',
   type: 'set',
+  cost: COST.CHOENPAM_SET,
   qdist: SET_QDIST,
   tiers: [
     [1,1,0.051335,'고정 대미지%'],
@@ -277,6 +307,7 @@ for (const cls of SYAM_NORMAL_CLASSES) {
 export const SYAM_NORMAL = {
   name: '사이암 메모리얼 - 일반',
   type: 'normal',
+  cost: COST.SYAM_NORMAL,
   qdist: { 1: 1.0 },
   tiers: SYAM_NORMAL_TIERS,
 };
@@ -313,6 +344,7 @@ for (const cls of SYAM_SET_CLASSES) {
 export const SYAM_SET = {
   name: '사이암 메모리얼 - 세트',
   type: 'set',
+  cost: COST.SYAM_SET,
   qdist: SET_QDIST,
   tiers: SYAM_SET_TIERS,
 };
@@ -324,6 +356,7 @@ export const SYAM_SET = {
 export const LZPA_SET = {
   name: '리리/제릴/판도라/아르케 메모리얼 - 세트',
   type: 'set',
+  cost: COST.LZPA_SET,
   qdist: SET_QDIST,
   tiers: [
     [1, 5, 12.3457, '[1] 최소 대미지%'],
@@ -352,6 +385,7 @@ export const LZPA_SET = {
 export const GENEPE_SET = {
   name: '게네페 메모리얼 - 세트',
   type: 'set',
+  cost: COST.GENEPE_SET,
   qdist: SET_QDIST,
   tiers: [
     [1, 7, 19.8413, '[1] 최소/최대 대미지%'],

@@ -119,6 +119,18 @@ function rollSample() {
   sampleRoll.value = rollOnce(selectedMemorial.value);
 }
 
+// 평균 시도 × 1회 비용 = 평균 누적 재화
+const meanCost = computed(() => {
+  if (!result.value || !selectedMemorial.value?.cost) return null;
+  if (!Number.isFinite(result.value.mean)) return null;
+  const c = selectedMemorial.value.cost;
+  const round = (n) => Math.round(n * 10) / 10;
+  return {
+    frag: round(result.value.mean * c.frag),
+    crystal: round(result.value.mean * c.crystal),
+  };
+});
+
 </script>
 
 <template>
@@ -259,73 +271,63 @@ function rollSample() {
     </section>
 
 
-    <!-- 시뮬 결과 -->
+    <!-- 시뮬 결과 (목표 요약 한 줄) -->
     <section
       v-if="result"
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        🎯 시뮬 결과 (단일 카드 동시 만족)
+      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+        🎯 시뮬 조건 요약
       </h2>
-      <div class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-        한 카드 안에서 다음 목표를 <strong>모두 동시 만족</strong>하는 카드를 만나기까지
-        평균 <strong>{{ fmt(result.mean) }}회</strong> 굴려야 합니다.
-        (단일 카드 성공률: <strong>{{ pctSmart(result.successRate) }}</strong>)
-        <ul class="mt-1.5 space-y-0.5">
-          <li v-for="(t, i) in result.targets" :key="i" class="text-indigo-600 dark:text-indigo-400 font-medium">
-            ▸ {{ t.base }} 합 ≥ {{ t.value }}
-          </li>
-        </ul>
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-800 p-3">
-          <div class="text-xs text-indigo-600 dark:text-indigo-300">평균 시도</div>
-          <div class="text-2xl font-extrabold text-indigo-700 dark:text-indigo-200 tabular-nums">
-            {{ fmt(result.mean) }}회
-          </div>
-        </div>
-        <div class="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-800 p-3">
-          <div class="text-xs text-emerald-600 dark:text-emerald-300">50% 안에</div>
-          <div class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-200 tabular-nums">
-            {{ fmt(result.p50) }}회
-          </div>
-        </div>
-        <div class="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-800 p-3">
-          <div class="text-xs text-amber-600 dark:text-amber-300">90% 안에</div>
-          <div class="text-2xl font-extrabold text-amber-700 dark:text-amber-200 tabular-nums">
-            {{ fmt(result.p90) }}회
-          </div>
-        </div>
-        <div class="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800 p-3">
-          <div class="text-xs text-rose-600 dark:text-rose-300">99% 안에</div>
-          <div class="text-2xl font-extrabold text-rose-700 dark:text-rose-200 tabular-nums">
-            {{ fmt(result.p99) }}회
-          </div>
-        </div>
-      </div>
-
-      <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
-        💡 <strong>50% 안에</strong> = 절반의 사용자가 이 횟수 이내에 도달.
-        <strong>90% 안에</strong> = 90% 사용자가 이 횟수 이내에 도달 (운 나쁜 케이스 대비).
-        <br />최단 1회 가능 (성공률 {{ pctSmart(result.successRate) }}) · 매우 운 나쁜 0.1% 케이스: {{ fmt(result.p999) }}회.
+      <ul class="space-y-0.5 mb-2">
+        <li
+          v-for="(t, i) in result.targets"
+          :key="i"
+          class="text-sm text-indigo-600 dark:text-indigo-400 font-medium"
+        >
+          ▸ {{ t.base }} 합 ≥ {{ t.value }}
+        </li>
+      </ul>
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        평균 <strong class="text-slate-700 dark:text-slate-200">{{ fmt(result.mean) }}회</strong> 시도 예상
+        <span v-if="meanCost">
+          (평균 조각 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(meanCost.frag) }}</strong>개,
+          결정 <strong class="text-rose-700 dark:text-rose-300">{{ fmt(meanCost.crystal) }}</strong>개)
+        </span>
+        · 단일 카드 성공률 {{ pctSmart(result.successRate) }}
       </p>
     </section>
 
-    <!-- 1번 시도의 성공한 카드 -->
+    <!-- 1번 실행의 성공 카드 -->
     <section
       v-if="sampleWinningCard"
       class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
-        🎉 1번 실행의 성공 카드 — {{ fmt(sampleWinningCard.tries) }}회차
-      </h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        시뮬 통계와는 별도로, 한 번의 실제 진행을 그대로 재현한 결과입니다.
-        같은 조건이라도 매번 다른 회차가 나옵니다 (위 버튼 다시 누르면 재실행).
-      </p>
-
       <div v-if="sampleWinningCard.success" class="space-y-3">
+        <!-- 핵심 헤드라인 — N회차 + 실제 소비 -->
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-200 dark:border-slate-700 pb-3">
+          <span class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
+            🎉 {{ fmt(sampleWinningCard.tries) }}회차에 성공
+          </span>
+          <span
+            v-if="selectedMemorial?.cost"
+            class="text-sm text-slate-600 dark:text-slate-300 tabular-nums"
+          >
+            <span class="text-amber-700 dark:text-amber-300 font-semibold">
+              조각 {{ fmt(Math.round(sampleWinningCard.tries * selectedMemorial.cost.frag * 10) / 10) }}개
+            </span>
+            ·
+            <span class="text-rose-700 dark:text-rose-300 font-semibold">
+              결정 {{ fmt(Math.round(sampleWinningCard.tries * selectedMemorial.cost.crystal * 10) / 10) }}개
+            </span>
+          </span>
+        </div>
+
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다 (위 버튼 다시 누르면 재실행).
+        </p>
+
+        <!-- 카드 -->
         <div class="rounded-lg bg-slate-50 dark:bg-slate-900/60 ring-1 ring-emerald-400 dark:ring-emerald-600 p-3">
           <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
             성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄)
@@ -355,9 +357,6 @@ function rollSample() {
             </div>
           </div>
         </div>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          앞선 {{ fmt(sampleWinningCard.tries - 1) }}장의 카드는 모두 목표 미달. {{ fmt(sampleWinningCard.tries) }}회차에 위 카드 등장.
-        </p>
       </div>
       <div v-else class="text-sm text-rose-600 dark:text-rose-400">
         ⚠ {{ fmt(sampleWinningCard.tries) }}회 굴렸지만 도달 실패 (maxTries 한도 초과).

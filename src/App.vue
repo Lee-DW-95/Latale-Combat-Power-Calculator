@@ -20,6 +20,7 @@ import MemorialSimulator from './components/MemorialSimulator.vue';
 import EnchantSimulator from './components/EnchantSimulator.vue';
 import DamagePredict from './components/DamagePredict.vue';
 import RelicSimulator from './components/RelicSimulator.vue';
+import AwakeningSimulator from './components/AwakeningSimulator.vue';
 
 // ============================================================
 // 탭 상태
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'enchant', label: '🔨 인챈트 시뮬', desc: '장비 인챈트 / 특수장비 강화' },
   { id: 'damage', label: '🎯 대미지 예측', desc: '스킬계수 + 캘리브레이션' },
   { id: 'relic', label: '🌟 성물 시뮬', desc: '성물 레벨 + 전용석/공용석 합산' },
+  { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기' },
 ];
 
 // ============================================================
@@ -202,6 +204,11 @@ function restoreFromHistory(entry) {
       <!-- ───── 탭 5: 성물 시뮬 ───── -->
       <template v-else-if="activeTab === 'relic'">
         <RelicSimulator />
+      </template>
+
+      <!-- ───── 탭 6: 각성석 시뮬 ───── -->
+      <template v-else-if="activeTab === 'awakening'">
+        <AwakeningSimulator />
       </template>
 
       <footer class="pt-4 text-center text-xs text-slate-400 dark:text-slate-500">
