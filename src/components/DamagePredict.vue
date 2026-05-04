@@ -15,8 +15,11 @@ import {
 } from '../utils/damagePredict.js';
 import {
   calculateBattlePower,
+  calculateDirectBP,
+  calculateSummonBP,
   conditionalMultiplier,
   conditionalMultiplierWith,
+  expectedConditionalMultiplier,
 } from '../utils/battlePower.js';
 import { fmt, fmtRound } from '../utils/format.js';
 
@@ -146,13 +149,23 @@ const currentBP = computed(() => calculateBattlePower(props.stats));
 const currentCoef = computed(() =>
   getSkillCoef(mode.value, selectedJob.value, selectedSkill.value, skillLevel.value),
 );
-// 조건부 환산 적용 배율 — 1 이면 미적용, 1.43 이면 43% 증폭
-const condMult = computed(() => {
-  if (!props.stats.환산활성) return 1;
-  return conditionalMultiplier(props.stats);
-});
-// 환산이 ON 인데 실제 입력이 없어 효과가 없는지 판단
-const condEffective = computed(() => props.stats.환산활성 && condMult.value > 1);
+// BP 환산 배율 — 가동률 가중 (직접 BP 에만 곱셈, 소환은 영향 없음)
+const condMultNormal = computed(() => expectedConditionalMultiplier(props.stats, 'normal'));
+const condMultBoss = computed(() => expectedConditionalMultiplier(props.stats, 'boss'));
+const condEffective = computed(
+  () => condMultNormal.value > 1 || condMultBoss.value > 1
+);
+
+// 평균 BP (직접+소환)/2 — base/일반/보스
+const baseBP = computed(() => calculateBattlePower(props.stats, 'base'));
+const normalBP = computed(() => calculateBattlePower(props.stats, 'normal'));
+const bossBP = computed(() => calculateBattlePower(props.stats, 'boss'));
+
+// 직접/소환 분리 BP — 환산 시각화용
+const directBPBase = computed(() => calculateDirectBP(props.stats, 'base'));
+const directBPNormal = computed(() => calculateDirectBP(props.stats, 'normal'));
+const directBPBoss = computed(() => calculateDirectBP(props.stats, 'boss'));
+const summonBP = computed(() => calculateSummonBP(props.stats));
 const predicted = computed(() => {
   if (!calibrationC.value) return null;
   return predictDamage(
@@ -165,11 +178,9 @@ const predicted = computed(() => {
   );
 });
 
-// 8가지 시나리오 (백어택/근거리/상태이상 조합) 별 BP·예상 대미지
-//   체크박스 조합과 무관하게 입력된 값 기준으로 모두 산출
-//   → 사용자가 "어느 조건이 가장 큰 차이를 만드는지" 즉시 비교 가능
+// 시나리오 매트릭스 — 백/근/상 ON/OFF 조합별 일반/보스 두 환경 BP/대미지
+//   백/근/상은 직접 BP 에만 영향, 소환은 그대로 → 평균(표시) BP = (직접×mult + 소환)/2
 const scenarioMatrix = computed(() => {
-  // 입력값이 있는 옵션만 시나리오에 포함 (없는 건 의미 없음)
   const hasBack = Number(props.stats.백어택 || 0) > 0;
   const hasClose = Number(props.stats.근거리 || 0) > 0;
   const hasStatus = Number(props.stats.상태대미지 || 0) > 0;
@@ -179,7 +190,10 @@ const scenarioMatrix = computed(() => {
   if (hasStatus) flags.push('상태이상');
   if (flags.length === 0) return [];
 
-  // 0..(2^N-1) 비트마스크로 모든 조합 생성
+  // 가동률 영향 제외한 base 직접/소환 BP (시나리오는 ON/OFF 100% 적용 가정)
+  const baseDirect = calculateDirectBP(props.stats, 'base');
+  const baseSummon = calculateSummonBP(props.stats);
+
   const total = 1 << flags.length;
   const out = [];
   for (let mask = 0; mask < total; mask++) {
@@ -190,29 +204,31 @@ const scenarioMatrix = computed(() => {
       activeMap[flags[i]] = !!on;
       if (on) labels.push(flags[i]);
     }
-    const mult = conditionalMultiplierWith(props.stats, activeMap);
-    // 시나리오별 BP — 기본 BP 에 multiplier 만 갈아끼움
-    // 현재 stats 의 활성 플래그 영향 제외하기 위해 임시 stats 만들어 BP 계산
-    const tempStats = {
-      ...props.stats,
-      백어택활성: false,
-      근거리활성: false,
-      상태대미지활성: false,
-    };
-    const baseBPNoCond = calculateBattlePower(tempStats);
-    const scenarioBP = baseBPNoCond * mult;
-    const dmg = calibrationC.value && scenarioBP > 0 && currentCoef.value > 0
-      ? calibrationC.value * scenarioBP * (currentCoef.value / 100)
-      : null;
+    const multNormal = conditionalMultiplierWith(props.stats, activeMap, 'normal');
+    const multBoss = conditionalMultiplierWith(props.stats, activeMap, 'boss');
+
+    // 직접 BP × multiplier, 소환 BP 그대로
+    const dirNormal = baseDirect * multNormal;
+    const dirBoss = baseDirect * multBoss;
+    const avgNormal = (dirNormal + baseSummon) / 2;
+    const avgBoss = (dirBoss + baseSummon) / 2;
+
+    const dmgNormal = calibrationC.value && avgNormal > 0 && currentCoef.value > 0
+      ? calibrationC.value * avgNormal * (currentCoef.value / 100) : null;
+    const dmgBoss = calibrationC.value && avgBoss > 0 && currentCoef.value > 0
+      ? calibrationC.value * avgBoss * (currentCoef.value / 100) : null;
     out.push({
       label: labels.length === 0 ? '기본 (조건 없음)' : labels.join(' + '),
-      mult,
-      bp: scenarioBP,
-      dmg,
+      multNormal,
+      multBoss,
+      dirNormal, dirBoss,
+      summon: baseSummon,
+      avgNormal, avgBoss,
+      dmgNormal, dmgBoss,
       activeCount: labels.length,
     });
   }
-  return out.sort((a, b) => a.activeCount - b.activeCount || b.mult - a.mult);
+  return out.sort((a, b) => a.activeCount - b.activeCount || b.avgBoss - a.avgBoss);
 });
 
 // 동일 캐릭으로 다른 스킬 비교 — C 없어도 계수 기반으로 상대 순위 노출
@@ -261,25 +277,32 @@ const allSkillPredictions = computed(() => {
     <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700 p-5">
       <header class="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h2 class="text-lg font-bold text-amber-700 dark:text-amber-300">
-          🎯 조건부 환산 — 시나리오별 ON/OFF
-          <span v-if="condEffective" class="ml-2 text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-            현재 BP × {{ condMult.toFixed(3) }} (+{{ ((condMult - 1) * 100).toFixed(1) }}%)
+          🎯 조건부 환산 — 가동률 기반 BP
+          <span v-if="condEffective" class="ml-2 text-xs font-semibold tabular-nums">
+            <span class="text-sky-700 dark:text-sky-300">일반 ×{{ condMultNormal.toFixed(3) }}</span>
+            <span class="mx-1 text-slate-400">/</span>
+            <span class="text-rose-700 dark:text-rose-300">보스 ×{{ condMultBoss.toFixed(3) }}</span>
           </span>
           <span v-else class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
-            모두 비활성 — 게임 표시값 그대로
+            가동률 미입력 — 게임 표시값 그대로
           </span>
         </h2>
       </header>
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        각 옵션의 체크박스를 독립적으로 켜고 끌 수 있습니다. 예: 백어택만 ON → 백어택 시나리오 대미지, 백어택+근거리 ON → 둘 다 적용된 대미지.
-        하단 시나리오 비교표에서 8가지 조합 즉시 확인 가능.
+        엑셀 공식 (B!P18/19): <code class="text-amber-700 dark:text-amber-300">multiplier = 1 + Σ(값% × 가동률) / (D × (1 + 크댐%))</code>,
+        D=0.6(일반)/0.3(보스). 크댐이 클수록 배율 작아짐.
+        <br />
+        ⚠️ 백/근/상은 <strong class="text-amber-700 dark:text-amber-300">직접타격 전용</strong> — 소환 BP는 영향 없고 직접 BP만 multiplier 곱셈됩니다.
+        표시(평균) BP = (직접 × mult + 소환) / 2 → 직접 효과의 약 절반이 표시 BP에 반영.
+        <br />
+        예: 크댐 9000%, 백어택 1000% × 가동률 70% → 직접 ×1.26 / 소환 ×1.00 / 평균 ×1.13 (보스 기준).
       </p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div
           v-for="cfg in [
-            { activeKey: '백어택활성', valueKey: '백어택', label: '백어택 대미지', hint: '예: 30' },
-            { activeKey: '근거리활성', valueKey: '근거리', label: '근거리 대미지', hint: '예: 15' },
-            { activeKey: '상태대미지활성', valueKey: '상태대미지', label: '상태이상 대미지', hint: '예: 10' },
+            { activeKey: '백어택활성', valueKey: '백어택', uptimeKey: '백어택가동률', label: '백어택 대미지', hint: '예: 1000' },
+            { activeKey: '근거리활성', valueKey: '근거리', uptimeKey: '근거리가동률', label: '근거리 대미지', hint: '예: 100' },
+            { activeKey: '상태대미지활성', valueKey: '상태대미지', uptimeKey: '상태대미지가동률', label: '상태이상 대미지', hint: '예: 50' },
           ]"
           :key="cfg.activeKey"
           class="rounded-md ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/40 dark:bg-amber-950/20 p-3"
@@ -301,8 +324,23 @@ const allSkillPredictions = computed(() => {
             :value="stats[cfg.valueKey]"
             @input="updateStatField(cfg.valueKey, $event.target.value === '' ? 0 : Number($event.target.value) || 0)"
             :placeholder="cfg.hint"
-            class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none mb-2"
           />
+          <label class="block">
+            <span class="block text-[10px] font-medium text-slate-600 dark:text-slate-300 mb-0.5">
+              가동률 (%) — BP 환산 가중치
+            </span>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              max="100"
+              :value="stats[cfg.uptimeKey]"
+              @input="updateStatField(cfg.uptimeKey, $event.target.value === '' ? 0 : Number($event.target.value) || 0)"
+              placeholder="0~100"
+              class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-xs tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            />
+          </label>
         </div>
       </div>
     </section>
@@ -435,10 +473,20 @@ const allSkillPredictions = computed(() => {
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="rounded-lg bg-slate-50 dark:bg-slate-900/40 ring-1 ring-slate-200 dark:ring-slate-700 p-3">
           <div class="text-xs text-slate-500 dark:text-slate-400">
-            현재 BP
-            <span v-if="condEffective" class="ml-1 text-amber-600 dark:text-amber-400 font-semibold">(환산 ×{{ condMult.toFixed(2) }})</span>
+            현재 BP <span class="text-rose-700 dark:text-rose-300 font-semibold">(보스 환산)</span>
           </div>
-          <div class="text-xl font-extrabold text-slate-700 dark:text-slate-200 tabular-nums">{{ fmtRound(currentBP) }}</div>
+          <div class="text-xl font-extrabold text-slate-700 dark:text-slate-200 tabular-nums">{{ fmtRound(bossBP) }}</div>
+          <div class="text-[10px] tabular-nums mt-0.5">
+            <span class="text-amber-700 dark:text-amber-300 font-semibold">직접 {{ fmtRound(directBPBoss) }}</span>
+            <span class="text-slate-400 mx-1">·</span>
+            <span class="text-sky-700 dark:text-sky-300 font-semibold">소환 {{ fmtRound(summonBP) }}</span>
+          </div>
+          <div
+            v-if="condEffective"
+            class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums mt-0.5"
+          >
+            평균 base {{ fmtRound(baseBP) }} · 일반 {{ fmtRound(normalBP) }}
+          </div>
         </div>
         <div class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-800 p-3">
           <div class="text-xs text-indigo-600 dark:text-indigo-300">스킬 계수</div>
@@ -470,11 +518,23 @@ const allSkillPredictions = computed(() => {
         <table class="min-w-full text-sm tabular-nums">
           <thead class="text-xs uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40">
             <tr>
-              <th class="px-3 py-2 text-left">시나리오</th>
-              <th class="px-3 py-2 text-right">곱셈 배율</th>
-              <th class="px-3 py-2 text-right">시나리오 BP</th>
-              <th class="px-3 py-2 text-right">예상 대미지</th>
-              <th class="px-3 py-2 text-right">vs 기본</th>
+              <th class="px-3 py-2 text-left" rowspan="2">시나리오</th>
+              <th class="px-3 py-2 text-center bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300" colspan="4">
+                🟦 일반 인던 (D=0.6)
+              </th>
+              <th class="px-3 py-2 text-center bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300" colspan="4">
+                🟥 보스 인던 (D=0.3)
+              </th>
+            </tr>
+            <tr>
+              <th class="px-3 py-1 text-right text-sky-700 dark:text-sky-300">배율</th>
+              <th class="px-3 py-1 text-right text-sky-700 dark:text-sky-300">직접</th>
+              <th class="px-3 py-1 text-right text-sky-700 dark:text-sky-300">평균</th>
+              <th class="px-3 py-1 text-right text-sky-700 dark:text-sky-300">대미지</th>
+              <th class="px-3 py-1 text-right text-rose-700 dark:text-rose-300">배율</th>
+              <th class="px-3 py-1 text-right text-rose-700 dark:text-rose-300">직접</th>
+              <th class="px-3 py-1 text-right text-rose-700 dark:text-rose-300">평균</th>
+              <th class="px-3 py-1 text-right text-rose-700 dark:text-rose-300">대미지</th>
             </tr>
           </thead>
           <tbody>
@@ -487,21 +547,28 @@ const allSkillPredictions = computed(() => {
               ]"
             >
               <td class="px-3 py-2">{{ s.label }}</td>
-              <td class="px-3 py-2 text-right">×{{ s.mult.toFixed(3) }}</td>
-              <td class="px-3 py-2 text-right">{{ fmtRound(s.bp) }}</td>
-              <td class="px-3 py-2 text-right font-bold">
-                <template v-if="s.dmg != null">{{ fmtRound(s.dmg) }}</template>
-                <template v-else><span class="text-slate-400 font-normal">—</span></template>
+              <td class="px-3 py-2 text-right text-sky-700 dark:text-sky-300">×{{ s.multNormal.toFixed(3) }}</td>
+              <td class="px-3 py-2 text-right">{{ fmtRound(s.dirNormal) }}</td>
+              <td class="px-3 py-2 text-right font-semibold">{{ fmtRound(s.avgNormal) }}</td>
+              <td class="px-3 py-2 text-right">
+                <template v-if="s.dmgNormal != null">{{ fmtRound(s.dmgNormal) }}</template>
+                <template v-else><span class="text-slate-400">—</span></template>
               </td>
-              <td class="px-3 py-2 text-right text-xs text-emerald-700 dark:text-emerald-400">
-                +{{ ((s.mult - 1) * 100).toFixed(1) }}%
+              <td class="px-3 py-2 text-right text-rose-700 dark:text-rose-300">×{{ s.multBoss.toFixed(3) }}</td>
+              <td class="px-3 py-2 text-right">{{ fmtRound(s.dirBoss) }}</td>
+              <td class="px-3 py-2 text-right font-semibold">{{ fmtRound(s.avgBoss) }}</td>
+              <td class="px-3 py-2 text-right font-bold">
+                <template v-if="s.dmgBoss != null">{{ fmtRound(s.dmgBoss) }}</template>
+                <template v-else><span class="text-slate-400 font-normal">—</span></template>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       <p class="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
-        💡 시나리오 BP 는 위 패널의 체크박스와 무관 — 입력된 % 값을 기준으로 모든 조합을 산출합니다. 체크박스는 상단 "현재 BP" 카드에만 영향.
+        💡 직접 BP에만 multiplier 곱, 소환 BP는 그대로. <strong>평균 = (직접 × mult + 소환) / 2</strong> — 게임 T창 표시 BP와 동일 산식.
+        <br />
+        ⚠️ 근거리·상태이상은 엑셀에 명시 공식이 없어 백어택과 동일 메커니즘으로 가정. 측정 데이터 도착 시 검증·보정 예정.
       </p>
     </section>
 

@@ -1,6 +1,12 @@
 <script setup>
 import { computed } from 'vue';
-import { getStatLabel, conditionalMultiplier } from '../utils/battlePower.js';
+import {
+  getStatLabel,
+  expectedConditionalMultiplier,
+  calculateBattlePower,
+  calculateDirectBP,
+  calculateSummonBP,
+} from '../utils/battlePower.js';
 import { STAT_FIELD_DEFS, BASE_FIELD_DEFS } from '../data/statLabels.js';
 import { fmt as formatBP } from '../utils/format.js';
 
@@ -34,16 +40,24 @@ const baseFilledCount = computed(() =>
   BASE_FIELD_DEFS.filter((d) => Number(props.modelValue[d.key] || 0) > 0).length
 );
 
-// 조건부 환산 표시용
-const conditionalMult = computed(() => conditionalMultiplier(props.modelValue));
-const anyConditionalActive = computed(() => conditionalMult.value > 1);
-const activeConditionsLabel = computed(() => {
-  const labels = [];
-  if (props.modelValue.백어택활성 && Number(props.modelValue.백어택) > 0) labels.push(`백어택 ${props.modelValue.백어택}%`);
-  if (props.modelValue.근거리활성 && Number(props.modelValue.근거리) > 0) labels.push(`근거리 ${props.modelValue.근거리}%`);
-  if (props.modelValue.상태대미지활성 && Number(props.modelValue.상태대미지) > 0) labels.push(`상태이상 ${props.modelValue.상태대미지}%`);
-  return labels.join(' · ') || '없음';
-});
+// 조건부 환산 표시용 — 가동률 가중 (직접 BP 에만 곱셈 적용됨, 소환은 영향 없음)
+//   props.battlePower 는 부모에서 'boss' 디폴트로 계산됨. 여기선 직접/소환 비율도 보여줌.
+const expectedMultNormal = computed(() => expectedConditionalMultiplier(props.modelValue, 'normal'));
+const expectedMultBoss = computed(() => expectedConditionalMultiplier(props.modelValue, 'boss'));
+
+// 평균 BP — base / normal / boss (= (직접+소환)/2)
+const baseBP = computed(() => calculateBattlePower(props.modelValue, 'base'));
+const normalBP = computed(() => calculateBattlePower(props.modelValue, 'normal'));
+const bossBP = computed(() => calculateBattlePower(props.modelValue, 'boss'));
+
+// 직접 / 소환 분리 BP — base 기준 (소환은 가동률 무관)
+const directBPBase = computed(() => calculateDirectBP(props.modelValue, 'base'));
+const directBPBoss = computed(() => calculateDirectBP(props.modelValue, 'boss'));
+const summonBP = computed(() => calculateSummonBP(props.modelValue));
+
+const anyConditionalActive = computed(
+  () => expectedMultNormal.value > 1 || expectedMultBoss.value > 1
+);
 </script>
 
 <template>
@@ -55,14 +69,31 @@ const activeConditionsLabel = computed(() => {
           계산된 전투력
           <span
             v-if="anyConditionalActive"
-            class="ml-1 text-amber-600 dark:text-amber-400 font-semibold"
-            :title="`조건부 환산 적용 중: ${activeConditionsLabel}`"
+            class="ml-1 text-amber-600 dark:text-amber-400 font-semibold tabular-nums"
+            title="가동률 가중 환산 — 직접 BP에만 곱셈, 소환은 영향 없음"
           >
-            (환산 ON · ×{{ conditionalMult.toFixed(3) }})
+            (보스 환산)
           </span>
         </div>
         <div class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tabular-nums">
           {{ formatBP(battlePower) }}
+        </div>
+        <!-- 직접/소환 분리 (항상 표시) -->
+        <div class="text-[10px] tabular-nums mt-0.5">
+          <span class="text-amber-700 dark:text-amber-300 font-semibold">
+            직접 {{ formatBP(directBPBoss) }}
+          </span>
+          <span class="text-slate-400 mx-1">·</span>
+          <span class="text-sky-700 dark:text-sky-300 font-semibold">
+            소환 {{ formatBP(summonBP) }}
+          </span>
+        </div>
+        <div
+          v-if="anyConditionalActive"
+          class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums mt-0.5"
+          title="환산 없이 base 평균 / 일반·보스 환경별 평균"
+        >
+          base {{ formatBP(baseBP) }} · 일반 {{ formatBP(normalBP) }} · 보스 {{ formatBP(bossBP) }}
         </div>
       </div>
     </header>
@@ -173,28 +204,32 @@ const activeConditionsLabel = computed(() => {
       </div>
     </div>
 
-    <!-- ─── 조건부 대미지 환산 (백어택/근거리/상태이상) — 개별 체크박스 ─── -->
+    <!-- ─── 조건부 대미지 환산 (백어택/근거리/상태이상) ─── -->
     <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
       <header class="flex items-center justify-between mb-2">
         <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
           🎯 조건부 대미지 환산
-          <span class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">
-            (시나리오별 ON/OFF · 활성 옵션만 BP/대미지에 곱셈 반영)
-          </span>
         </h3>
-        <span v-if="anyConditionalActive" class="text-xs tabular-nums text-amber-600 dark:text-amber-400 font-semibold">
-          현재 ×{{ conditionalMult.toFixed(3) }}
+        <span v-if="anyConditionalActive" class="text-xs tabular-nums font-semibold">
+          <span class="text-sky-700 dark:text-sky-300">일반 ×{{ expectedMultNormal.toFixed(3) }}</span>
+          <span class="mx-1 text-slate-400">/</span>
+          <span class="text-rose-700 dark:text-rose-300">보스 ×{{ expectedMultBoss.toFixed(3) }}</span>
         </span>
       </header>
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        각 옵션은 <strong>독립적으로 ON/OFF</strong> 가능. 백어택만 켜면 백어택 시나리오 BP, 근거리만 켜면 근거리 시나리오 BP 등 즉시 비교됩니다.
+        엑셀 공식 (B!P18/19): <code class="text-amber-700 dark:text-amber-300">multiplier = 1 + Σ(값% × 가동률) / (D × (1 + 크댐%))</code>,
+        D=0.6(일반)/0.3(보스). <strong>가동률</strong>은 직타비중 × 조건충족율 → 0~100 사이로 입력.
+        <br />
+        ⚠️ 백/근/상은 <strong class="text-amber-700 dark:text-amber-300">직접타격에만 영향</strong> — 소환 BP는 그대로, 직접 BP만 곱셈 → 표시(평균) BP는 직접 효과의 절반 정도 상승.
+        <br />
+        예: 백어택 1000% × 가동률 70% (크댐 9000%) → 직접 BP ×1.26, 소환 BP ×1.00, 표시 BP ×1.13.
       </p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div
           v-for="cfg in [
-            { activeKey: '백어택활성', valueKey: '백어택', label: '백어택 대미지', hint: '예: 30' },
-            { activeKey: '근거리활성', valueKey: '근거리', label: '근거리 대미지', hint: '예: 15' },
-            { activeKey: '상태대미지활성', valueKey: '상태대미지', label: '상태이상 대미지', hint: '예: 10' },
+            { activeKey: '백어택활성', valueKey: '백어택', uptimeKey: '백어택가동률', label: '백어택 대미지', hint: '예: 1000' },
+            { activeKey: '근거리활성', valueKey: '근거리', uptimeKey: '근거리가동률', label: '근거리 대미지', hint: '예: 100' },
+            { activeKey: '상태대미지활성', valueKey: '상태대미지', uptimeKey: '상태대미지가동률', label: '상태이상 대미지', hint: '예: 50' },
           ]"
           :key="cfg.activeKey"
           class="rounded-md ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/40 dark:bg-amber-950/20 p-3"
@@ -216,8 +251,23 @@ const activeConditionsLabel = computed(() => {
             :value="stats[cfg.valueKey]"
             @input="setField(cfg.valueKey, $event.target.value)"
             :placeholder="cfg.hint"
-            class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none mb-2"
           />
+          <label class="block">
+            <span class="block text-[10px] font-medium text-slate-600 dark:text-slate-300 mb-0.5">
+              가동률 (%) — BP 환산 가중치
+            </span>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              max="100"
+              :value="stats[cfg.uptimeKey]"
+              @input="setField(cfg.uptimeKey, $event.target.value)"
+              placeholder="0~100"
+              class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-xs tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            />
+          </label>
         </div>
       </div>
     </div>

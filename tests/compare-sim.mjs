@@ -1,4 +1,3 @@
-// 원본 latale.info/60 코드를 그대로 복붙 (표/유틸/rollOnce 그대로)
 const LINES_DIST = [{k:1,p:0.40},{k:2,p:0.40},{k:3,p:0.15},{k:4,p:0.05}];
 const STONE_DIST = [{name:"상급 보라빛 각성석", p:0.95}, {name:"상급 신비한 각성석", p:0.05}];
 

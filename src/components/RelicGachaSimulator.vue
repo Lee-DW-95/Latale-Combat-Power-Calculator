@@ -198,7 +198,6 @@ function fmtEly(n) {
     >
       <strong>🌟 성물 뽑기 시뮬레이터</strong> · 원하는 성물 옵션이 나올 때까지 평균 몇 회 뽑아야 하는지 분석합니다.
       <br />
-      <strong class="text-xs">출처</strong>: latale.info/57 · 분석적 접근으로 즉시 응답.
     </div>
 
     <!-- 서브 탭 -->

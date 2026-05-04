@@ -96,65 +96,213 @@ export function effectiveMinDmg(minDmg, maxDmg) {
   return Math.min(mn, mx);
 }
 
-export function calculateBattlePower(stats) {
-  const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
+/**
+ * 직접/소환 타격 BP 분리 — 20건 제약 선형 회귀 (P 18건 + M 2건).
+ *
+ *   모델: ab = α·근력 + β·공격력 + K2·고댐 + K_mon·추가댐
+ *
+ *   제약(constraint): 평균 BP = (ab_d + ab_s) / 2 = K0·근력 + K1·공격력 + ...
+ *     → α_d + α_s = 2·K0,  β_d + β_s = 2·K1
+ *     → 60건 평균 BP 정확도(RMSE 0.315%) 그대로 보존
+ *
+ *   직/소 차이만 OLS로 학습:
+ *     ab_d - ab_s = -2u·근력 + 2v·공격력
+ *     u = 0.69167, v = 73.951
+ *
+ *   가중치:
+ *     α_d = K0 - u,  α_s = K0 + u    (근력은 소환 비중 ↑)
+ *     β_d = K1 + v,  β_s = K1 - v    (공격력은 직접 비중 ↑)
+ *
+ *   설계 결정 — 비선형 cross-term을 빼고 선형으로 가는 이유:
+ *     비선형(cross-term) 자유 회귀는 split RMSE 살짝 좋지만(직 0.81%/소 0.47%)
+ *     60건 평균 BP RMSE 0.315% → 0.466% 로 악화. 일반화 손실이 큼.
+ *     자료6/자료7 처럼 직≈소 outlier는 (주스탯·공격력) 만으로는 분리 불가.
+ *
+ *   20건 정확도:
+ *     직 RMSE 0.92%, 소 0.54%, 평 0.41% (모든 60건 평균 0.315%)
+ *     순서(직≷소) 19/20 정확 (자료7만 미세하게 뒤집힘)
+ *
+ *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
+ *   근마효율 가설 A: 직접/소환 양쪽에 동일 곱셈 (실측 ΔBP -6,742 와 부합).
+ *
+ *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
+ */
+const SPLIT_U = 0.69167;  // 근력 split (직접 = K0 - u, 소환 = K0 + u)
+const SPLIT_V = 73.951;   // 공격력 split (직접 = K1 + v, 소환 = K1 - v)
 
-  // 수련의방 cap: 최소뎀이 최대뎀 초과 시 최대뎀으로 잘림
+// 곱셈 항 M = critMult × dmgMult × dominanceMult × geunmaMult × penMult × base
+//   기존 V_BIG3 공식 그대로. 직접/소환 공통.
+function multiplierFor(stats) {
+  if (!stats) return 0;
+  const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
   const maxDmg = Number(stats.최대뎀 || 0);
   const minDmg = effectiveMinDmg(stats.최소뎀, stats.최대뎀);
-
-  // V_BIG3: K0×주스탯 + K1×공격력 + K2×고댐 + K_mon×(일몬추+보몬추) (가산형 베이스)
-  const attackBase =
-    Number(stats.주스탯 || 0) * params.K0 +
-    Number(stats.공격력 || 0) * params.K1 +
-    Number(stats.고댐 || 0) * params.K2 +
-    (Number(stats.일몬추 || 0) + Number(stats.보몬추 || 0)) * params.K_mon;
-
-  if (attackBase <= 0) return 0;
-
-  // 곱셈 항들 (크댐, 최소+최대뎀, 지배력, 근마, 관통)
   const critMultiplier = 1 + Number(stats.크댐 || 0) / params.D_crit;
   const dmgMultiplier = 1 + (minDmg + maxDmg) / params.D_dmg;
   const dominanceMultiplier =
     1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
   const geunmaMultiplier = 1 + Number(stats.근마효율 || 0) * params.K_geunma;
   const penetrationMultiplier = 1 + Number(stats.관통 || 0) / params.D_pen;
-
-  let battlePower =
-    attackBase *
+  return (
     critMultiplier *
     dmgMultiplier *
     dominanceMultiplier *
     geunmaMultiplier *
     penetrationMultiplier *
-    params.base;
+    params.base
+  );
+}
 
-  // 조건부 환산 — 활성화된 옵션만 BP 에 곱셈 항으로 적용.
-  // 모든 플래그 OFF 면 multiplier=1 → BP 영향 없음 (회귀 테스트 보존).
-  battlePower *= conditionalMultiplier(stats);
+// attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
+//   세 모드 모두 K0/K1 기반. direct/summon 은 (u, v) 만큼 split 적용.
+//   평균 = (direct + summon)/2 = avg (자동 보존, 별도 회귀 불필요).
+function attackBaseFor(stats, mode = 'avg') {
+  if (!stats) return 0;
+  const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
+  const 주스탯 = Number(stats.주스탯 || 0);
+  const 공격력 = Number(stats.공격력 || 0);
+  const 고댐 = Number(stats.고댐 || 0);
+  const 추가댐 = Number(stats.일몬추 || 0) + Number(stats.보몬추 || 0);
 
-  return Math.round(battlePower);
+  let alpha = params.K0;
+  let beta = params.K1;
+  if (mode === 'direct') {
+    alpha -= SPLIT_U;
+    beta += SPLIT_V;
+  } else if (mode === 'summon') {
+    alpha += SPLIT_U;
+    beta -= SPLIT_V;
+  }
+  return alpha * 주스탯 + beta * 공격력 + params.K2 * 고댐 + params.K_mon * 추가댐;
+}
+
+/**
+ * 전투력(BP) 계산 — 표시 BP = (직접 BP + 소환 BP) / 2.
+ *   target: 'base' (조건부 환산 미반영, 게임 T창 표시값과 일치) |
+ *           'normal' (일반 인던 가동률 환산) |
+ *           'boss' (보스 인던 가동률 환산, 디폴트)
+ *
+ *   조건부 환산(백/근/상)은 직접타격에만 적용되므로 직접 BP × cond_mult, 소환 BP는 그대로.
+ *   가동률 0 이면 cond_mult = 1 → 'base' 와 동일.
+ */
+export function calculateBattlePower(stats, target = 'boss') {
+  if (!stats) return 0;
+  const ab_d = attackBaseFor(stats, 'direct');
+  const ab_s = attackBaseFor(stats, 'summon');
+  if (ab_d <= 0 && ab_s <= 0) return 0;
+  const M = multiplierFor(stats);
+  const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
+  const bp_direct = ab_d * M * cond;
+  const bp_summon = ab_s * M;
+  return Math.round((bp_direct + bp_summon) / 2);
+}
+
+/**
+ * 직접타격 BP — 백/근/상 가동률 환산 적용.
+ */
+export function calculateDirectBP(stats, target = 'boss') {
+  if (!stats) return 0;
+  const ab = attackBaseFor(stats, 'direct');
+  if (ab <= 0) return 0;
+  const M = multiplierFor(stats);
+  const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
+  return Math.round(ab * M * cond);
+}
+
+/**
+ * 소환타격 BP — 백/근/상 영향 없음 (직접타격 전용 옵션).
+ *   target 인자는 시그니처 호환만 (실제 사용 안 됨).
+ */
+export function calculateSummonBP(stats /* , target */) {
+  if (!stats) return 0;
+  const ab = attackBaseFor(stats, 'summon');
+  if (ab <= 0) return 0;
+  return Math.round(ab * multiplierFor(stats));
 }
 
 // ============================================================
-// 조건부 대미지 환산 — 백어택/근거리/상태이상 % × 활성 플래그
-//   각 옵션은 개별로 ON/OFF 가능: 시나리오별 대미지 비교용.
-//   활성 플래그가 false 또는 미정의 → 그 옵션 미반영.
+// 조건부 대미지 환산 — 백어택/근거리/상태이상
+//
+// 출처: 라테일 스펙 분석기 3.4.1 엑셀의 B!P18 / B!P19 공식 그대로.
+//   인던 일반:  대미지 ∝ (0.6 × (1 + 크댐%) + 백어택% + 근거리% + 상태이상%) × (1 + 일반지배력%)
+//   인던 보스:  대미지 ∝ (0.3 × (1 + 크댐%) + 백어택% + 근거리% + 상태이상%) × (1 + 보스지배력%)
+//
+//   조건부 옵션 OFF 시 분자에서 해당 항이 빠지므로, ON/OFF 비교 시 곱셈 배율은:
+//
+//      multiplier = 1 + (활성 옵션들의 %합) / (D × (1 + 크댐/100))
+//
+//   D = 0.6 (일반) / 0.3 (보스).  지배력은 약분되어 영향 없음.
+//
+//   ⚠️ 단순 (1+x) 곱셈이 아닌 까닭: 분모가 크댐%에 비례하므로 endgame 캐릭(크댐 9000%+)일수록
+//      백어택의 상대적 효과가 작아진다. 백어택 1000% 이라도 실제 곱셈 배율은 1.18~1.37배 수준.
+//
+//   단, 근거리/상태이상은 엑셀에 별도 공식이 없어 백어택과 동일한 메커니즘으로 가정 (사용자 확인).
 // ============================================================
-export function conditionalMultiplier(stats) {
-  const back = stats?.백어택활성 ? Number(stats?.백어택 || 0) / 100 : 0;
-  const close = stats?.근거리활성 ? Number(stats?.근거리 || 0) / 100 : 0;
-  const status = stats?.상태대미지활성 ? Number(stats?.상태대미지 || 0) / 100 : 0;
-  return (1 + back) * (1 + close) * (1 + status);
+const TARGET_DENOM_BASE = Object.freeze({ normal: 0.6, boss: 0.3 });
+
+function conditionalMultiplierCore(stats, activeMap, target) {
+  const D = TARGET_DENOM_BASE[target] ?? TARGET_DENOM_BASE.normal;
+  const crit = Number(stats?.크댐 || 0) / 100;
+  const denom = D * (1 + crit);
+  if (denom <= 0) return 1;
+
+  let numerator = 0;
+  if (activeMap.백어택) numerator += Number(stats?.백어택 || 0);
+  if (activeMap.근거리) numerator += Number(stats?.근거리 || 0);
+  if (activeMap.상태이상) numerator += Number(stats?.상태대미지 || 0);
+  // numerator 도 % 값이라 100 으로 나눔
+  return 1 + (numerator / 100) / denom;
 }
 
-// 임의 활성 플래그 조합으로 multiplier 계산 (시나리오 비교용)
+// 활성 플래그 (stats.{옵션}활성) 기반 자동 multiplier — 시나리오 ON/OFF 보기용
+//   target: 'normal' | 'boss' — 디폴트 'normal'
+//   ⚠ 사용처: 사용자가 "지금 이 옵션이 적용되는 순간의 BP" 를 볼 때.
+//   BP 자동 환산엔 expectedConditionalMultiplier (가동률 가중) 사용.
+export function conditionalMultiplier(stats, target = 'normal') {
+  return conditionalMultiplierCore(
+    stats,
+    {
+      백어택: !!stats?.백어택활성,
+      근거리: !!stats?.근거리활성,
+      상태이상: !!stats?.상태대미지활성,
+    },
+    target,
+  );
+}
+
+// 임의 활성 플래그 조합으로 multiplier 계산 (시나리오 매트릭스 best/worst 비교용)
 //   activeMap = { 백어택: bool, 근거리: bool, 상태이상: bool }
-export function conditionalMultiplierWith(stats, activeMap = {}) {
-  const back = activeMap.백어택 ? Number(stats?.백어택 || 0) / 100 : 0;
-  const close = activeMap.근거리 ? Number(stats?.근거리 || 0) / 100 : 0;
-  const status = activeMap.상태이상 ? Number(stats?.상태대미지 || 0) / 100 : 0;
-  return (1 + back) * (1 + close) * (1 + status);
+export function conditionalMultiplierWith(stats, activeMap = {}, target = 'normal') {
+  return conditionalMultiplierCore(stats, activeMap, target);
+}
+
+// ============================================================
+// 기댓값(가동률 가중) 환산 — BP 자동 반영용
+//
+//   백어택/근거리/상태이상은 항상 적용되는 게 아니라 조건이 충족돼야 들어간다 (직타·자세·상태이상 부여).
+//   따라서 평균 BP 는 옵션 % × 가동률 (P(조건 충족)) 의 기댓값이 된다.
+//   대미지 분자가 옵션들에 대해 선형이므로 기댓값도 깔끔히 분해됨:
+//
+//      E[mult] = 1 + Σ ( 옵션% × 가동률 ) / (D × (1 + 크댐%))
+//
+//   가동률 = stats.{옵션}가동률 (% 단위, 0~100). 0 이면 그 옵션은 BP 영향 없음.
+//   소환타격 위주 캐릭은 0 입력 → 자연스레 환산 제외.
+// ============================================================
+export function expectedConditionalMultiplier(stats, target = 'normal') {
+  const D = TARGET_DENOM_BASE[target] ?? TARGET_DENOM_BASE.normal;
+  const crit = Number(stats?.크댐 || 0) / 100;
+  const denom = D * (1 + crit);
+  if (denom <= 0) return 1;
+
+  const weighted = (val, up) =>
+    (Number(val || 0) * Math.max(0, Math.min(100, Number(up || 0)))) / 100;
+
+  const back = weighted(stats?.백어택, stats?.백어택가동률);
+  const close = weighted(stats?.근거리, stats?.근거리가동률);
+  const status = weighted(stats?.상태대미지, stats?.상태대미지가동률);
+
+  const numerator = (back + close + status) / 100; // % → 소수
+  return 1 + numerator / denom;
 }
 
 export const STAT_KEYS = Object.freeze([
@@ -382,15 +530,18 @@ export function createEmptyStats(type = 'P') {
     기본_고댐: 0,
     기본_일몬추: 0,
     기본_보몬추: 0,
-    // 조건부 대미지 환산 — 게임 공식 BP에는 포함 안 되지만 사용자가 "조건 충족 시"
-    // 환산값을 보고 싶을 때 사용. 옵션별 개별 활성 플래그로 시나리오별 비교 가능.
-    // 모든 플래그 false 가 기본 → BP 영향 없음 (회귀 보존).
+    // 조건부 대미지 환산 — 게임 T창 BP에는 미포함. 가동률 기반 기댓값으로 별도 환산.
+    //   백어택/근거리/상태이상 % 값 + 가동률(0~100, 사용자가 직타비중 + 조건충족율 합산해 입력)
+    //   가동률 0 = BP 영향 없음. 활성 플래그는 시나리오 매트릭스 'ON/OFF' 빠른 보기용.
     백어택: 0,           // %
     백어택활성: false,
-    근거리: 0,           // %
+    백어택가동률: 0,     // %  (0~100, BP 환산 기댓값에 사용)
+    근거리: 0,
     근거리활성: false,
-    상태대미지: 0,       // %
+    근거리가동률: 0,
+    상태대미지: 0,
     상태대미지활성: false,
+    상태대미지가동률: 0,
   };
 }
 
