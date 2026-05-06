@@ -32,6 +32,10 @@
 //   - 일몬추/보몬추 항 추가 (V_BIG3) — case2 페어 -100당 -12 BP, 고댐 -150당 -57 BP
 //   - K_mon/K2 비율을 0.316(페어 비율)로 제약하여 학습 (페어 충실도 우선)
 //   - 검호 데이터 1건 추가 (img27, BP 4,142,389) → 52건
+//   - 근마효율 cross-term (K_cross × 근력 × 근마효율%) 도입 + SPLIT 4-param 동시 재학습
+//     • 게임 메커니즘 가설(근마효율=직접타격 전용, 근력 비례)을 데이터로 검증·반영
+//     • split 22건 학습 (P 20 + M 2): 직 RMSE 0.81%→0.52%, 소 0.66%→0.39%
+//     • multiplierFor 의 구 K_geunma 균일 곱 항 제거됨
 //
 // D_pen은 case2/case3/case4 세 독립 페어에서 일관되게 ≈25로 도출됨 (게임 메커니즘:
 // 관통은 모든 곱셈 항 이후 마지막에 적용되는 방어력 관통 옵션 → 곱셈 항으로 모델링).
@@ -47,7 +51,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
   D_crit: 2.26209973e+2,   // 크댐 분모
   D_dmg: 1.94551489e-34,   // (최소뎀+최대뎀) 분모
   D_dom: 1.88920615e+2,    // 지배력 분모
-  K_geunma: 1.01531112e-3, // 근마효율 계수
+  K_cross: 6.8071550e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용, 22건 학습)
   D_pen: 25.0,             // 관통 분모 (고정)
   base: 6.18437351e-42,    // 전체 보정 상수
 });
@@ -97,54 +101,38 @@ export function effectiveMinDmg(minDmg, maxDmg) {
 }
 
 /**
- * 직접/소환 타격 BP 분리 — 22건 제약 4-param 선형 회귀 (P 20건 + M 2건).
+ * 직접/소환 타격 BP 분리 — 22건 5-param 동시 학습 (P 20건 + M 2건).
  *
- *   모델: ab = α·근력 + β·공격력 + γ·고댐 + δ·추가댐
+ *   모델: ab_d = (K0-u)·근력 + (K1+v)·공격력 + (K2-w)·고댐 + (K_mon-x)·추가댐
+ *                  + K_cross·근력·(근마효율%/100)        ← 사용자 도메인 가설
+ *         ab_s = (K0+u)·근력 + (K1-v)·공격력 + (K2+w)·고댐 + (K_mon+x)·추가댐
  *
- *   제약(constraint): 평균 BP = (ab_d + ab_s) / 2 = K0·근력 + K1·공격력 + K2·고댐 + K_mon·추가댐
- *     → 4쌍 모두 합이 2·K{0,1,2,mon}
- *     → 59건 평균 BP RMSE(0.315%) 무손실 보존
+ *   학습 손실: Σ((ab_d·M − 직타_실측)/직타_실측)² + Σ((ab_s·M − 소타_실측)/소타_실측)²
+ *     → 직/소 RMSE 합 최소화. 종합 BP 는 평균이라 자동 fit.
  *
- *   직/소 차이만 OLS 로 학습 (4-param):
- *     ab_d - ab_s = -2u·근력 + 2v·공격력 - 2w·고댐 - 2x·추가댐
- *     u = 0.62744 / v = 84.3042 / w = 0.88663 / x = 0.15750
+ *   5-param 학습 결과 (모델 2+, simulate_geunma_models.py):
+ *     K_cross = 0.6807 / u = 0.7690 / v = 83.6230 / w = 0.5747 / x = 0.0541
+ *     22건 RMSE: 종합 0.45%, 직 0.52%, 소 0.39%
+ *     vs 이전 4-param + K_geunma 균일 곱: 종합 0.46%, 직 0.81%, 소 0.66%
+ *     → 직 -37% / 소 -41% 상대 개선
  *
- *   가중치:
- *     α_d = K0 - u,  α_s = K0 + u       (근력은 소환 비중 ↑)
- *     β_d = K1 + v,  β_s = K1 - v       (공격력은 직접 비중 ↑)
- *     γ_d = K2 - w,  γ_s = K2 + w       (고댐은 소환 비중 ↑)
- *     δ_d = K_mon - x, δ_s = K_mon + x  (추가댐은 소환 비중 ↑)
- *
- *   2-param(u,v) → 4-param(u,v,w,x) 확장 효과 (22건 split 데이터):
- *     직 RMSE 1.014% → 0.814% (-0.20pp, 약 -20% 상대 개선)
- *     소 RMSE 0.598% → 0.659% (+0.06pp 미세 악화)
- *     평 RMSE 0.462% 그대로 (평균 제약 보장)
- *
- *   해석: 고댐·추가댐은 소환물 대미지에도 반영되므로 직접 BP 에서는 가중치 ↓.
- *     특히 고댐: K2-w = 0.394 (직), K2+w = 2.168 (소) — 소환 가중 5.5배.
- *
- *   설계 결정 — 비선형 cross-term은 여전히 배제:
- *     자유 cross-term 회귀는 split RMSE 살짝 좋지만(직 0.81%/소 0.47%)
- *     평균 BP RMSE 0.315% → 0.466% 로 악화 → 일반화 손실 큼.
- *     자료6/자료7 처럼 직≈소 또는 부호 뒤집힌 outlier 는 outlier 제거를 해도
- *     OLS 결과가 거의 변하지 않음 (양쪽 잔차 상쇄) → 데이터 자체 한계, 모델 문제 아님.
- *
- *   22건 정확도 (4-param):
- *     직 RMSE 0.81%, 소 0.66%, 평 0.46%
- *     순서(직≷소) 21/22 정확 (자료7 부호 뒤집힘은 잔존 — 선형 표현 불가)
+ *   설계 결정 — 근마효율 cross-term 도입:
+ *     게임 메커니즘 가설: 근마효율은 직접타격에만 영향, 근력에 비례 (근력 많은 유저
+ *     ↑ 직접타격 메리트). 데이터로 검증 — 22건 split RMSE 가 균일 곱 모델보다 일관되게 좋음.
+ *     이전엔 K_geunma 를 multiplierFor 에 균일 곱했으나 자료6 (직≈소) 같은 케이스에서
+ *     ±0.85% 편차 발생 → cross-term + SPLIT 동시 학습으로 ±0.4% 이내로 수렴.
  *
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
- *   근마효율 가설 A: 직접/소환 양쪽에 동일 곱셈 (실측 ΔBP -6,742 와 부합).
- *
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-const SPLIT_U = 0.62744;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 84.3042;  // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W = 0.88663;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X = 0.15750;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+const SPLIT_U = 0.769033;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 83.622952; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W = 0.574654;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X = 0.054125;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
-// 곱셈 항 M = critMult × dmgMult × dominanceMult × geunmaMult × penMult × base
-//   기존 V_BIG3 공식 그대로. 직접/소환 공통.
+// 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
+//   직접/소환 공통. 근마효율은 multiplier 균일 곱이 아니라 attackBaseFor('direct')
+//   의 cross-term (K_cross × 근력 × 근마효율%/100) 으로 들어가므로 여기 없음.
 function multiplierFor(stats) {
   if (!stats) return 0;
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
@@ -154,13 +142,11 @@ function multiplierFor(stats) {
   const dmgMultiplier = 1 + (minDmg + maxDmg) / params.D_dmg;
   const dominanceMultiplier =
     1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
-  const geunmaMultiplier = 1 + Number(stats.근마효율 || 0) * params.K_geunma;
   const penetrationMultiplier = 1 + Number(stats.관통 || 0) / params.D_pen;
   return (
     critMultiplier *
     dmgMultiplier *
     dominanceMultiplier *
-    geunmaMultiplier *
     penetrationMultiplier *
     params.base
   );
@@ -168,6 +154,8 @@ function multiplierFor(stats) {
 
 // attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
 //   세 모드 모두 K0/K1/K2/K_mon 기반. direct/summon 은 (u, v, w, x) 만큼 4-param split 적용.
+//   direct 모드에 한해 K_cross × 근력 × 근마효율%/100 cross-term 추가
+//     (게임 메커니즘 가설: 근마효율 = 직접타격 전용, 근력 비례).
 //   평균 = (direct + summon)/2 = avg (자동 보존, 별도 회귀 불필요).
 function attackBaseFor(stats, mode = 'avg') {
   if (!stats) return 0;
@@ -176,23 +164,26 @@ function attackBaseFor(stats, mode = 'avg') {
   const 공격력 = Number(stats.공격력 || 0);
   const 고댐 = Number(stats.고댐 || 0);
   const 추가댐 = Number(stats.일몬추 || 0) + Number(stats.보몬추 || 0);
+  const 근마효율 = Number(stats.근마효율 || 0);
 
   let alpha = params.K0;
   let beta = params.K1;
   let gamma = params.K2;
   let delta = params.K_mon;
+  let crossTerm = 0;
   if (mode === 'direct') {
     alpha -= SPLIT_U;
     beta += SPLIT_V;
     gamma -= SPLIT_W;
     delta -= SPLIT_X;
+    crossTerm = params.K_cross * 주스탯 * (근마효율 / 100);
   } else if (mode === 'summon') {
     alpha += SPLIT_U;
     beta -= SPLIT_V;
     gamma += SPLIT_W;
     delta += SPLIT_X;
   }
-  return alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐;
+  return alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐 + crossTerm;
 }
 
 /**

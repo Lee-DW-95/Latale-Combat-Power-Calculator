@@ -32,6 +32,7 @@ coverage
 # Tooling artifacts
 .playwright-mcp/
 /latale-info-*.png
+__pycache__/
 
 # 1회용 데이터 추출 입력 CSV (스크립트 실행 후 삭제 가능)
 _skill_dh.csv
