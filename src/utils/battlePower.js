@@ -374,19 +374,22 @@ export function pctPool(stats, displayKey, baseKey) {
  *   새 표시값 = (기본값 + 부적_가산) × (1 + 누적% + 부적%)
  *   변화량   = 새 표시값 - 표시값
  *
- * 폴백: 기본값이 0이면 (사용자가 기본값 미입력) 단순 가산만 적용.
+ * 폴백 (기본값 미입력 시): 표시값을 기본값으로 가정 (= 누적% 0). % 옵션도 반영되도록.
+ *   누적%이 실제로 큰 캐릭은 과대평가될 수 있어 EquipmentCompare UI 가 행별 ⚠ 경고로 안내.
+ *   가산만 반환하던 기존 폴백은 % 옵션을 완전히 버려 사용자에게 "변화 없음"으로 보였음.
  */
 function applyEquipDelta(stats, displayKey, baseKey, addedFromEquip, addedPctFromEquip) {
   const base = Number(stats?.[baseKey] || 0);
   const display = Number(stats?.[displayKey] || 0);
 
-  if (base <= 0) {
-    // 기본값 미입력 시 폴백: 단순 가산
-    return addedFromEquip;
-  }
+  // 기본값/표시값 둘 다 0이면 % 옵션도 적용 불가 — 가산만
+  if (base <= 0 && display <= 0) return addedFromEquip;
 
-  const currentPct = (display - base) / base;
-  const newBase = base + addedFromEquip;
+  // 기본값 미입력 시 표시값을 base 로 폴백 (누적% = 0 가정)
+  const effectiveBase = base > 0 ? base : display;
+  const currentPct = base > 0 ? (display - base) / base : 0;
+
+  const newBase = effectiveBase + addedFromEquip;
   const newPct = currentPct + addedPctFromEquip / 100;
   const newDisplay = newBase * (1 + newPct);
   return newDisplay - display;

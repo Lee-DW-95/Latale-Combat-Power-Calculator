@@ -47,6 +47,22 @@ function formatPct(p) {
   if (p == null) return '';
   return `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`;
 }
+
+// 기본값 미입력 + % 옵션 입력된 행 — 폴백 추정값 사용 중임을 알림
+//   주스탯 행은 올스탯_퍼도 같은 풀이라 함께 검사
+function needsFallbackWarning(def) {
+  if (!def.pctKey) return false;
+  if (pctPoolFor(def) != null) return false;
+  const oldP = Number(props.oldEquip[def.pctKey] || 0);
+  const newP = Number(props.newEquip[def.pctKey] || 0);
+  let pctEntered = oldP !== 0 || newP !== 0;
+  if (def.key === '주스탯') {
+    pctEntered ||=
+      Number(props.oldEquip['올스탯_퍼'] || 0) !== 0 ||
+      Number(props.newEquip['올스탯_퍼'] || 0) !== 0;
+  }
+  return pctEntered;
+}
 </script>
 
 <template>
@@ -112,6 +128,13 @@ function formatPct(p) {
                 :title="`현재 누적 % (자동 계산): ${formatPct(pctPoolFor(def))}`"
               >
                 ({{ formatPct(pctPoolFor(def)) }})
+              </span>
+              <span
+                v-else-if="needsFallbackWarning(def)"
+                class="ml-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"
+                title="기본값(추가 세부정보) 미입력 — % 옵션이 누적%=0 가정으로 추정됨. 정확도를 위해 추가 세부정보의 +값을 입력하세요."
+              >
+                ⚠ 기본값 미입력 (추정)
               </span>
             </td>
             <!-- 현재 장비 가산 -->
