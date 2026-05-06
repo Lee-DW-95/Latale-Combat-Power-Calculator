@@ -305,6 +305,7 @@ export function conditionalMultiplierWith(stats, activeMap = {}, target = 'norma
 //      E[mult] = 1 + Σ ( 옵션% × 가동률 ) / (D × (1 + 크댐%))
 //
 //   가동률 = stats.{옵션}가동률 (% 단위, 0~100). 0 이면 그 옵션은 BP 영향 없음.
+//   활성 플래그 = stats.{옵션}활성 (bool). false 면 가동률·옵션값에 관계없이 BP 영향 0 — UI 체크박스가 게이트.
 //   소환타격 위주 캐릭은 0 입력 → 자연스레 환산 제외.
 // ============================================================
 export function expectedConditionalMultiplier(stats, target = 'normal') {
@@ -316,9 +317,9 @@ export function expectedConditionalMultiplier(stats, target = 'normal') {
   const weighted = (val, up) =>
     (Number(val || 0) * Math.max(0, Math.min(100, Number(up || 0)))) / 100;
 
-  const back = weighted(stats?.백어택, stats?.백어택가동률);
-  const close = weighted(stats?.근거리, stats?.근거리가동률);
-  const status = weighted(stats?.상태대미지, stats?.상태대미지가동률);
+  const back = stats?.백어택활성 ? weighted(stats?.백어택, stats?.백어택가동률) : 0;
+  const close = stats?.근거리활성 ? weighted(stats?.근거리, stats?.근거리가동률) : 0;
+  const status = stats?.상태대미지활성 ? weighted(stats?.상태대미지, stats?.상태대미지가동률) : 0;
 
   const numerator = (back + close + status) / 100; // % → 소수
   return 1 + numerator / denom;
