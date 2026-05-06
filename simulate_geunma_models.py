@@ -143,6 +143,77 @@ def evaluate_with_split(model_fn, K_g, split, samples):
 
 
 # ────────────────────────────────────────────────────────────────────
+# 모델 3 — 9-param 동시 재학습 (K0/K1/K2/K_mon + cross + SPLIT)
+#   근력/공격력 비율 ↑ 케이스에서 과소추정 발견 → K0/K1 도 자유도로 풀어 자동 보정
+#   physical 만 학습 (마법은 K1_M 별도 비율로 PHYSICAL 결과에 보정)
+# ────────────────────────────────────────────────────────────────────
+def model3_bp(s, K0, K1_p, K2, K_mon, K_cross, u, v, w, x_split):
+    """K0/K1/K2/K_mon 도 변수. 마법은 K1 만 K1_p × 1.0091 로 보정 (기존 비율 유지)."""
+    p_phys = dict(PHYS)
+    p_phys.update(K0=K0, K1=K1_p, K2=K2, K_mon=K_mon, K_cross=K_cross,
+                  D_pen=PHYS['D_pen'], base=PHYS['base'])
+    p_mag = dict(p_phys)
+    p_mag['K1'] = K1_p * 1.00908  # 기존 학습 비율 유지
+
+    p = p_mag if s.get('type') == 'M' else p_phys
+    a, b, c, d = p['K0'], p['K1'], p['K2'], p['K_mon']
+    추가댐 = s['일몬추'] + s['보몬추']
+    근마효율 = s['근마효율']
+
+    # multiplier (K_geunma 항 없음)
+    min_dmg = min(s['최소뎀'], s['최대뎀'])
+    crit = 1 + s['크댐'] / p['D_crit']
+    dmg = 1 + (min_dmg + s['최대뎀']) / p['D_dmg']
+    dom = 1 + (s['일몬지'] + s['보몬지']) / p['D_dom']
+    pen = 1 + s['관통'] / p['D_pen']
+    M = crit * dmg * dom * pen * p['base']
+
+    # direct: K0-u, K1+v, K2-w, K_mon-x + cross
+    ad = (a-u)*s['주스탯'] + (b+v)*s['공격력'] + (c-w)*s['고댐'] + (d-x_split)*추가댐 \
+         + K_cross*s['주스탯']*(근마효율/100)
+    asu = (a+u)*s['주스탯'] + (b-v)*s['공격력'] + (c+w)*s['고댐'] + (d+x_split)*추가댐
+    bp_d = ad * M
+    bp_s = asu * M
+    return (bp_d + bp_s) / 2, bp_d, bp_s
+
+
+def train_model3(samples_split, samples_total_only):
+    """9-param 학습: 균형 손실"""
+    def loss(x):
+        K0, K1, K2, K_mon, K_c, u, v, w, x_sp = x
+        e = []
+        for s in samples_split:
+            bp, bp_d, bp_s = model3_bp(s, K0, K1, K2, K_mon, K_c, u, v, w, x_sp)
+            e.append((bp - s['전투력']) / s['전투력'])
+            e.append((bp_d - s['직접타격']) / s['직접타격'])
+            e.append((bp_s - s['소환타격']) / s['소환타격'])
+        for s in samples_total_only:
+            bp, _, _ = model3_bp(s, K0, K1, K2, K_mon, K_c, u, v, w, x_sp)
+            e.append((bp - s['전투력']) / s['전투력'])
+        return float(np.mean(np.array(e) ** 2))
+
+    best = None
+    for seed in range(80):
+        rng = np.random.default_rng(seed)
+        start = [
+            PHYS['K0'] * float(rng.uniform(0.7, 1.3)),
+            PHYS['K1'] * float(rng.uniform(0.85, 1.15)),
+            PHYS['K2'] * float(rng.uniform(0.7, 1.3)),
+            PHYS['K_mon'] * float(rng.uniform(0.7, 1.3)),
+            6.4e-1 * float(rng.uniform(0.5, 2.0)),
+            SPLIT_U * float(rng.uniform(0.5, 1.8)),
+            SPLIT_V * float(rng.uniform(0.7, 1.3)),
+            SPLIT_W * float(rng.uniform(0.5, 1.8)),
+            SPLIT_X * float(rng.uniform(0.5, 1.8)),
+        ]
+        r = minimize(loss, start, method='Nelder-Mead',
+                     options={'xatol': 1e-12, 'fatol': 1e-15, 'maxiter': 100000})
+        if best is None or r.fun < best.fun:
+            best = r
+    return best.x, best.fun
+
+
+# ────────────────────────────────────────────────────────────────────
 # 학습 — 종합 BP RMSE 손실 함수
 # ────────────────────────────────────────────────────────────────────
 def train(model_fn, samples, x0):
@@ -257,6 +328,19 @@ def main():
     err_full_0 = [(model0_bp(s)[0] - s['전투력']) / s['전투력'] for s in full_total_set]
     rmse_full_0 = rmse_pct(err_full_0)
     print(f'\n[참고] 모델 0 (베이스) 59건 종합 RMSE: {rmse_full_0:.3f}%')
+
+    # ── 모델 3 (9-param: K0/K1/K2/K_mon + cross + SPLIT 동시 학습)
+    print('\n[학습 중] 모델 3 (9-param 동시 재학습 — 자유도 ↑)...')
+    x_3, _ = train_model3(train_set, extra_for_total)
+    K0_3, K1_3, K2_3, K_mon_3, K_c_3, u_3, v_3, w_3, x_3_sp = x_3
+    err_full_3 = [(model3_bp(s, *x_3)[0] - s['전투력']) / s['전투력'] for s in full_total_set]
+    err_split_3_d = [(model3_bp(s, *x_3)[1] - s['직접타격']) / s['직접타격'] for s in train_set]
+    err_split_3_s = [(model3_bp(s, *x_3)[2] - s['소환타격']) / s['소환타격'] for s in train_set]
+    err_split_3_t = [(model3_bp(s, *x_3)[0] - s['전투력']) / s['전투력'] for s in train_set]
+    print(f'모델 3 — K0={K0_3:.4f}, K1={K1_3:.3f}, K2={K2_3:.4f}, K_mon={K_mon_3:.4f}')
+    print(f'         K_cross={K_c_3:.4e}, u={u_3:.4f}, v={v_3:.4f}, w={w_3:.4f}, x={x_3_sp:.4f}')
+    print(f'  22건 — 종합 {rmse_pct(err_split_3_t):.3f}%  직 {rmse_pct(err_split_3_d):.3f}%  소 {rmse_pct(err_split_3_s):.3f}%')
+    print(f'  59건 종합: {rmse_pct(err_full_3):.3f}%  (vs 베이스 {rmse_full_0:.3f}% / 현 코드 0.375%)')
 
     # ── 비교 표
     print('\n' + '=' * 70)
