@@ -97,17 +97,25 @@ def model2_bp(s, K_cross, split=None):
 
 # ────────────────────────────────────────────────────────────────────
 # 모델 1·2 의 SPLIT 동시 재학습 버전
-#   직/소 RMSE 합을 최소화 (종합 BP 는 평균이라 자동 보존)
+#   균형 손실: Σ(종합² + 직² + 소²)
+#     ⚠ 이전 버전은 "직² + 소²" 만 최적화 → 종합 BP fit 시프트로 RMSE 0.33%→0.46% 악화
+#     균형 손실로 종합 BP / split 둘 다 챙김
 # ────────────────────────────────────────────────────────────────────
-def train_with_split(model_fn, samples, x0_geunma):
-    """5-param 학습: (K_geunma_or_cross, u, v, w, x). 직/소 RMSE 합 최소화."""
+def train_with_split(model_fn, samples, x0_geunma, all_for_total=None):
+    """5-param 학습: (K_geunma_or_cross, u, v, w, x). 종합+직+소 RMSE² 합 최소화.
+    all_for_total: split 없지만 종합 BP 만 학습에 추가할 데이터 (일반화 강화용)."""
+    extra = list(all_for_total) if all_for_total else []
     def loss(x):
         K_g, u, v, w, x_split = x
         e = []
         for s in samples:
-            _, bp_d, bp_s = model_fn(s, K_g, split=(u, v, w, x_split))
+            bp_total, bp_d, bp_s = model_fn(s, K_g, split=(u, v, w, x_split))
+            e.append((bp_total - s['전투력']) / s['전투력'])
             e.append((bp_d - s['직접타격']) / s['직접타격'])
             e.append((bp_s - s['소환타격']) / s['소환타격'])
+        for s in extra:
+            bp_total, _, _ = model_fn(s, K_g, split=(u, v, w, x_split))
+            e.append((bp_total - s['전투력']) / s['전투력'])
         return float(np.mean(np.array(e) ** 2))
 
     best = None
@@ -211,21 +219,44 @@ def main():
     print(f'\n모델 2 (Cross-term 근력×근마효율% — K_cross = {K_c:.6e})')
     print(f'  종합 RMSE: {r2[0]:.3f}%   직접 RMSE: {r2[1]:.3f}%   소환 RMSE: {r2[2]:.3f}%')
 
+    # 종합 BP 만 추가 학습할 데이터 (split 없지만 근마효율>0 인 케이스)
+    extra_for_total = [s for s in data
+                       if s.get('근마효율', 0) > 0
+                       and not (s.get('직접타격') and s.get('소환타격'))]
+    print(f'\n→ 종합 BP 추가 학습 셋: {len(extra_for_total)} 건 (split 없음, 근마효율>0)')
+    print(f'  학습 신호 총합: split {len(train_set)}건×3 + total {len(extra_for_total)}건×1')
+
+    # 54건 전체 종합 BP 평가 (회귀 테스트와 동일)
+    full_total_set = [s for s in data if s.get('type') == 'P'] + [s for s in data if s.get('type') == 'M']
+
     # ── 모델 1+ (K_geunma 직접 전용 + SPLIT 동시 재학습)
-    print('\n[학습 중] 모델 1+ (K_geunma 직접 전용 + SPLIT 4 재학습)...')
-    x_1plus, _ = train_with_split(model1_bp, train_set, x0_geunma=PHYS['K_geunma'])
+    print('\n[학습 중] 모델 1+ (K_geunma 직접 전용 + SPLIT 4 재학습 — 균형 손실)...')
+    x_1plus, _ = train_with_split(model1_bp, train_set, x0_geunma=PHYS['K_geunma'],
+                                   all_for_total=extra_for_total)
     K_g1p, u1, v1, w1, x1 = x_1plus
     r1p = evaluate_with_split(model1_bp, K_g1p, (u1, v1, w1, x1), eval_set)
+    err_full_1 = [(model1_bp(s, K_g1p, split=(u1, v1, w1, x1))[0] - s['전투력']) / s['전투력']
+                   for s in full_total_set]
+    rmse_full_1 = rmse_pct(err_full_1)
     print(f'모델 1+ — K_geunma_d={K_g1p:.4e}, u={u1:.4f}, v={v1:.4f}, w={w1:.4f}, x={x1:.4f}')
-    print(f'  종합 RMSE: {r1p[0]:.3f}%   직접 RMSE: {r1p[1]:.3f}%   소환 RMSE: {r1p[2]:.3f}%')
+    print(f'  22건 — 종합 {r1p[0]:.3f}%  직 {r1p[1]:.3f}%  소 {r1p[2]:.3f}%  |  59건 종합 {rmse_full_1:.3f}%')
 
     # ── 모델 2+ (Cross-term + SPLIT 동시 재학습)
-    print('\n[학습 중] 모델 2+ (Cross-term + SPLIT 4 재학습)...')
-    x_2plus, _ = train_with_split(model2_bp, train_set, x0_geunma=2e-8)
+    print('\n[학습 중] 모델 2+ (Cross-term + SPLIT 4 재학습 — 균형 손실)...')
+    x_2plus, _ = train_with_split(model2_bp, train_set, x0_geunma=2e-8,
+                                   all_for_total=extra_for_total)
     K_c2p, u2, v2, w2, x2 = x_2plus
     r2p = evaluate_with_split(model2_bp, K_c2p, (u2, v2, w2, x2), eval_set)
+    err_full_2 = [(model2_bp(s, K_c2p, split=(u2, v2, w2, x2))[0] - s['전투력']) / s['전투력']
+                   for s in full_total_set]
+    rmse_full_2 = rmse_pct(err_full_2)
     print(f'모델 2+ — K_cross={K_c2p:.4e}, u={u2:.4f}, v={v2:.4f}, w={w2:.4f}, x={x2:.4f}')
-    print(f'  종합 RMSE: {r2p[0]:.3f}%   직접 RMSE: {r2p[1]:.3f}%   소환 RMSE: {r2p[2]:.3f}%')
+    print(f'  22건 — 종합 {r2p[0]:.3f}%  직 {r2p[1]:.3f}%  소 {r2p[2]:.3f}%  |  59건 종합 {rmse_full_2:.3f}%')
+
+    # 모델 0 의 59건 종합 RMSE도 같이 비교
+    err_full_0 = [(model0_bp(s)[0] - s['전투력']) / s['전투력'] for s in full_total_set]
+    rmse_full_0 = rmse_pct(err_full_0)
+    print(f'\n[참고] 모델 0 (베이스) 59건 종합 RMSE: {rmse_full_0:.3f}%')
 
     # ── 비교 표
     print('\n' + '=' * 70)

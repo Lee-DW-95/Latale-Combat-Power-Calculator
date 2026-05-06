@@ -51,7 +51,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
   D_crit: 2.26209973e+2,   // 크댐 분모
   D_dmg: 1.94551489e-34,   // (최소뎀+최대뎀) 분모
   D_dom: 1.88920615e+2,    // 지배력 분모
-  K_cross: 6.8071550e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용, 22건 학습)
+  K_cross: 6.3697275e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용, 균형 손실 학습)
   D_pen: 25.0,             // 관통 분모 (고정)
   base: 6.18437351e-42,    // 전체 보정 상수
 });
@@ -110,11 +110,15 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   학습 손실: Σ((ab_d·M − 직타_실측)/직타_실측)² + Σ((ab_s·M − 소타_실측)/소타_실측)²
  *     → 직/소 RMSE 합 최소화. 종합 BP 는 평균이라 자동 fit.
  *
- *   5-param 학습 결과 (모델 2+, simulate_geunma_models.py):
- *     K_cross = 0.6807 / u = 0.7690 / v = 83.6230 / w = 0.5747 / x = 0.0541
- *     22건 RMSE: 종합 0.45%, 직 0.52%, 소 0.39%
- *     vs 이전 4-param + K_geunma 균일 곱: 종합 0.46%, 직 0.81%, 소 0.66%
- *     → 직 -37% / 소 -41% 상대 개선
+ *   5-param 학습 결과 (모델 2+, simulate_geunma_models.py — 균형 손실 + 학습 확장):
+ *     K_cross = 0.6370 / u = 0.7601 / v = 83.4635 / w = 0.5908 / x = 0.0556
+ *     22건 RMSE: 종합 0.47%, 직 0.55%, 소 0.40%
+ *     59건 종합 RMSE: 0.367% (vs 이전 K_geunma 균일 곱 0.315%)
+ *     vs 이전 4-param + K_geunma 균일 곱: 직 0.81%/소 0.66% → 직 -32% / 소 -39% 개선
+ *
+ *   학습 손실 함수 — 균형 (split 22건 종합+직+소 + 추가 36건 종합):
+ *     loss = mean( e_total² + e_d² + e_s²  [22건 split]  +  e_total²  [36건 split없음] )
+ *     초기엔 split RMSE 만 최소화했으나 59건 종합 RMSE 가 0.31%→0.46% 악화 → 균형 손실로 보정.
  *
  *   설계 결정 — 근마효율 cross-term 도입:
  *     게임 메커니즘 가설: 근마효율은 직접타격에만 영향, 근력에 비례 (근력 많은 유저
@@ -125,10 +129,10 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-const SPLIT_U = 0.769033;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 83.622952; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W = 0.574654;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X = 0.054125;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+const SPLIT_U = 0.760051;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 83.463460; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W = 0.590822;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X = 0.055641;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   직접/소환 공통. 근마효율은 multiplier 균일 곱이 아니라 attackBaseFor('direct')
