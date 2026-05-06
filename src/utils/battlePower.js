@@ -44,14 +44,14 @@
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.46822895e+0,       // 주스탯 가중치 (9-param 재학습)
-  K1: 1.49296304e+2,       // 공격력 가중치 (+2.1% — 근력/공격력 비율 패턴 보정)
-  K2: 1.33643746e+0,       // 고댐 가중치 (9-param 재학습)
-  K_mon: 3.44566830e-1,    // 일몬추+보몬추 가중치 (9-param 재학습)
+  K0: 1.45988696e+0,       // 주스탯 가중치 (정제 데이터 9-param 재학습)
+  K1: 1.47842018e+2,       // 공격력 가중치
+  K2: 1.67360980e+0,       // 고댐 가중치 (+25% — 수련의방 cap 노이즈 제거 후 정상화)
+  K_mon: 2.76714980e-1,    // 일몬추+보몬추 가중치 (-20%)
   D_crit: 2.26209973e+2,   // 크댐 분모 (V_BIG3 유지)
   D_dmg: 1.94551489e-34,   // (최소뎀+최대뎀) 분모 (V_BIG3 유지)
   D_dom: 1.88920615e+2,    // 지배력 분모 (V_BIG3 유지)
-  K_cross: 6.6304248e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용)
+  K_cross: 6.4115396e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용)
   D_pen: 25.0,             // 관통 분모 (고정)
   base: 6.18437351e-42,    // 전체 보정 상수 (V_BIG3 유지)
 });
@@ -66,7 +66,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 1.50651915e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지)
+  K1: 1.49184424e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지)
 });
 
 /**
@@ -110,16 +110,20 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   학습 손실: Σ((ab_d·M − 직타_실측)/직타_실측)² + Σ((ab_s·M − 소타_실측)/소타_실측)²
  *     → 직/소 RMSE 합 최소화. 종합 BP 는 평균이라 자동 fit.
  *
- *   9-param 학습 결과 (모델 3, simulate_geunma_models.py — K0/K1/K2/K_mon 도 함께):
- *     K0=1.4682 / K1=149.296 / K2=1.3364 / K_mon=0.3446
- *     K_cross=0.6630 / u=0.7681 / v=83.9375 / w=0.5158 / x=0.0815
- *     22건 RMSE: 종합 0.39%, 직 0.47%, 소 0.34%
- *     59건 종합 RMSE: 0.326% (vs 이전 K_geunma 균일 곱 0.315%, +0.011%p 거의 무손실)
- *     이전 5-param 대비 직 -16% / 소 -15% 추가 개선
+ *   9-param 학습 결과 (모델 3, 정제 데이터 51건 — 중복+수련의방 8건 제외):
+ *     K0=1.4599 / K1=147.842 / K2=1.6736 / K_mon=0.2767
+ *     K_cross=0.6412 / u=0.7776 / v=82.5776 / w=0.2461 / x=0.1233
+ *     22건 RMSE: 종합 0.26%, 직 0.34%, 소 0.20%
+ *     51건 종합 RMSE: 0.197% (베이스 0.245% 보다 0.05%p 더 좋음)
+ *     59건 종합(수련의방 outlier 포함 평가): 0.34% 추정
+ *
+ *   K2 자동 정상화 — 데이터 품질 통찰:
+ *     자료8(중복) + 수련의방 7건은 effectiveMinDmg cap 처리에도 K2 학습을 왜곡.
+ *     정제 후 K2 가 1.28→1.67 (+25%) 자동 상승. K_mon 도 0.40→0.28 (-30%) 정상화.
  *
  *   K1 자동 보정 — 사용자 도메인 통찰:
  *     "근력↓ 공격력↑ 케이스에서 종합 BP 과소추정" → K1 가중치 부족 신호.
- *     9-param 재학습으로 K1 가 146.22 → 149.30 자동 상승 (+2.1%) → 패턴 해소.
+ *     9-param 재학습으로 K1 = 147.84 → 패턴 해소.
  *
  *   학습 손실 함수 — 균형 (split 22건 종합+직+소 + 추가 36건 종합):
  *     loss = mean( e_total² + e_d² + e_s²  [22건 split]  +  e_total²  [36건 split없음] )
@@ -134,10 +138,10 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-const SPLIT_U = 0.768107;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 83.937537; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W = 0.515807;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X = 0.081492;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+const SPLIT_U = 0.777602;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 82.577634; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W = 0.246113;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X = 0.123264;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   직접/소환 공통. 근마효율은 multiplier 균일 곱이 아니라 attackBaseFor('direct')

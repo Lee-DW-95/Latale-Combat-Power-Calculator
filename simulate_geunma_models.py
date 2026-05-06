@@ -251,6 +251,21 @@ def main():
     with open(os.path.join(here, 'SAMPLE_DATA.json'), 'r', encoding='utf-8') as f:
         data = json.load(f)
 
+    # 데이터 정제 — 학습에서 제외할 케이스
+    EXCLUDE = {
+        '자료8_사용자캡쳐',     # case4_관통99 와 BP 동일한 중복 + OCR 미정정
+        '기존2',                # 최소뎀 > 최대뎀 (수련의방 의심, 미세)
+        'img18_도깨비',         # 최소뎀 > 최대뎀 (수련의방 의심, 미세)
+        'img23_사용자캡쳐5',     # 최소뎀 > 최대뎀 ×1.83 (수련의방 명백)
+        'case3_관통97',         # 최소뎀 > 최대뎀 ×1.76 (수련의방 명백)
+        'case3_관통98',         # 최소뎀 > 최대뎀 ×1.76 (수련의방 명백)
+        'case4_관통98',         # 최소뎀 > 최대뎀 ×1.79 (수련의방 명백)
+        'case4_관통99',         # 최소뎀 > 최대뎀 ×1.79 (수련의방 명백)
+    }
+    print(f'학습 제외: {len(EXCLUDE)}건 (중복 1 + 수련의방 7)')
+    data = [s for s in data if s.get('name') not in EXCLUDE]
+    print(f'정제 후 총 데이터: {len(data)}건')
+
     # 근마효율>0 + 직접타격/소환타격 실측 모두 보유한 데이터만
     valid = [s for s in data
              if s.get('근마효율', 0) > 0
