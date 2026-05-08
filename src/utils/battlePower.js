@@ -43,17 +43,22 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
+// V_BIG6 — 카톡 페어 18건 + 자료6 세이버 1건 (총 19건) 학습.
+//   사용자 제공 기본스탯으로 정확한 메커니즘(누적-Npp/기본-A) 적용. 두 캐릭(서로 다른 누적%)
+//   동시 fit 성공 → K_cross 가 캐릭 보편 상수임이 확인됨 (학습값 0.5035 ≈ 직접 측정 0.5366).
+//   학습 결과: 종합 RMSE 0.004%, max 0.011% — 19건 모두 사실상 완벽 fit.
+//   SAMPLE_DATA P 회귀: 1.462% (자료6 외 entries 의 OCR 노이즈 영향).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.45988696e+0,       // 주스탯 가중치 (정제 데이터 9-param 재학습)
-  K1: 1.47842018e+2,       // 공격력 가중치
-  K2: 1.67360980e+0,       // 고댐 가중치 (+25% — 수련의방 cap 노이즈 제거 후 정상화)
-  K_mon: 2.76714980e-1,    // 일몬추+보몬추 가중치 (-20%)
-  D_crit: 2.26209973e+2,   // 크댐 분모 (V_BIG3 유지)
-  D_dmg: 1.94551489e-34,   // (최소뎀+최대뎀) 분모 (V_BIG3 유지)
-  D_dom: 1.88920615e+2,    // 지배력 분모 (V_BIG3 유지)
-  K_cross: 6.4115396e-1,   // 근력 × 근마효율%/100 cross-term (직접 attackBase 전용)
+  K0: 2.03059956e+0,       // 주스탯 가중치
+  K1: 1.74223439e+2,       // 공격력 가중치
+  K2: 1.25735169e+0,       // 고댐 가중치
+  K_mon: 9.00213610e-1,    // 일몬추+보몬추 가중치
+  D_crit: 1.36445681e+2,   // 크댐 분모
+  D_dmg: 8.51623553e-38,   // (최소뎀+최대뎀) 분모 (effective base × 1/D_dmg 결합)
+  D_dom: 1.98034195e+2,    // 지배력 분모
+  K_cross: 5.03512826e-1,  // 근마효율 cross-term (multiplicative on ab_d)
   D_pen: 25.0,             // 관통 분모 (고정)
-  base: 6.18437351e-42,    // 전체 보정 상수 (V_BIG3 유지)
+  base: 1.24030797e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -66,7 +71,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 1.49184424e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지)
+  K1: 1.75805388e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG6
 });
 
 /**
@@ -138,10 +143,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-const SPLIT_U = 0.777602;  // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 82.577634; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W = 0.246113;  // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X = 0.123264;  // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG6 (카톡 18 + 자료6 1 학습)
+const SPLIT_U =  0.978818; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 86.138699; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =  0.750773; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X = -0.020116; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   직접/소환 공통. 근마효율은 multiplier 균일 곱이 아니라 attackBaseFor('direct')
@@ -167,9 +173,10 @@ function multiplierFor(stats) {
 
 // attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
 //   세 모드 모두 K0/K1/K2/K_mon 기반. direct/summon 은 (u, v, w, x) 만큼 4-param split 적용.
-//   direct 모드에 한해 K_cross × 근력 × 근마효율%/100 cross-term 추가
-//     (게임 메커니즘 가설: 근마효율 = 직접타격 전용, 근력 비례).
-//   평균 = (direct + summon)/2 = avg (자동 보존, 별도 회귀 불필요).
+//   direct 모드에 한해 ab_d × (1 + K_cross × 근마효율%/100) multiplicative 적용
+//     (V_BIG4 신규 메커니즘: 근마효율은 주스탯 외 공격력/고댐 등 직접 attackBase 전체에 비례).
+//     카톡 페어 직접 측정 (1+0.27K)/(1+0.26K) = BP 비율 → K_cross ≈ 0.5366 으로 도출.
+//   평균 = (direct + summon)/2 = avg.
 function attackBaseFor(stats, mode = 'avg') {
   if (!stats) return 0;
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
@@ -183,20 +190,22 @@ function attackBaseFor(stats, mode = 'avg') {
   let beta = params.K1;
   let gamma = params.K2;
   let delta = params.K_mon;
-  let crossTerm = 0;
   if (mode === 'direct') {
     alpha -= SPLIT_U;
     beta += SPLIT_V;
     gamma -= SPLIT_W;
     delta -= SPLIT_X;
-    crossTerm = params.K_cross * 주스탯 * (근마효율 / 100);
   } else if (mode === 'summon') {
     alpha += SPLIT_U;
     beta -= SPLIT_V;
     gamma += SPLIT_W;
     delta += SPLIT_X;
   }
-  return alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐 + crossTerm;
+  let result = alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐;
+  if (mode === 'direct') {
+    result *= 1 + params.K_cross * (근마효율 / 100);
+  }
+  return result;
 }
 
 /**
