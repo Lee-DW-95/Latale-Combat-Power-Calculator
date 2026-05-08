@@ -252,6 +252,66 @@ export function calculateSummonBP(stats /* , target */) {
   return Math.round(ab * multiplierFor(stats));
 }
 
+/**
+ * 몬스터 타입별 분리 BP — 일반 / 보스 상대 전투력.
+ *
+ *   정의: 한쪽 몬스터 타입 항만 적용된 캐릭의 BP.
+ *     일반 BP: 일몬추/지만 적용 (일=보로 가정 = 반대편을 일몬 값으로 대체)
+ *     보스 BP: 보몬추/지만 적용 (반대편을 보몬 값으로 대체)
+ *   → 일몬추=보몬추, 일몬지=보몬지 인 캐릭은 vs 일반 = vs 보스 = 종합 BP 자명 성립.
+ *   → 비선형 항(K_mon × 합 × multiplier 등) 때문에 (일+보)/2 ≈ 종합 (정확한 동치 X).
+ *
+ *   백어택/근거리/상태이상 가동률은 monsterType과 일관 매핑.
+ *
+ * @param {CharacterStats} stats
+ * @param {'normal'|'boss'} monsterType
+ * @returns {number} 분리 BP (직접+소환 평균)
+ */
+export function calculateBPVsMonster(stats, monsterType) {
+  if (!stats) return 0;
+  const adjusted = { ...stats };
+  if (monsterType === 'normal') {
+    adjusted.보몬추 = Number(stats.일몬추 || 0);
+    adjusted.보몬지 = Number(stats.일몬지 || 0);
+  } else {
+    adjusted.일몬추 = Number(stats.보몬추 || 0);
+    adjusted.일몬지 = Number(stats.보몬지 || 0);
+  }
+  return calculateBattlePower(adjusted, monsterType);
+}
+
+/**
+ * 몬스터 타입별 분리 직접타격 BP.
+ */
+export function calculateDirectBPVsMonster(stats, monsterType) {
+  if (!stats) return 0;
+  const adjusted = { ...stats };
+  if (monsterType === 'normal') {
+    adjusted.보몬추 = Number(stats.일몬추 || 0);
+    adjusted.보몬지 = Number(stats.일몬지 || 0);
+  } else {
+    adjusted.일몬추 = Number(stats.보몬추 || 0);
+    adjusted.일몬지 = Number(stats.보몬지 || 0);
+  }
+  return calculateDirectBP(adjusted, monsterType);
+}
+
+/**
+ * 몬스터 타입별 분리 소환타격 BP.
+ */
+export function calculateSummonBPVsMonster(stats, monsterType) {
+  if (!stats) return 0;
+  const adjusted = { ...stats };
+  if (monsterType === 'normal') {
+    adjusted.보몬추 = Number(stats.일몬추 || 0);
+    adjusted.보몬지 = Number(stats.일몬지 || 0);
+  } else {
+    adjusted.일몬추 = Number(stats.보몬추 || 0);
+    adjusted.일몬지 = Number(stats.보몬지 || 0);
+  }
+  return calculateSummonBP(adjusted);
+}
+
 // ============================================================
 // 조건부 대미지 환산 — 백어택/근거리/상태이상
 //

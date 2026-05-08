@@ -6,6 +6,7 @@ import {
   calculateBattlePower,
   calculateDirectBP,
   calculateSummonBP,
+  calculateBPVsMonster,
 } from '../utils/battlePower.js';
 import { STAT_FIELD_DEFS, BASE_FIELD_DEFS } from '../data/statLabels.js';
 import { fmt as formatBP } from '../utils/format.js';
@@ -55,6 +56,11 @@ const directBPBase = computed(() => calculateDirectBP(props.modelValue, 'base'))
 const directBPBoss = computed(() => calculateDirectBP(props.modelValue, 'boss'));
 const summonBP = computed(() => calculateSummonBP(props.modelValue));
 
+// 일반몹 / 보스몹 분리 BP — 무관 항(보몬추/지 또는 일몬추/지) 0 가정
+//   monsterType 에 맞는 백/근/상 가동률 환산 자동 적용 (normal/boss target).
+const bpVsNormal = computed(() => calculateBPVsMonster(props.modelValue, 'normal'));
+const bpVsBoss = computed(() => calculateBPVsMonster(props.modelValue, 'boss'));
+
 const anyConditionalActive = computed(
   () => expectedMultNormal.value > 1 || expectedMultBoss.value > 1
 );
@@ -88,10 +94,30 @@ const anyConditionalActive = computed(
             소환 {{ formatBP(summonBP) }}
           </span>
         </div>
+        <!-- 일반몹/보스몹 분리 (항상 표시) -->
+        <div
+          class="text-[10px] tabular-nums mt-0.5"
+          title="일몬추/일몬지 만 적용한 일반몹 BP, 보몬추/보몬지 만 적용한 보스몹 BP. 백/근/상 가동률은 각 환경에 맞춰 환산됨."
+        >
+          <span class="text-emerald-700 dark:text-emerald-300 font-semibold">
+            vs 일반 {{ formatBP(bpVsNormal) }}
+          </span>
+          <span class="text-slate-400 mx-1">·</span>
+          <span class="text-rose-700 dark:text-rose-300 font-semibold">
+            vs 보스 {{ formatBP(bpVsBoss) }}
+          </span>
+        </div>
+        <p
+          class="text-[9px] text-slate-400 dark:text-slate-500 italic mt-0.5 max-w-[280px] leading-snug"
+          title="모델은 BP = aBase × multiplier 곱셈 형태라 (vs 일반 + vs 보스) / 2 가 종합 BP 와 정확히 일치하지 않습니다. 일=보 캐릭은 자명 성립."
+        >
+          ⓘ (vs 일반 + vs 보스) ÷ 2 ≈ 종합 BP — 곱셈 항 비선형성 때문에
+          ±0.01% 미세 오차 발생 (일몬·보몬 수치가 같으면 0)
+        </p>
         <div
           v-if="anyConditionalActive"
           class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums mt-0.5"
-          title="환산 없이 base 평균 / 일반·보스 환경별 평균"
+          title="환산 없이 base 평균 / 일반·보스 환경별 평균 (일/보 추가댐·지배력 합산)"
         >
           base {{ formatBP(baseBP) }} · 일반 {{ formatBP(normalBP) }} · 보스 {{ formatBP(bossBP) }}
         </div>
