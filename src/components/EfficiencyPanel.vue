@@ -61,14 +61,154 @@ const maxDelta = computed(() => {
 });
 
 // ============================================================
+// 스탯간 옵션 % 동등 환산 — "근력 8% = 크댐 45%" 식의 게임 단위 환산.
+//
+//   라테일 부적 옵션 "+N%" 라벨이 스탯별로 다른 메커니즘:
+//     주스탯/공격력/고댐/일몬추/보몬추 — 누적 +Npp (% 옵션 메커니즘)
+//     크댐/최소뎀/최대뎀                — raw +N 가산 (가산값 메커니즘)
+//     일/보몬지/근마효율                — raw +N (% 단위 자체, 직접 가산)
+//     관통                              — raw +N (cap 99)
+//
+//   사용자 검증 (자료6, 근력 +8% 옵션 → ΔBP +38,487):
+//     크댐 raw +45 가산 = ΔBP +38,487 (= "크댐 +45%" 부적과 동등)
+//   사용자 입력 패턴(가산값 칼럼 vs % 옵션 칼럼) 그대로 자연 단위로 환산.
+// ============================================================
+const PEN_CAP = 99;
+
+const equivStat = ref('주스탯');
+const equivPct = ref(8); // 기본 +8% (사용자 예시 기준)
+
+const ALL_STAT_KEYS_FOR_EQUIV = MARGINAL_STEPS.map((m) => m.key);
+
+// 스탯별 자연 단위 메커니즘 — 사용자 인식 옵션 단위
+//   'pct': 누적 +Npp (% 옵션 칼럼)
+//   'raw': raw +N 가산 (가산값 칼럼)
+const NATURAL_UNIT = {
+  주스탯: 'pct', 공격력: 'pct', 고댐: 'pct', 일몬추: 'pct', 보몬추: 'pct',
+  크댐: 'raw', 최소뎀: 'raw', 최대뎀: 'raw',
+  일몬지: 'raw', 보몬지: 'raw', 근마효율: 'raw', 관통: 'raw',
+};
+
+// 옵션 단위 라벨 — UI 표시 (사용자에게 통일된 "+N%" 또는 "+N pp/raw")
+function optionUnitLabel(statKey) {
+  // 모든 가산형 8 스탯 + 근마효율은 게임에서 "+N%" 표기 (메커니즘은 다를지라도)
+  if (statKey === '관통') return '';
+  return '%';
+}
+
+// 스탯 옵션 +amount 적용 시 BP 계산 (스탯별 자연 단위 메커니즘 적용)
+function bpWithOption(baseStats, statKey, amount) {
+  const newStats = { ...baseStats };
+  const unit = NATURAL_UNIT[statKey];
+
+  if (unit === 'pct') {
+    // 누적 +Npp 옵션 (equipDelta 의 % 옵션 메커니즘)
+    const equip = { [`${statKey}_퍼`]: amount };
+    const delta = equipDelta(baseStats, equip);
+    for (const k of STAT_KEYS) {
+      newStats[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
+    }
+    return calculateBattlePower(newStats);
+  }
+
+  // raw 가산 메커니즘
+  if (statKey === '근마효율') {
+    newStats.근마효율 = (Number(baseStats.근마효율) || 0) + amount;
+    return calculateBattlePower(newStats);
+  }
+  if (statKey === '일몬지' || statKey === '보몬지') {
+    newStats[statKey] = (Number(baseStats[statKey]) || 0) + amount;
+    return calculateBattlePower(newStats);
+  }
+  if (statKey === '관통') {
+    newStats.관통 = Math.max(0, Math.min(PEN_CAP, (Number(baseStats.관통) || 0) + amount));
+    return calculateBattlePower(newStats);
+  }
+  // 크댐/최소뎀/최대뎀: equipDelta 가산값 메커니즘 (기본값에 raw +N → 표시 +N×(1+누적))
+  const equip = { [statKey]: amount };
+  const delta = equipDelta(baseStats, equip);
+  for (const k of STAT_KEYS) {
+    newStats[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
+  }
+  return calculateBattlePower(newStats);
+}
+
+const equivalents = computed(() => {
+  const refKey = equivStat.value;
+  const refAmount = Number(equivPct.value) || 0;
+  if (refAmount === 0 || baseBP.value <= 0) return null;
+
+  const refBP = bpWithOption(props.stats, refKey, refAmount);
+  const refDeltaBP = refBP - baseBP.value;
+  if (refDeltaBP === 0) return null;
+
+  // 관통 cap 도달 체크 (기준이 관통일 때)
+  let refCapped = false;
+  if (refKey === '관통') {
+    const requested = (Number(props.stats.관통) || 0) + refAmount;
+    if (requested > PEN_CAP || requested < 0) refCapped = true;
+  }
+
+  const items = ALL_STAT_KEYS_FOR_EQUIV
+    .filter((k) => k !== refKey)
+    .map((k) => {
+      // 이분법 — 단조 함수 가정 (옵션 추가 ↑ → BP ↑)
+      let lo = -99, hi = 9999;
+      let mid = 0;
+      let lastDelta = 0;
+      for (let i = 0; i < 80; i++) {
+        mid = (lo + hi) / 2;
+        const bp = bpWithOption(props.stats, k, mid);
+        const dBP = bp - baseBP.value;
+        lastDelta = dBP;
+        if (refDeltaBP > 0) {
+          if (dBP < refDeltaBP) lo = mid;
+          else hi = mid;
+        } else {
+          if (dBP > refDeltaBP) lo = mid;
+          else hi = mid;
+        }
+        if (Math.abs(dBP - refDeltaBP) < Math.abs(refDeltaBP) * 1e-7) break;
+      }
+      // 관통 cap 검사
+      let capHit = false;
+      if (k === '관통') {
+        const requested = (Number(props.stats.관통) || 0) + mid;
+        if (requested > PEN_CAP) capHit = true;
+      }
+      const converged = Math.abs(lastDelta - refDeltaBP) < Math.abs(refDeltaBP) * 1e-3;
+      return {
+        key: k,
+        label: getStatLabel(props.stats.type, k),
+        unit: optionUnitLabel(k),
+        unitMechanism: NATURAL_UNIT[k] === 'pct' ? '누적' : '가산',
+        amount: converged ? mid : null,
+        note: capHit ? 'cap(99) 도달 — 도달 불가' : (!converged ? '도달 불가' : null),
+      };
+    })
+    .sort((a, b) => {
+      if (a.amount == null && b.amount == null) return 0;
+      if (a.amount == null) return 1;
+      if (b.amount == null) return -1;
+      return Math.abs(a.amount) - Math.abs(b.amount);
+    });
+
+  return {
+    refDeltaBP,
+    refCapped,
+    refUnit: optionUnitLabel(refKey),
+    items,
+  };
+});
+
+// ============================================================
 // 빠른 시뮬 (A) — 부적/장비 가산 옵션 + % 옵션 시뮬
 // ============================================================
 const simStat = ref('주스탯');
 const simAmount = ref('');     // 가산값 (부적 raw 옵션)
 const simPct = ref('');        // % 옵션
 
-// 게임 메커니즘 cap — 관통은 99 가 최대
-const PEN_CAP = 99;
+// PEN_CAP 은 환산 섹션에서 선언됨 (재사용)
 
 // 선택한 스탯이 % 옵션을 지원하는지 (8개 기본스탯류)
 const simSupportsPct = computed(() => STATS_WITH_BASE.includes(simStat.value));
@@ -207,6 +347,108 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </ul>
         <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
           💡 표 항목 클릭 시 아래 빠른 시뮬에 자동 적용됩니다.
+        </p>
+      </div>
+
+      <!-- (C) 스탯간 옵션 % 동등 환산 -->
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+          🔄 스탯간 옵션 % 동등 환산
+        </h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+          게임 부적/장비 옵션 단위 환산 — <strong>"근력 +8% = 크댐 +45%"</strong> 같은 기준 캐릭별 효율 비교.
+          스탯별 옵션 메커니즘:
+          <span class="text-indigo-600 dark:text-indigo-400">주/공/고/일·보몬추 → 누적%P</span>,
+          <span class="text-rose-600 dark:text-rose-400">크댐/최소·최대뎀 → raw 가산</span>,
+          일/보몬지·근마효율·관통 → 직접 +N.
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-slate-500 dark:text-slate-400 text-sm">기준</span>
+          <select
+            v-model="equivStat"
+            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          >
+            <option v-for="m in MARGINAL_STEPS" :key="m.key" :value="m.key">
+              {{ getStatLabel(stats.type, m.key) }}
+            </option>
+          </select>
+          <span class="text-slate-500 dark:text-slate-400 font-medium">옵션 +</span>
+          <input
+            v-model.number="equivPct"
+            type="number"
+            step="any"
+            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-20 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          />
+          <span class="text-slate-500 dark:text-slate-400 text-sm">{{ equivalents?.refUnit ?? '%' }}</span>
+        </div>
+
+        <div v-if="equivalents" class="text-sm">
+          <p class="text-slate-600 dark:text-slate-300 mb-2">
+            <strong>{{ getStatLabel(stats.type, equivStat) }}</strong>
+            <span :class="equivPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+              {{ equivPct >= 0 ? '+' : '' }}{{ equivPct }}{{ equivalents.refUnit }} 옵션
+            </span>
+            (BP {{ equivalents.refDeltaBP >= 0 ? '+' : '' }}{{ fmt(equivalents.refDeltaBP) }})
+            <span class="text-slate-500 dark:text-slate-400">≈ 다른 옵션</span>
+          </p>
+          <p
+            v-if="equivalents.refCapped"
+            class="text-[11px] text-orange-600 dark:text-orange-400 mb-2"
+          >
+            ⚠ 기준 스탯이 cap에 걸려 실제 ΔBP 가 입력값보다 작습니다.
+          </p>
+          <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+            <li
+              v-for="e in equivalents.items"
+              :key="e.key"
+              class="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-900/40"
+            >
+              <span class="text-slate-700 dark:text-slate-300 truncate">{{ e.label }}</span>
+              <span
+                v-if="e.amount != null"
+                class="tabular-nums"
+                :title="Math.abs(e.amount) < Math.abs(equivPct)
+                  ? `${getStatLabel(stats.type, equivStat)} 보다 효율 좋음 (작은 % 로 동등 효과)`
+                  : `${getStatLabel(stats.type, equivStat)} 보다 효율 낮음`"
+              >
+                <span
+                  :class="[
+                    'font-semibold',
+                    Math.abs(e.amount) < Math.abs(equivPct)
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-slate-500 dark:text-slate-400',
+                  ]"
+                >
+                  {{ e.amount >= 0 ? '+' : '' }}{{ e.amount.toFixed(2) }}{{ e.unit }}
+                </span>
+                <span
+                  :class="[
+                    'text-[9px] ml-1',
+                    e.unitMechanism === '누적'
+                      ? 'text-indigo-500/70 dark:text-indigo-400/70'
+                      : 'text-rose-500/70 dark:text-rose-400/70',
+                  ]"
+                >
+                  ({{ e.unitMechanism }})
+                </span>
+              </span>
+              <span
+                v-else
+                class="text-[10px] text-slate-400 dark:text-slate-500 italic"
+              >
+                {{ e.note }}
+              </span>
+            </li>
+          </ul>
+          <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic leading-snug">
+            ⓘ 라테일 부적 옵션 "+N%" 라벨은 스탯별 메커니즘이 다릅니다.
+            결과의 <span class="text-indigo-600 dark:text-indigo-400">(누적)</span>은 누적%에 +Npp 추가,
+            <span class="text-rose-600 dark:text-rose-400">(가산)</span>은 raw 절대값 +N 가산입니다.
+            정확한 환산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다.
+          </p>
+        </div>
+        <p v-else class="text-xs text-slate-400 dark:text-slate-500 italic">
+          기준 스탯과 옵션 값을 입력하면 다른 옵션들의 동등 변화량이 표시됩니다.
         </p>
       </div>
 
