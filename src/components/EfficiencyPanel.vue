@@ -5,7 +5,6 @@ import {
   calculateDirectBP,
   calculateSummonBP,
   calculateBPVsMonster,
-  statMarginalEffect,
   getStatLabel,
   equipDelta,
   STAT_KEYS,
@@ -21,68 +20,30 @@ const STATS_WITH_BASE = [
   '주스탯', '공격력', '크댐', '최소뎀', '최대뎀', '고댐', '일몬추', '보몬추',
 ];
 
-// 스탯별 "현실적인" step 단위 — 게임 내 흔한 변화량 기준
-// (1당 효율로 비교하면 주스탯이 너무 작게 보이고 크댐 등이 과대평가되어 step별로 정규화)
+// 옵션 +1 단위 (게임 부적/장비 옵션 단위) — 객관적 우선순위 비교
+//   누적%P 옵션 (+1%): 주/공/고/일·보몬추
+//   raw +1 가산:        크댐/최소뎀/최대뎀
+//   직접 +1pp:          일/보몬지/근마효율
+//   raw +1 (cap 99):    관통
 const MARGINAL_STEPS = [
-  { key: '주스탯', step: 100000, label: '+100,000' },
-  { key: '공격력', step: 100,    label: '+100' },
-  { key: '고댐',   step: 1000,   label: '+1,000' },
-  { key: '크댐',   step: 100,    label: '+100' },
-  { key: '최소뎀', step: 10,     label: '+10' },
-  { key: '최대뎀', step: 10,     label: '+10' },
-  { key: '일몬추', step: 1000,   label: '+1,000' },
-  { key: '보몬추', step: 1000,   label: '+1,000' },
-  { key: '일몬지', step: 1,      label: '+1%' },
-  { key: '보몬지', step: 1,      label: '+1%' },
-  { key: '근마효율', step: 1,    label: '+1%' },
-  { key: '관통',   step: 1,      label: '+1' },
+  { key: '주스탯',   label: '+1%',  unitNote: '누적' },
+  { key: '공격력',   label: '+1%',  unitNote: '누적' },
+  { key: '고댐',     label: '+1%',  unitNote: '누적' },
+  { key: '크댐',     label: '+1',   unitNote: '가산' },
+  { key: '최소뎀',   label: '+1',   unitNote: '가산' },
+  { key: '최대뎀',   label: '+1',   unitNote: '가산' },
+  { key: '일몬추',   label: '+1%',  unitNote: '누적' },
+  { key: '보몬추',   label: '+1%',  unitNote: '누적' },
+  { key: '일몬지',   label: '+1%',  unitNote: '가산' },
+  { key: '보몬지',   label: '+1%',  unitNote: '가산' },
+  { key: '근마효율', label: '+1%',  unitNote: '가산' },
+  { key: '관통',     label: '+1',   unitNote: '가산' },
 ];
 
-const baseBP = computed(() => calculateBattlePower(props.stats));
-
-const efficiencies = computed(() => {
-  if (baseBP.value <= 0) return [];
-  return MARGINAL_STEPS
-    .map(({ key, step, label }) => {
-      const delta = statMarginalEffect(props.stats, key, step);
-      return {
-        key,
-        step,
-        stepLabel: label,
-        label: getStatLabel(props.stats.type, key),
-        delta,
-        deltaPct: (delta / baseBP.value) * 100,
-      };
-    })
-    .sort((a, b) => b.delta - a.delta);
-});
-
-const maxDelta = computed(() => {
-  if (!efficiencies.value.length) return 1;
-  const m = Math.max(...efficiencies.value.map((e) => Math.abs(e.delta)));
-  return m > 0 ? m : 1;
-});
-
 // ============================================================
-// 스탯간 옵션 % 동등 환산 — "근력 8% = 크댐 45%" 식의 게임 단위 환산.
-//
-//   라테일 부적 옵션 "+N%" 라벨이 스탯별로 다른 메커니즘:
-//     주스탯/공격력/고댐/일몬추/보몬추 — 누적 +Npp (% 옵션 메커니즘)
-//     크댐/최소뎀/최대뎀                — raw +N 가산 (가산값 메커니즘)
-//     일/보몬지/근마효율                — raw +N (% 단위 자체, 직접 가산)
-//     관통                              — raw +N (cap 99)
-//
-//   사용자 검증 (자료6, 근력 +8% 옵션 → ΔBP +38,487):
-//     크댐 raw +45 가산 = ΔBP +38,487 (= "크댐 +45%" 부적과 동등)
-//   사용자 입력 패턴(가산값 칼럼 vs % 옵션 칼럼) 그대로 자연 단위로 환산.
+// 공통 유틸 — 옵션 메커니즘 (한계 효율 + 환산 + 빠른 시뮬 공유)
 // ============================================================
 const PEN_CAP = 99;
-
-const equivStat = ref('주스탯');
-const equivPct = ref(8); // 기본 +8% (사용자 예시 기준)
-const equivMode = ref('avg'); // 'avg' | 'direct' | 'summon' | 'normal' | 'boss' — BP 기준
-
-const ALL_STAT_KEYS_FOR_EQUIV = MARGINAL_STEPS.map((m) => m.key);
 
 // 스탯별 자연 단위 메커니즘 — 사용자 인식 옵션 단위
 //   'pct': 누적 +Npp (% 옵션 칼럼)
@@ -95,7 +56,6 @@ const NATURAL_UNIT = {
 
 // 옵션 단위 라벨 — UI 표시 (사용자에게 통일된 "+N%" 또는 "+N pp/raw")
 function optionUnitLabel(statKey) {
-  // 모든 가산형 8 스탯 + 근마효율은 게임에서 "+N%" 표기 (메커니즘은 다를지라도)
   if (statKey === '관통') return '';
   return '%';
 }
@@ -145,6 +105,44 @@ function bpWithOption(baseStats, statKey, amount, mode = 'avg') {
   }
   return bpFor(newStats, mode);
 }
+
+const baseBP = computed(() => calculateBattlePower(props.stats));
+
+// ============================================================
+// 한계 효율 분석 — 옵션 +1 단위 객관적 비교 (게임 부적 단위 통일)
+// ============================================================
+const efficiencies = computed(() => {
+  if (baseBP.value <= 0) return [];
+  return MARGINAL_STEPS
+    .map(({ key, label, unitNote }) => {
+      const newBP = bpWithOption(props.stats, key, 1, 'avg');
+      const delta = newBP - baseBP.value;
+      return {
+        key,
+        stepLabel: label,
+        unitNote,
+        label: getStatLabel(props.stats.type, key),
+        delta,
+        deltaPct: (delta / baseBP.value) * 100,
+      };
+    })
+    .sort((a, b) => b.delta - a.delta);
+});
+
+const maxDelta = computed(() => {
+  if (!efficiencies.value.length) return 1;
+  const m = Math.max(...efficiencies.value.map((e) => Math.abs(e.delta)));
+  return m > 0 ? m : 1;
+});
+
+// ============================================================
+// 스탯간 옵션 % 동등 환산 — "근력 8% = 크댐 45%" 식의 게임 단위 환산.
+// ============================================================
+const equivStat = ref('주스탯');
+const equivPct = ref(8); // 기본 +8% (사용자 예시 기준)
+const equivMode = ref('avg'); // 'avg' | 'direct' | 'summon' | 'normal' | 'boss' — BP 기준
+
+const ALL_STAT_KEYS_FOR_EQUIV = MARGINAL_STEPS.map((m) => m.key);
 
 const equivalents = computed(() => {
   const refKey = equivStat.value;
@@ -331,9 +329,13 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
     <div v-else>
       <!-- (B) 마진 효율 분석 -->
       <div class="mb-5">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
-          📊 스탯별 한계 효율 (효율 순 정렬)
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
+          📊 스탯별 한계 효율 — 옵션 +1 단위 객관 비교
         </h3>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-snug">
+          모든 스탯을 게임 부적 옵션 단위 (+1%) 로 통일해 BP 영향 직접 비교.
+          각 스탯의 메커니즘은 항목별 (누적/가산) 표시.
+        </p>
         <ul class="space-y-1.5">
           <li
             v-for="e in efficiencies"
@@ -346,8 +348,19 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               <span class="text-slate-700 dark:text-slate-300 text-xs sm:text-sm truncate">
                 {{ e.label }}
               </span>
-              <span class="text-slate-400 dark:text-slate-500 text-[10px] tabular-nums">
-                ({{ e.stepLabel }})
+              <span class="text-[10px] tabular-nums">
+                <span class="text-slate-400 dark:text-slate-500">{{ e.stepLabel }}</span>
+                <span
+                  :class="[
+                    'ml-1',
+                    e.unitNote === '누적'
+                      ? 'text-indigo-500/70 dark:text-indigo-400/70'
+                      : 'text-rose-500/70 dark:text-rose-400/70',
+                  ]"
+                  :title="e.unitNote === '누적' ? '누적%P 옵션' : 'raw 가산 옵션'"
+                >
+                  ({{ e.unitNote }})
+                </span>
               </span>
             </span>
             <div class="flex-1 bg-slate-100 dark:bg-slate-900/50 rounded h-5 overflow-hidden relative min-w-0">
