@@ -342,9 +342,11 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             @click="pickStat(e.key)"
             :title="`'${e.label}' 빠른 시뮬에 적용`"
           >
-            <span class="text-slate-700 dark:text-slate-300 flex-shrink-0 w-28 sm:w-36 truncate">
-              {{ e.label }}
-              <span class="text-slate-400 dark:text-slate-500 text-[11px]">
+            <span class="flex flex-col flex-shrink-0 w-32 sm:w-44 leading-tight">
+              <span class="text-slate-700 dark:text-slate-300 text-xs sm:text-sm truncate">
+                {{ e.label }}
+              </span>
+              <span class="text-slate-400 dark:text-slate-500 text-[10px] tabular-nums">
                 ({{ e.stepLabel }})
               </span>
             </span>
@@ -354,9 +356,11 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 :style="{ width: `${Math.max(2, (e.delta / maxDelta) * 100)}%` }"
               />
             </div>
-            <span class="text-slate-800 dark:text-slate-100 tabular-nums font-semibold flex-shrink-0 w-28 sm:w-36 text-right text-xs sm:text-sm">
-              {{ sign(e.delta) }}
-              <span class="text-slate-500 dark:text-slate-400 text-[11px] block sm:inline sm:ml-1">
+            <span class="flex flex-col flex-shrink-0 w-24 sm:w-32 text-right leading-tight">
+              <span class="text-slate-800 dark:text-slate-100 tabular-nums font-semibold text-xs sm:text-sm">
+                {{ sign(e.delta) }}
+              </span>
+              <span class="text-slate-500 dark:text-slate-400 text-[10px] tabular-nums">
                 ({{ e.deltaPct >= 0 ? '+' : '' }}{{ e.deltaPct.toFixed(3) }}%)
               </span>
             </span>
