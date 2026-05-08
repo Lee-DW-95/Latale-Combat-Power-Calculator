@@ -67,6 +67,9 @@ const simStat = ref('주스탯');
 const simAmount = ref('');     // 가산값 (부적 raw 옵션)
 const simPct = ref('');        // % 옵션
 
+// 게임 메커니즘 cap — 관통은 99 가 최대
+const PEN_CAP = 99;
+
 // 선택한 스탯이 % 옵션을 지원하는지 (8개 기본스탯류)
 const simSupportsPct = computed(() => STATS_WITH_BASE.includes(simStat.value));
 
@@ -83,33 +86,62 @@ const simCumulativePct = computed(() => {
   return ((display - simBaseValue.value) / simBaseValue.value) * 100;
 });
 
+// 관통 cap 까지 남은 여유분 (음수 방지). 관통 외엔 null.
+const simRemainingHeadroom = computed(() => {
+  if (simStat.value !== '관통') return null;
+  return Math.max(0, PEN_CAP - (Number(props.stats.관통) || 0));
+});
+
 const simResult = computed(() => {
   const amount = Number(simAmount.value) || 0;
   const pct = Number(simPct.value) || 0;
   if (amount === 0 && pct === 0) return null;
   if (baseBP.value <= 0) return null;
 
-  // 장비 옵션 객체 구성 (한 옵션만 채움)
-  const equip = { [simStat.value]: amount };
-  if (simSupportsPct.value) {
-    equip[`${simStat.value}_퍼`] = pct;
-  }
-
-  // equipDelta로 표시값 변화량 계산 (기본값/누적% 자동 반영)
-  const delta = equipDelta(props.stats, equip);
-
-  // 새 stats 만들어서 BP 계산
   const newStats = { ...props.stats };
-  for (const k of STAT_KEYS) {
-    newStats[k] = (Number(props.stats[k]) || 0) + (delta[k] || 0);
+  let displayDelta = 0;
+  let capped = false;
+
+  if (simStat.value === '근마효율') {
+    // 근마효율은 장비 옵션이 아니라 표시값 그대로 가산되는 캐릭터 스탯
+    //   (equipDelta 는 이걸 모델링하지 않아 0 을 반환 → 직접 가산)
+    const next = (Number(props.stats.근마효율) || 0) + amount;
+    newStats.근마효율 = next;
+    displayDelta = next - (Number(props.stats.근마효율) || 0);
+  } else {
+    // 장비 옵션 객체 구성 (한 옵션만 채움)
+    const equip = { [simStat.value]: amount };
+    if (simSupportsPct.value) {
+      equip[`${simStat.value}_퍼`] = pct;
+    }
+
+    // equipDelta로 표시값 변화량 계산 (기본값/누적% 자동 반영)
+    const delta = equipDelta(props.stats, equip);
+
+    for (const k of STAT_KEYS) {
+      newStats[k] = (Number(props.stats[k]) || 0) + (delta[k] || 0);
+    }
+    displayDelta = delta[simStat.value] || 0;
+
+    // 관통 99 cap — 게임상 99 초과는 무시되므로 BP 도 그만큼만 반영
+    if (simStat.value === '관통') {
+      const requested = newStats.관통;
+      if (requested > PEN_CAP) {
+        newStats.관통 = PEN_CAP;
+        displayDelta = PEN_CAP - (Number(props.stats.관통) || 0);
+        capped = true;
+      }
+    }
   }
+
   const newBP = calculateBattlePower(newStats);
   const change = newBP - baseBP.value;
 
   return {
     delta: change,
     deltaPct: (change / baseBP.value) * 100,
-    displayDelta: delta[simStat.value] || 0, // 표시값 변화량 (부적 적용 후)
+    displayDelta,
+    capped,
   };
 });
 
@@ -203,9 +235,16 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             v-model="simAmount"
             type="number"
             step="any"
-            placeholder="가산"
-            title="부적/장비의 가산 옵션 (raw 값)"
-            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            :min="simStat === '관통' ? 0 : undefined"
+            :max="simStat === '관통' ? simRemainingHeadroom : undefined"
+            :disabled="simStat === '관통' && simRemainingHeadroom <= 0"
+            :placeholder="simStat === '관통' && simRemainingHeadroom <= 0 ? 'cap 99 도달' : '가산'"
+            :title="simStat === '관통'
+              ? (simRemainingHeadroom <= 0
+                ? '관통은 cap(99) 에 도달해 추가 가산이 BP 에 반영되지 않습니다'
+                : `관통은 cap 99 — 최대 +${simRemainingHeadroom} 까지 효과`)
+              : '부적/장비의 가산 옵션 (raw 값)'"
+            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <template v-if="simSupportsPct">
             <span class="text-slate-500 dark:text-slate-400 font-medium">+</span>
@@ -242,9 +281,33 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
           <span v-else class="text-sm text-slate-400 dark:text-slate-500">값을 입력하세요</span>
         </div>
 
-        <!-- 누적% 안내 / 기본값 미입력 안내 -->
+        <!-- 누적% 안내 / 기본값 미입력 안내 / 관통 cap 안내 -->
         <p
-          v-if="simSupportsPct && simBaseValue <= 0"
+          v-if="simStat === '관통' && simRemainingHeadroom <= 0"
+          class="mt-2 text-[11px] text-orange-600 dark:text-orange-400"
+        >
+          ⚠ <strong>관통력</strong>이 이미 cap(99) 에 도달했습니다 — 추가 가산은 BP 에 반영되지 않습니다.
+        </p>
+        <p
+          v-else-if="simStat === '관통' && simResult?.capped"
+          class="mt-2 text-[11px] text-orange-600 dark:text-orange-400"
+        >
+          ⚠ 관통은 최대 99 까지만 적용 — 입력값 중 <strong>+{{ simResult.displayDelta }}</strong> 만 BP 에 반영됩니다.
+        </p>
+        <p
+          v-else-if="simStat === '관통'"
+          class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"
+        >
+          💡 관통은 cap 99 — 최대 <strong>+{{ simRemainingHeadroom }}</strong> 까지 효과가 있습니다.
+        </p>
+        <p
+          v-else-if="simStat === '근마효율' && simResult"
+          class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"
+        >
+          💡 근마효율 표시값에 <strong>+{{ simResult.displayDelta }}%</strong> 가산 — 직접타격 cross-term (근력 × 근마효율%) 으로 환산됩니다.
+        </p>
+        <p
+          v-else-if="simSupportsPct && simBaseValue <= 0"
           class="mt-2 text-[11px] text-orange-600 dark:text-orange-400"
         >
           ⚠ <strong>{{ getStatLabel(stats.type, simStat) }}</strong>의 기본값이 미입력 상태 — 가산은 단순 더하기로 계산됩니다.
