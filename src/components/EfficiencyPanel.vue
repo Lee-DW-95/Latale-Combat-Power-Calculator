@@ -4,6 +4,7 @@ import {
   calculateBattlePower,
   calculateDirectBP,
   calculateSummonBP,
+  calculateBPVsMonster,
   statMarginalEffect,
   getStatLabel,
   equipDelta,
@@ -79,7 +80,7 @@ const PEN_CAP = 99;
 
 const equivStat = ref('주스탯');
 const equivPct = ref(8); // 기본 +8% (사용자 예시 기준)
-const equivMode = ref('avg'); // 'avg' | 'direct' | 'summon' — BP 기준
+const equivMode = ref('avg'); // 'avg' | 'direct' | 'summon' | 'normal' | 'boss' — BP 기준
 
 const ALL_STAT_KEYS_FOR_EQUIV = MARGINAL_STEPS.map((m) => m.key);
 
@@ -99,10 +100,12 @@ function optionUnitLabel(statKey) {
   return '%';
 }
 
-// BP 계산 — mode 별 ('avg' | 'direct' | 'summon')
+// BP 계산 — mode 별 ('avg' | 'direct' | 'summon' | 'normal' | 'boss')
 function bpFor(stats, mode) {
   if (mode === 'direct') return calculateDirectBP(stats);
   if (mode === 'summon') return calculateSummonBP(stats);
+  if (mode === 'normal') return calculateBPVsMonster(stats, 'normal');
+  if (mode === 'boss') return calculateBPVsMonster(stats, 'boss');
   return calculateBattlePower(stats);
 }
 
@@ -395,8 +398,9 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </div>
 
         <!-- BP 기준 모드 토글 -->
-        <div class="flex items-center gap-1 mb-3 text-xs">
-          <span class="text-slate-500 dark:text-slate-400 mr-1">BP 기준:</span>
+        <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+          <span class="text-slate-500 dark:text-slate-400">BP 기준:</span>
+          <!-- 직접/소환 분리 -->
           <div class="inline-flex rounded-md ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden">
             <button
               type="button"
@@ -417,10 +421,31 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               {{ m.label }}
             </button>
           </div>
-          <span class="text-[10px] text-slate-400 dark:text-slate-500 ml-2 italic">
-            직타 비중 큰 캐릭은 직접, 소환 비중 큰 캐릭은 소환 모드 추천
-          </span>
+          <span class="text-slate-300 dark:text-slate-600">·</span>
+          <!-- 일반/보스 몬스터 분리 -->
+          <div class="inline-flex rounded-md ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden">
+            <button
+              type="button"
+              v-for="m in [
+                { v: 'normal', label: 'vs 일반' },
+                { v: 'boss', label: 'vs 보스' },
+              ]"
+              :key="m.v"
+              @click="equivMode = m.v"
+              :class="[
+                'px-3 py-1 transition',
+                equivMode === m.v
+                  ? (m.v === 'normal' ? 'bg-emerald-600 text-white font-semibold' : 'bg-rose-600 text-white font-semibold')
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+              ]"
+            >
+              {{ m.label }}
+            </button>
+          </div>
         </div>
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 italic mb-3 leading-snug">
+          직타/소환 비중에 맞춰 직접·소환 모드 / 일반·보스 던전 콘텐츠에 맞춰 vs 일반·vs 보스 모드 선택.
+        </p>
 
         <div v-if="equivalents" class="text-sm">
           <p class="text-slate-600 dark:text-slate-300 mb-2">
@@ -429,7 +454,12 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               {{ equivPct >= 0 ? '+' : '' }}{{ equivPct }}{{ equivalents.refUnit }} 옵션
             </span>
             <span class="text-[11px] text-slate-500 dark:text-slate-400">
-              ({{ equivMode === 'avg' ? '종합' : equivMode === 'direct' ? '직접' : '소환' }} BP
+              ({{
+                equivMode === 'avg' ? '종합' :
+                equivMode === 'direct' ? '직접' :
+                equivMode === 'summon' ? '소환' :
+                equivMode === 'normal' ? 'vs 일반' : 'vs 보스'
+              }} BP
               {{ equivalents.refDeltaBP >= 0 ? '+' : '' }}{{ fmt(equivalents.refDeltaBP) }})
             </span>
             <span class="text-slate-500 dark:text-slate-400">≈ 다른 옵션</span>
