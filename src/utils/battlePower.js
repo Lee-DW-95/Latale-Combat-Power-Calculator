@@ -1,12 +1,13 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 56개의 실제 T창 데이터로 회귀분석하여 도출한 V_BIG3 모델
- * (관통 + 일몬추/보몬추 포함, K_mon 항 페어 제약 학습)
- * 검증 정확도: 물리 RMSE 0.28%, 마법 RMSE 0.13%, 모든 케이스 오차 1% 이내
+ * V_BIG10 — 게임 truncate 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
+ *   사용자 도메인 통찰: 게임은 일관성을 위해 모든 소수점 정수% floor 처리.
+ *   학습 36건 (카톡 18 + SAMPLE 18) RMSE 0.180% max 0.620% — V_BIG8 대비 33% 개선.
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
+ * @see scripts/refit_v10_all_floor.mjs - 재학습 스크립트
  */
 
 // ============================================================
@@ -43,22 +44,28 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
-// V_BIG6 — 카톡 페어 18건 + 자료6 세이버 1건 (총 19건) 학습.
-//   사용자 제공 기본스탯으로 정확한 메커니즘(누적-Npp/기본-A) 적용. 두 캐릭(서로 다른 누적%)
-//   동시 fit 성공 → K_cross 가 캐릭 보편 상수임이 확인됨 (학습값 0.5035 ≈ 직접 측정 0.5366).
-//   학습 결과: 종합 RMSE 0.004%, max 0.011% — 19건 모두 사실상 완벽 fit.
-//   SAMPLE_DATA P 회귀: 1.462% (자료6 외 entries 의 OCR 노이즈 영향).
+// V_BIG10 — 게임 truncate 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
+//   사용자 도메인 통찰: 게임은 일관성을 위해 모든 소수점을 정수% 단위 floor 처리.
+//     • 크댐, 데미지, 지배력, 관통, K_cross×근마 모든 multiplier 의 boost% → 정수% floor
+//     • attackBase 각 항 (K0·주스탯, K1·공격력 등) → floor (큰 숫자라 효과 미미)
+//     • 직타·소타 BP, (직타+소타)/2 평균 → floor
+//   카톡 18 + SAMPLE 18 = 36건 학습. 카톡 5배 가중.
+//   학습 결과: 학습 36건 종합 RMSE 0.180% max 0.620% — V_BIG8 대비 33% 개선.
+//   V_BIG9 (부분 floor) 0.184% 대비 0.004%p 미세 개선 — 큰 숫자 항 floor 는 거의 무영향.
+//   카톡 18 sensitivity: 종합 0.052% (floor quantization 으로 인한 미세 손실).
+//   잔차 0% 도달 불가능 — 양 방향 잔차 동시 존재는 직업별 BP 미세 차이가 원인.
+//   K_cross ≈ 0.196 (V_BIG9 0.200 boundary 근접, floor 메커니즘 검증).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.03059956e+0,       // 주스탯 가중치
-  K1: 1.74223439e+2,       // 공격력 가중치
-  K2: 1.25735169e+0,       // 고댐 가중치
-  K_mon: 9.00213610e-1,    // 일몬추+보몬추 가중치
-  D_crit: 1.36445681e+2,   // 크댐 분모
-  D_dmg: 8.51623553e-38,   // (최소뎀+최대뎀) 분모 (effective base × 1/D_dmg 결합)
-  D_dom: 1.98034195e+2,    // 지배력 분모
-  K_cross: 5.03512826e-1,  // 근마효율 cross-term (multiplicative on ab_d)
-  D_pen: 25.0,             // 관통 분모 (고정)
-  base: 1.24030797e-45,    // 전체 보정 상수
+  K0: 2.70535421e+0,       // 주스탯 가중치
+  K1: 2.60311810e+2,       // 공격력 가중치
+  K2: 2.57501586e+0,       // 고댐 가중치
+  K_mon: 6.95042190e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.67678255e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 1.98544882e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용, 거의 무영향)
+  D_dom: 1.90892391e+2,    // 지배력 분모 (1% floor 적용)
+  K_cross: 1.96200380e-1,  // 근마효율 cross-term (1% floor 적용)
+  D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
+  base: 4.16374112e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -71,7 +78,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 1.75805388e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG6
+  K1: 2.62675454e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG10
 });
 
 /**
@@ -143,25 +150,34 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG6 (카톡 18 + 자료6 1 학습)
-const SPLIT_U =  0.978818; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 86.138699; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =  0.750773; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X = -0.020116; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG10 (전체 floor 적용 36건 학습)
+const SPLIT_U =   1.314020; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 144.240024; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.169298; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.410974; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
-//   직접/소환 공통. 근마효율은 multiplier 균일 곱이 아니라 attackBaseFor('direct')
-//   의 cross-term (K_cross × 근력 × 근마효율%/100) 으로 들어가므로 여기 없음.
+//   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
+//     • 크댐, 데미지, 지배력, 관통 모두 일관 적용
+//     • 데미지 multiplier 는 D_dmg ≈ 1e-37 라 효과 거의 없음 (numerical 안정성 목적)
+//   근마효율은 attackBaseFor('direct') 의 cross-term 으로 들어가므로 여기 없음.
 function multiplierFor(stats) {
   if (!stats) return 0;
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
   const maxDmg = Number(stats.최대뎀 || 0);
   const minDmg = effectiveMinDmg(stats.최소뎀, stats.최대뎀);
-  const critMultiplier = 1 + Number(stats.크댐 || 0) / params.D_crit;
-  const dmgMultiplier = 1 + (minDmg + maxDmg) / params.D_dmg;
+  // 크댐 boost 1% 단위 floor
+  const critMultiplier =
+    1 + Math.floor(Number(stats.크댐 || 0) / params.D_crit * 100) / 100;
+  // 데미지 boost 1% floor (D_dmg ~1e-37 라 영향 무시 수준)
+  const dmgMultiplier =
+    1 + Math.floor((minDmg + maxDmg) / params.D_dmg * 100) / 100;
+  // 지배력 boost 1% 단위 floor
   const dominanceMultiplier =
-    1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
-  const penetrationMultiplier = 1 + Number(stats.관통 || 0) / params.D_pen;
+    1 + Math.floor((Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom * 100) / 100;
+  // 관통 boost 1% 단위 floor
+  const penetrationMultiplier =
+    1 + Math.floor(Number(stats.관통 || 0) / params.D_pen * 100) / 100;
   return (
     critMultiplier *
     dmgMultiplier *
@@ -201,9 +217,15 @@ function attackBaseFor(stats, mode = 'avg') {
     gamma += SPLIT_W;
     delta += SPLIT_X;
   }
-  let result = alpha * 주스탯 + beta * 공격력 + gamma * 고댐 + delta * 추가댐;
+  // V_BIG10: attackBase 각 항 floor (게임 truncate 일관 적용)
+  let result = Math.floor(alpha * 주스탯)
+             + Math.floor(beta * 공격력)
+             + Math.floor(gamma * 고댐)
+             + Math.floor(delta * 추가댐);
   if (mode === 'direct') {
-    result *= 1 + params.K_cross * (근마효율 / 100);
+    // 게임 floor 메커니즘: K_cross × 근마효율 결과를 정수% 로 floor
+    //   예: K_cross 0.196 × 근마 32 = 6.27 → floor 6 → 1 + 6/100 = 1.06
+    result = Math.floor(result * (1 + Math.floor(params.K_cross * 근마효율) / 100));
   }
   return result;
 }
@@ -224,9 +246,10 @@ export function calculateBattlePower(stats, target = 'boss') {
   if (ab_d <= 0 && ab_s <= 0) return 0;
   const M = multiplierFor(stats);
   const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
-  const bp_direct = ab_d * M * cond;
-  const bp_summon = ab_s * M;
-  return Math.round((bp_direct + bp_summon) / 2);
+  // V_BIG10: 직타·소타 BP 각각 floor, 평균도 floor (게임 표시 BP 정수)
+  const bp_direct = Math.floor(ab_d * M * cond);
+  const bp_summon = Math.floor(ab_s * M);
+  return Math.floor((bp_direct + bp_summon) / 2);
 }
 
 /**
@@ -238,7 +261,7 @@ export function calculateDirectBP(stats, target = 'boss') {
   if (ab <= 0) return 0;
   const M = multiplierFor(stats);
   const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
-  return Math.round(ab * M * cond);
+  return Math.floor(ab * M * cond);
 }
 
 /**
@@ -249,7 +272,7 @@ export function calculateSummonBP(stats /* , target */) {
   if (!stats) return 0;
   const ab = attackBaseFor(stats, 'summon');
   if (ab <= 0) return 0;
-  return Math.round(ab * multiplierFor(stats));
+  return Math.floor(ab * multiplierFor(stats));
 }
 
 /**
