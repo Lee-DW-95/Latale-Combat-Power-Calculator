@@ -1,10 +1,11 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * V_BIG17 — 사용자 자료 모두 정확 (자료6 lock + 자료9/10/11/12 강조).
- *   사용자 자료 모두 ±0.14% 이내:
- *     자료6 -0.018% / 자료9 +0.138% / 자료10 +0.055% / 자료11 -0.029% / 자료12 +0.031%
- *   SAMPLE_DATA P 56건 RMSE 0.411%, M 7건 0.220%.
+ * V_BIG19 — A 단계(자료6/9 lock 100x) + B 단계(주스탯² 비선형 항 추가).
+ *   사용자 자료 모두 ±0.07% 이내:
+ *     자료6 +0.004% / 자료9 +0.071% / 자료10 +0.010% / 자료11 -0.019% / 자료12 +0.001%
+ *   K0_sq = -0.00962 (주스탯² 음의 기여, 게임 diminishing returns 메커니즘).
+ *   SAMPLE_DATA P 56건 RMSE 0.375%, M 7건 0.224%.
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
@@ -44,25 +45,23 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
-// V_BIG17 — 사용자 자료 모두 정확도 우선 (자료6 lock + 자료9/10/11/12 강조).
-//   가중치: 자료6 100x (lock) / 자료9/10/11/12 50x / 카톡 5x / 검증 max 2x / 기타 1x
-//   1% floor 메커니즘 일관 적용.
-//
-//   사용자 자료 잔차 (모두 ±0.14% 이내):
-//     자료6  -0.018% (614.99만)   자료9  +0.138%   자료10 +0.055%   자료11 -0.029%   자료12 +0.031%
-//   SAMPLE_DATA P 56건 RMSE 0.411%, M 7건 0.220%.
-//   V_BIG16 (자료6 우선) 대비 자료9/10/11/12 도 ±0.04~0.14% 로 큰 폭 개선.
+// V_BIG19 (A+B 단계) — 자료6/9 lock + 주스탯² 비선형 항 추가.
+//   사용자 자료 모두 ±0.07% 이내:
+//     자료6 +0.004% (perfect)   자료9 +0.071%   자료10 +0.010%   자료11 -0.019%   자료12 +0.001%
+//   SAMPLE P 56건 RMSE 0.375%, M 7건 0.224%.
+//   K0_sq = -0.00961908 (주스탯² 음의 기여, diminishing returns 메커니즘 모델링).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.65458051e+0,       // 주스탯 가중치
-  K1: 2.62281328e+2,       // 공격력 가중치
-  K2: 2.35320739e+0,       // 고댐 가중치
-  K_mon: 8.30359990e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.85093079e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 2.25786098e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.84193692e+2,    // 지배력 분모 (1% floor 적용)
-  K_cross: 2.03728370e-1,  // 근마효율 cross-term (1% floor 적용)
+  K0: 2.65274862e+0,       // 주스탯 가중치 (선형)
+  K0_sq: -9.61908000e-3,   // 주스탯² 가중치 (비선형, V_BIG19 신규)
+  K1: 2.62218762e+2,       // 공격력 가중치
+  K2: 2.34202075e+0,       // 고댐 가중치
+  K_mon: 8.11455950e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.85116616e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 2.25471962e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 1.84179170e+2,    // 지배력 분모 (1% floor 적용)
+  K_cross: 1.98366680e-1,  // 근마효율 cross-term (1% floor 적용)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.96395669e-45,    // 전체 보정 상수
+  base: 4.97359278e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -75,7 +74,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.64662844e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG17
+  K1: 2.64599709e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG19
 });
 
 /**
@@ -147,11 +146,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG17 (자료6 100x lock + 자료9/10/11/12 50x 가중치)
-const SPLIT_U =   1.282969; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 143.236699; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.243965; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.459053; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG19 (주스탯² 비선형 항 포함)
+const SPLIT_U =   1.280441; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 143.011483; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.224051; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.462910; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
@@ -215,13 +214,15 @@ function attackBaseFor(stats, mode = 'avg') {
     delta += SPLIT_X;
   }
   // V_BIG10: attackBase 각 항 floor (게임 truncate 일관 적용)
+  // V_BIG19: 주스탯² 비선형 항 추가 (diminishing returns 메커니즘 — K0_sq 음수)
   let result = Math.floor(alpha * 주스탯)
              + Math.floor(beta * 공격력)
              + Math.floor(gamma * 고댐)
-             + Math.floor(delta * 추가댐);
+             + Math.floor(delta * 추가댐)
+             + Math.floor((params.K0_sq || 0) * 주스탯 * 주스탯 / 1e7);
   if (mode === 'direct') {
     // 게임 floor 메커니즘: K_cross × 근마효율 결과를 정수% 로 floor
-    //   예: K_cross 0.196 × 근마 32 = 6.27 → floor 6 → 1 + 6/100 = 1.06
+    //   예: K_cross 0.198 × 근마 32 = 6.34 → floor 6 → 1 + 6/100 = 1.06
     result = Math.floor(result * (1 + Math.floor(params.K_cross * 근마효율) / 100));
   }
   return result;
