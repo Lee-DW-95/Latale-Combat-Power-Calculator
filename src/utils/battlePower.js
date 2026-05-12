@@ -1,13 +1,13 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * V_BIG15 — 기존3 (검 계열) 학습 추가. 검 계열 검증 데이터 5건 → SPLIT 안정화.
- *   학습 28건 RMSE 0.107% max 0.327% — V_BIG14 대비 15% 개선.
- *   자료9 잔차 +0.41% → +0.20%, img17 -0.28% → -0.03% 큰 개선.
+ * V_BIG10 (롤백) — 균형 잡힌 fit 모델.
+ *   학습 36건 (카톡 18 + SAMPLE 18) RMSE 0.180% max 0.620%.
+ *   SAMPLE_DATA P 56건 전체 회귀: RMSE 0.304% max 0.941%.
+ *   V_BIG13~15 (검증 max만 학습) 후 다수 케이스 악화로 V_BIG10 롤백.
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
- * @see scripts/refit_v12_clean_max.mjs - 학습 스크립트
  */
 
 // ============================================================
@@ -44,24 +44,28 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
-// V_BIG15 — 기존3 (검 계열, avg→max 정정) 학습 추가.
-//   기존3 무기: max 55867, min 54561, 기본 max 10926, min 10653 — 기본 gap 273 (검 계열).
-//   기존2 도 동일한 검 계열 무기 (gap 273) 이지만 수련의방 케이스라 학습 제외.
-//   학습 데이터: 카톡 18 + 검증된 max 10 (자료6/9/11/12 + 기존3 + img1/9/14/16/17) = 28건.
-//   학습 RMSE 0.107% max 0.327% — V_BIG14 (0.126% max 0.411%) 대비 15% 개선.
-//   자료9 잔차 +0.41% → +0.20%, img17 잔차 -0.28% → -0.03% 큰 개선.
-//   검 계열 무기 학습 데이터가 5건 (img1/9/17 + 자료6/9 추정 + 기존3) → SPLIT 안정화.
+// V_BIG10 (롤백) — 검증된 균형 fit 모델.
+//   학습 데이터: 카톡 18 + SAMPLE 18 = 36건 (avg/max 혼합 입력 그대로 학습).
+//   학습 RMSE 0.180% max 0.620% / SAMPLE P 전체 56건 RMSE 0.304% max 0.941%.
+//   1% floor 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
+//
+//   V_BIG13/14/15 (검증된 max 케이스만 학습) 시도 후 롤백한 이유:
+//     • 학습된 케이스만 정확, 다른 모든 케이스 잔차 크게 증가
+//     • 기존1 +0.32% → +1.10%, 자료10 -0.13% → -0.81%, img4 +0.94% → +1.60% 등 악화
+//     • universal 13-파라미터 모델이 검증 데이터 8건만 fit 하면 나머지 50건+ 잔차 폭증
+//   결론: 데이터 다양성 (mixed avg/max 입력 포함) 이 더 견고한 fit 제공.
+//   진정한 0% 도달은 게임 내부 BP 코드 발견해야 가능 — 회귀 fit 한계.
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.60900277e+0,       // 주스탯 가중치
-  K1: 2.51068106e+2,       // 공격력 가중치
-  K2: 2.45472007e+0,       // 고댐 가중치
-  K_mon: 7.61710210e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.46510679e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 1.89235521e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.93738551e+2,    // 지배력 분모 (1% floor 적용)
-  K_cross: 1.86006260e-1,  // 근마효율 cross-term (1% floor 적용)
+  K0: 2.70535421e+0,       // 주스탯 가중치
+  K1: 2.60311810e+2,       // 공격력 가중치
+  K2: 2.57501586e+0,       // 고댐 가중치
+  K_mon: 6.95042190e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.67678255e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 1.98544882e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 1.90892391e+2,    // 지배력 분모 (1% floor 적용)
+  K_cross: 1.96200380e-1,  // 근마효율 cross-term (1% floor 적용)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 3.80372542e-45,    // 전체 보정 상수
+  base: 4.16374112e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -74,7 +78,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.53347805e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG15
+  K1: 2.62675454e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG10
 });
 
 /**
@@ -146,11 +150,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG15 (검증된 max 28건 학습, 기존3 추가)
-const SPLIT_U =   1.274462; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 137.715598; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.078208; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.360467; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG10 (롤백, 검증된 균형 fit)
+const SPLIT_U =   1.314020; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 144.240024; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.169298; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.410974; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
