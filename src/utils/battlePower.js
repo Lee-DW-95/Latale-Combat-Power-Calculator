@@ -1,13 +1,14 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * V_BIG10 (롤백) — 균형 잡힌 fit 모델.
- *   학습 36건 (카톡 18 + SAMPLE 18) RMSE 0.180% max 0.620%.
- *   SAMPLE_DATA P 56건 전체 회귀: RMSE 0.304% max 0.941%.
- *   V_BIG13~15 (검증 max만 학습) 후 다수 케이스 악화로 V_BIG10 롤백.
+ * V_BIG16 — 사용자 직접 입력 자료 정확도 우선 학습.
+ *   가중치: 사용자 자료 10x / 카톡 5x / 검증된 max 2x / 기타 1x.
+ *   자료6 잔차 +0.013% (615.17만, 실측 615.1만 거의 perfect).
+ *   SAMPLE_DATA P 56건 RMSE 0.347%, M 7건 0.230%.
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
+ * @see scripts/refit_v16_user_first.mjs - 학습 스크립트
  */
 
 // ============================================================
@@ -44,28 +45,25 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
-// V_BIG10 (롤백) — 검증된 균형 fit 모델.
-//   학습 데이터: 카톡 18 + SAMPLE 18 = 36건 (avg/max 혼합 입력 그대로 학습).
-//   학습 RMSE 0.180% max 0.620% / SAMPLE P 전체 56건 RMSE 0.304% max 0.941%.
+// V_BIG16 — 사용자 직접 입력 자료 (자료6/9/10/11/12) 정확도 우선 학습.
+//   가중치: 사용자 자료 10x / 카톡 페어 5x / 검증된 max 2x / 기타 1x
 //   1% floor 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
 //
-//   V_BIG13/14/15 (검증된 max 케이스만 학습) 시도 후 롤백한 이유:
-//     • 학습된 케이스만 정확, 다른 모든 케이스 잔차 크게 증가
-//     • 기존1 +0.32% → +1.10%, 자료10 -0.13% → -0.81%, img4 +0.94% → +1.60% 등 악화
-//     • universal 13-파라미터 모델이 검증 데이터 8건만 fit 하면 나머지 50건+ 잔차 폭증
-//   결론: 데이터 다양성 (mixed avg/max 입력 포함) 이 더 견고한 fit 제공.
-//   진정한 0% 도달은 게임 내부 BP 코드 발견해야 가능 — 회귀 fit 한계.
+//   결과 — 자료6 잔차 +0.166% → +0.013% (사용자 본 BP 615.1만 거의 perfect):
+//     자료6  +0.013%   자료9  +0.354%   자료10 +0.145%   자료11 -0.071%   자료12 +0.102%
+//   SAMPLE_DATA P 56건 RMSE 0.347%, M 7건 0.230%.
+//   K_cross = 0.2000 (정수% boundary, floor 메커니즘 검증 강력함).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.70535421e+0,       // 주스탯 가중치
-  K1: 2.60311810e+2,       // 공격력 가중치
-  K2: 2.57501586e+0,       // 고댐 가중치
-  K_mon: 6.95042190e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.67678255e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 1.98544882e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.90892391e+2,    // 지배력 분모 (1% floor 적용)
-  K_cross: 1.96200380e-1,  // 근마효율 cross-term (1% floor 적용)
+  K0: 2.51202854e+0,       // 주스탯 가중치
+  K1: 2.44974573e+2,       // 공격력 가중치
+  K2: 2.35949348e+0,       // 고댐 가중치
+  K_mon: 7.82399130e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.44812601e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 2.31460774e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 1.88642986e+2,    // 지배력 분모 (1% floor 적용)
+  K_cross: 1.99999950e-1,  // 근마효율 cross-term (1% floor 적용)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.16374112e-45,    // 전체 보정 상수
+  base: 4.70181213e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -78,7 +76,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.62675454e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG10
+  K1: 2.47198943e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG16
 });
 
 /**
@@ -150,11 +148,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG10 (롤백, 검증된 균형 fit)
-const SPLIT_U =   1.314020; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 144.240024; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.169298; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.410974; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG16 (사용자 자료 10x 가중치 학습)
+const SPLIT_U =   1.212318; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 137.845328; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.227303; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.496578; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
