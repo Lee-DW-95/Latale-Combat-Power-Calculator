@@ -1,13 +1,13 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * V_BIG10 — 게임 truncate 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
- *   사용자 도메인 통찰: 게임은 일관성을 위해 모든 소수점 정수% floor 처리.
- *   학습 36건 (카톡 18 + SAMPLE 18) RMSE 0.180% max 0.620% — V_BIG8 대비 33% 개선.
+ * V_BIG15 — 기존3 (검 계열) 학습 추가. 검 계열 검증 데이터 5건 → SPLIT 안정화.
+ *   학습 28건 RMSE 0.107% max 0.327% — V_BIG14 대비 15% 개선.
+ *   자료9 잔차 +0.41% → +0.20%, img17 -0.28% → -0.03% 큰 개선.
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
- * @see scripts/refit_v10_all_floor.mjs - 재학습 스크립트
+ * @see scripts/refit_v12_clean_max.mjs - 학습 스크립트
  */
 
 // ============================================================
@@ -44,28 +44,24 @@
 //
 // K_mon: 일몬추+보몬추 가중치, K2 × 0.316 = 고댐의 약 1/3 효과
 //   (case2 페어 측정: 일몬추 -100=-12 BP, 고댐 -150=-57 BP → 비율 0.316)
-// V_BIG10 — 게임 truncate 메커니즘 일관 적용 (모든 multiplier + attackBase + BP).
-//   사용자 도메인 통찰: 게임은 일관성을 위해 모든 소수점을 정수% 단위 floor 처리.
-//     • 크댐, 데미지, 지배력, 관통, K_cross×근마 모든 multiplier 의 boost% → 정수% floor
-//     • attackBase 각 항 (K0·주스탯, K1·공격력 등) → floor (큰 숫자라 효과 미미)
-//     • 직타·소타 BP, (직타+소타)/2 평균 → floor
-//   카톡 18 + SAMPLE 18 = 36건 학습. 카톡 5배 가중.
-//   학습 결과: 학습 36건 종합 RMSE 0.180% max 0.620% — V_BIG8 대비 33% 개선.
-//   V_BIG9 (부분 floor) 0.184% 대비 0.004%p 미세 개선 — 큰 숫자 항 floor 는 거의 무영향.
-//   카톡 18 sensitivity: 종합 0.052% (floor quantization 으로 인한 미세 손실).
-//   잔차 0% 도달 불가능 — 양 방향 잔차 동시 존재는 직업별 BP 미세 차이가 원인.
-//   K_cross ≈ 0.196 (V_BIG9 0.200 boundary 근접, floor 메커니즘 검증).
+// V_BIG15 — 기존3 (검 계열, avg→max 정정) 학습 추가.
+//   기존3 무기: max 55867, min 54561, 기본 max 10926, min 10653 — 기본 gap 273 (검 계열).
+//   기존2 도 동일한 검 계열 무기 (gap 273) 이지만 수련의방 케이스라 학습 제외.
+//   학습 데이터: 카톡 18 + 검증된 max 10 (자료6/9/11/12 + 기존3 + img1/9/14/16/17) = 28건.
+//   학습 RMSE 0.107% max 0.327% — V_BIG14 (0.126% max 0.411%) 대비 15% 개선.
+//   자료9 잔차 +0.41% → +0.20%, img17 잔차 -0.28% → -0.03% 큰 개선.
+//   검 계열 무기 학습 데이터가 5건 (img1/9/17 + 자료6/9 추정 + 기존3) → SPLIT 안정화.
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.70535421e+0,       // 주스탯 가중치
-  K1: 2.60311810e+2,       // 공격력 가중치
-  K2: 2.57501586e+0,       // 고댐 가중치
-  K_mon: 6.95042190e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.67678255e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 1.98544882e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용, 거의 무영향)
-  D_dom: 1.90892391e+2,    // 지배력 분모 (1% floor 적용)
-  K_cross: 1.96200380e-1,  // 근마효율 cross-term (1% floor 적용)
+  K0: 2.60900277e+0,       // 주스탯 가중치
+  K1: 2.51068106e+2,       // 공격력 가중치
+  K2: 2.45472007e+0,       // 고댐 가중치
+  K_mon: 7.61710210e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.46510679e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 1.89235521e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 1.93738551e+2,    // 지배력 분모 (1% floor 적용)
+  K_cross: 1.86006260e-1,  // 근마효율 cross-term (1% floor 적용)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.16374112e-45,    // 전체 보정 상수
+  base: 3.80372542e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -78,7 +74,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.62675454e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG10
+  K1: 2.53347805e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG15
 });
 
 /**
@@ -150,11 +146,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG10 (전체 floor 적용 36건 학습)
-const SPLIT_U =   1.314020; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 144.240024; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.169298; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.410974; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG15 (검증된 max 28건 학습, 기존3 추가)
+const SPLIT_U =   1.274462; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 137.715598; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.078208; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.360467; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
