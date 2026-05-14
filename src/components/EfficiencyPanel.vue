@@ -90,8 +90,13 @@ function bpWithOption(baseStats, statKey, amount, mode = 'avg') {
     return bpFor(newStats, mode);
   }
   if (statKey === '일몬지' || statKey === '보몬지') {
-    newStats[statKey] = (Number(baseStats[statKey]) || 0) + amount;
-    return bpFor(newStats, mode);
+    // BP 식 내부 Math.floor 때문에 일몬지/보몬지 1% 단위 입력이 plateau 에 갇혀
+    // 짝수에서만 응답하는 문제 — amount × SCALE 로 측정한 뒤 선형 환산해 소수점 정밀도 확보.
+    const SCALE = 10000;
+    newStats[statKey] = (Number(baseStats[statKey]) || 0) + amount * SCALE;
+    const scaledBP = bpFor(newStats, mode);
+    const baseBPVal = bpFor(baseStats, mode);
+    return baseBPVal + (scaledBP - baseBPVal) / SCALE;
   }
   if (statKey === '관통') {
     newStats.관통 = Math.max(0, Math.min(PEN_CAP, (Number(baseStats.관통) || 0) + amount));
@@ -244,25 +249,83 @@ function awakUnitLabel(statKey, unit) {
   return '';
 }
 
-// 각성석 1~4줄. 값이 비어있으면 무시. 초기값은 사용자 예시(크댐/최대/공격력%/공격력+).
-const awakRows = ref([
-  { stat: '크댐',   unit: 'raw', value: '' },
-  { stat: '최대뎀', unit: 'raw', value: '' },
-  { stat: '공격력', unit: 'pct', value: '' },
-  { stat: '공격력', unit: 'raw', value: '' },
-]);
+// 각성석 — 인게임에서 최대 10 개 장착, 각 각성석은 4 옵션 슬롯. 시작은 1 행.
+const AWAK_STONE_MAX = 10;
+const AWAK_OPTIONS_PER_STONE = 4;
+
+// 각성석은 한 각성석 내 같은 옵션이 중복 출현하지 않으므로,
+// 신규 각성석 기본값은 서로 다른 옵션 4종으로 시작.
+const AWAK_DEFAULT_OPTIONS = [
+  { stat: '크댐',   unit: 'raw' },
+  { stat: '최대뎀', unit: 'raw' },
+  { stat: '공격력', unit: 'pct' },
+  { stat: '공격력', unit: 'raw' },
+];
+function makeEmptyStone() {
+  return {
+    options: AWAK_DEFAULT_OPTIONS.map((d) => ({ stat: d.stat, unit: d.unit, value: '' })),
+  };
+}
+
+const awakStones = ref([makeEmptyStone()]);
 
 // "급" 환산 기준 스탯 — 사용자가 가장 자주 비교하는 크댐을 디폴트
 const awakRefStat = ref('크댐');
 
-function onAwakStatChange(idx) {
-  const row = awakRows.value[idx];
-  const units = awakUnitsFor(row.stat);
-  if (!units.includes(row.unit)) row.unit = units[0];
+// 평균 환산 표시 토글 — 합산값을 활성 각성석 수로 나눠 평균 급 표시
+const awakShowAvg = ref(false);
+
+// 각성석 드롭다운 축약 라벨 — 캐릭터 type 은 이미 상단 탭에서 결정되므로 (물리)/(마법) 접미사 제거.
+const AWAK_SHORT_LABEL = {
+  주스탯: { P: '근력', M: '마법력' },
+  공격력: { P: '무기공격력', M: '속성력' },
+  고댐: '고정뎀',
+  크댐: '크댐',
+  최소뎀: '최소뎀',
+  최대뎀: '최대뎀',
+  일몬지: '일몬지',
+  보몬지: '보몬지',
+};
+
+// stat+unit 합쳐진 셀렉트 옵션 목록 — raw+pct 둘 다 가능한 스탯은 항목 2개로 분리.
+const AWAK_DROPDOWN_OPTIONS = AWAK_STAT_OPTIONS.flatMap((o) =>
+  o.units.map((u) => ({ key: `${o.key}__${u}`, stat: o.key, unit: u })),
+);
+
+function awakDropdownKey(opt) {
+  return `${opt.stat}__${opt.unit}`;
+}
+function awakDropdownLabel(d, charType) {
+  const def = AWAK_SHORT_LABEL[d.stat];
+  const base = typeof def === 'string' ? def : (def?.[charType] ?? def?.P ?? d.stat);
+  if (awakUnitsFor(d.stat).length <= 1) return base;
+  return d.unit === 'pct' ? `${base} %` : `${base} +`;
+}
+function onAwakDropdownChange(stoneIdx, optIdx, key) {
+  const found = AWAK_DROPDOWN_OPTIONS.find((d) => d.key === key);
+  if (!found) return;
+  const opt = awakStones.value[stoneIdx].options[optIdx];
+  opt.stat = found.stat;
+  opt.unit = found.unit;
 }
 
-function resetAwakRows() {
-  awakRows.value = awakRows.value.map(() => ({ stat: '크댐', unit: 'raw', value: '' }));
+// 같은 각성석 내 다른 옵션이 이미 사용 중인 키는 셀렉트박스에서 선택 불가.
+function isAwakDropdownKeyDisabled(stoneIdx, optIdx, key) {
+  const stone = awakStones.value[stoneIdx];
+  return stone.options.some((opt, i) => i !== optIdx && awakDropdownKey(opt) === key);
+}
+
+function addAwakStone() {
+  if (awakStones.value.length >= AWAK_STONE_MAX) return;
+  awakStones.value.push(makeEmptyStone());
+}
+function setAwakStonesMax() {
+  while (awakStones.value.length < AWAK_STONE_MAX) {
+    awakStones.value.push(makeEmptyStone());
+  }
+}
+function resetAwakStones() {
+  awakStones.value = [makeEmptyStone()];
 }
 
 // equip 객체를 stats 에 적용해 새 stats 객체 반환 (equipDelta 활용)
@@ -275,68 +338,122 @@ function applyEquipToStats(baseStats, equip) {
   return out;
 }
 
-// 각성석 합산 환산 결과 — 동시 적용 ΔBP + 기준 스탯 등가량
+// 주어진 ΔBP 를 기준 스탯 옵션 하나로 재현했을 때 필요한 amount 를 이분법으로 탐색.
+//   BP 식 내부 Math.floor 들 때문에 ΔBP 가 mid 에 대해 계단(plateau) 함수지만,
+//   이분법은 plateau 가장자리(같은 ΔBP 를 내는 가장 작은 amount)에 단조적으로 수렴.
+//   80 회면 mid 정밀도가 사실상 무한대 — 결과를 그대로 돌려주면 충분.
+function solveRefAmountForDelta(refKey, targetDelta, baseBPForMode, mode) {
+  if (targetDelta === 0) return 0;
+  let lo = -99, hi = 99999, mid = 0;
+  for (let i = 0; i < 80; i++) {
+    mid = (lo + hi) / 2;
+    const dBP = bpWithOption(props.stats, refKey, mid, mode) - baseBPForMode;
+    if (targetDelta > 0) {
+      if (dBP < targetDelta) lo = mid; else hi = mid;
+    } else {
+      if (dBP > targetDelta) lo = mid; else hi = mid;
+    }
+  }
+  return mid;
+}
+
+// 각성석 환산 결과 — 각 옵션을 단독 적용한 ΔBP 를 기준 스탯(예: 크댐) 환산값으로 바꾼 뒤 합산.
+//   예) 최대뎀 +100%(단독 ΔBP X) + 크댐 +100%(단독 ΔBP Y) → 크댐 환산 N% + M% = 합산 (N+M)% 급
+//   ※ 옵션별 환산 합은 "각 옵션이 기준 스탯 몇 %에 해당하는지" 의 직관적인 척도.
+//      각성석 옵션은 한 각성석 내에서 같은 스탯이 중복 출현하지 않는 전제.
 const awakResult = computed(() => {
   const mode = equivMode.value;
   const baseBPForMode = bpFor(props.stats, mode);
   if (baseBPForMode <= 0) return null;
 
-  // 4 줄을 합쳐 하나의 equip 객체 구성 (같은 스탯이 raw+% 동시 등장 가능)
-  const equip = {};
-  const linesInfo = [];
+  const refKey = awakRefStat.value;
+  const refNaturalUnit = NATURAL_UNIT[refKey];
+  const stonesInfo = [];
   let activeCount = 0;
+  let activeStoneCount = 0;
+  let totalDelta = 0;
+  let refAmountSum = 0;
 
-  for (const r of awakRows.value) {
-    const v = Number(r.value);
-    if (!Number.isFinite(v) || v === 0) {
-      linesInfo.push(null);
-      continue;
+  // 모드별 base BP 캐시 — 단독 적용 ΔBP 와 크댐 환산값을 4가지 모드로도 합산.
+  const SPLIT_MODES = ['direct', 'summon', 'normal', 'boss'];
+  const baseBPByMode = {};
+  for (const m of SPLIT_MODES) baseBPByMode[m] = bpFor(props.stats, m);
+  const totalDeltaByMode = { direct: 0, summon: 0, normal: 0, boss: 0 };
+  const refAmountByMode = { direct: 0, summon: 0, normal: 0, boss: 0 };
+
+  for (const stone of awakStones.value) {
+    const optionsInfo = [];
+    let stoneActive = 0;
+    let stoneDelta = 0;
+    let stoneRefAmount = 0;
+
+    for (const r of stone.options) {
+      const v = Number(r.value);
+      if (!Number.isFinite(v) || v === 0) {
+        optionsInfo.push(null);
+        continue;
+      }
+      activeCount++;
+      stoneActive++;
+      const equipKey = r.unit === 'pct' ? `${r.stat}_퍼` : r.stat;
+
+      // 일몬지/보몬지는 BP 식 내부 floor() 때문에 plateau 갇힘 — SCALE 배수 측정 후 선형 환산해
+      // 소수점/홀수 입력도 정확한 ΔBP 산출.
+      const isDomStat = r.stat === '일몬지' || r.stat === '보몬지';
+      const measureScale = isDomStat ? 10000 : 1;
+      const singleStats = applyEquipToStats(props.stats, { [equipKey]: v * measureScale });
+
+      // 단독 적용 ΔBP — 본 스탯에 이 옵션 하나만 적용했을 때
+      const optDelta = (bpFor(singleStats, mode) - baseBPForMode) / measureScale;
+      totalDelta += optDelta;
+      stoneDelta += optDelta;
+
+      // 옵션별 환산: 이 ΔBP 를 기준 스탯 하나로 내려면 얼마?
+      //   기준 스탯·자연 단위와 정확히 일치하면 이분법을 건너뛰고 입력값 v 를 그대로 사용.
+      const isSameAsRef = r.stat === refKey && r.unit === refNaturalUnit;
+      const optRefAmount = isSameAsRef
+        ? v
+        : solveRefAmountForDelta(refKey, optDelta, baseBPForMode, mode);
+      refAmountSum += optRefAmount;
+      stoneRefAmount += optRefAmount;
+
+      // 모드별 ΔBP + 크댐 환산값 — 좌측 종합 표시와 별개로 직접/소환/일반/보스 분리.
+      for (const m of SPLIT_MODES) {
+        const optDeltaM = (bpFor(singleStats, m) - baseBPByMode[m]) / measureScale;
+        totalDeltaByMode[m] += optDeltaM;
+        refAmountByMode[m] += isSameAsRef
+          ? v
+          : solveRefAmountForDelta(refKey, optDeltaM, baseBPByMode[m], m);
+      }
+
+      optionsInfo.push({ delta: optDelta, refAmount: optRefAmount });
     }
-    activeCount++;
-    const equipKey = r.unit === 'pct' ? `${r.stat}_퍼` : r.stat;
-    equip[equipKey] = (equip[equipKey] || 0) + v;
 
-    // 단독 적용 ΔBP (각 줄 기여도 표시용 — 합산과 정확히 일치하진 않음, 비선형)
-    const singleStats = applyEquipToStats(props.stats, { [equipKey]: v });
-    const singleBP = bpFor(singleStats, mode);
-    linesInfo.push({ delta: singleBP - baseBPForMode });
+    if (stoneActive > 0) activeStoneCount++;
+
+    stonesInfo.push({
+      activeCount: stoneActive,
+      delta: stoneDelta,
+      refAmount: stoneRefAmount,
+      options: optionsInfo,
+    });
   }
 
   if (activeCount === 0) return null;
 
-  // 동시 적용 ΔBP — 4 옵션을 한 번에 stats 에 반영해 평가 (정확한 합산값)
-  const combinedStats = applyEquipToStats(props.stats, equip);
-  const combinedBP = bpFor(combinedStats, mode);
-  const totalDelta = combinedBP - baseBPForMode;
-
-  // 기준 스탯 등가량 — 이분법으로 같은 ΔBP 를 내는 옵션 amount 탐색
-  const refKey = awakRefStat.value;
-  let lo = -99, hi = 99999, mid = 0, lastDelta = 0;
-  for (let i = 0; i < 80; i++) {
-    mid = (lo + hi) / 2;
-    const bp = bpWithOption(props.stats, refKey, mid, mode);
-    const dBP = bp - baseBPForMode;
-    lastDelta = dBP;
-    if (totalDelta > 0) {
-      if (dBP < totalDelta) lo = mid; else hi = mid;
-    } else if (totalDelta < 0) {
-      if (dBP > totalDelta) lo = mid; else hi = mid;
-    } else {
-      mid = 0; lastDelta = 0; break;
-    }
-    if (Math.abs(dBP - totalDelta) < Math.abs(totalDelta) * 1e-7) break;
-  }
-  const converged = totalDelta === 0
-    ? true
-    : Math.abs(lastDelta - totalDelta) < Math.abs(totalDelta) * 1e-3;
+  const refAmountAvg = activeStoneCount > 0 ? refAmountSum / activeStoneCount : 0;
 
   return {
     activeCount,
+    activeStoneCount,
     totalDelta,
     totalDeltaPct: (totalDelta / baseBPForMode) * 100,
-    linesInfo,
+    totalDeltaByMode,
+    refAmountByMode,
+    stonesInfo,
     refKey,
-    refAmount: converged ? mid : null,
+    refAmount: refAmountSum,
+    refAmountAvg,
     refUnit: optionUnitLabel(refKey),
   };
 });
@@ -658,91 +775,108 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
           <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
             💎 각성석 종합 환산
           </h3>
-          <button
-            type="button"
-            @click="resetAwakRows"
-            class="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline"
-          >
-            초기화
-          </button>
+          <div class="flex items-center gap-1.5 text-[11px]">
+            <button
+              type="button"
+              @click="addAwakStone"
+              :disabled="awakStones.length >= AWAK_STONE_MAX"
+              class="px-2 py-1 rounded ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              + 행 추가
+            </button>
+            <button
+              type="button"
+              @click="setAwakStonesMax"
+              :disabled="awakStones.length >= AWAK_STONE_MAX"
+              class="px-2 py-1 rounded ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              행 MAX ({{ AWAK_STONE_MAX }})
+            </button>
+            <button
+              type="button"
+              @click="awakShowAvg = !awakShowAvg"
+              :class="[
+                'px-2 py-1 rounded ring-1 transition',
+                awakShowAvg
+                  ? 'bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700'
+                  : 'ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+              ]"
+              title="활성 각성석 수로 나눈 평균 급 표시"
+            >
+              Avg
+            </button>
+            <button
+              type="button"
+              @click="resetAwakStones"
+              class="px-2 py-1 rounded text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+            >
+              초기화
+            </button>
+          </div>
         </div>
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-snug">
-          각성석 4 옵션을 모두 입력하면 <strong>합산 BP 상승치</strong>와
-          <strong>"{{ getStatLabel(stats.type, awakRefStat) }} +X% 급"</strong> 환산이 표시됩니다.
-          위쪽 환산 섹션과 같은 <strong>BP 기준 모드</strong>를 공유합니다.
+          각 옵션을 <strong>단독 적용했을 때의 ΔBP</strong> 를 기준 스탯으로 환산해 합산합니다 —
+          예: "최대대미지 +100% + 크리티컬 대미지 +100%" → <strong>합산 160%급</strong>.
+          각성석은 최대 10 개 장착 가능하며, 위쪽 환산 섹션과 같은 <strong>BP 기준 모드</strong>를 공유합니다.
         </p>
 
-        <div class="space-y-1.5 mb-3">
+        <div class="space-y-2 mb-3">
           <div
-            v-for="(row, idx) in awakRows"
-            :key="idx"
-            class="flex flex-wrap items-center gap-2"
+            v-for="(stone, sIdx) in awakStones"
+            :key="sIdx"
+            class="flex items-center gap-1.5 flex-wrap rounded-md ring-1 ring-slate-200 dark:ring-slate-700 pl-1 pr-2 py-2"
           >
-            <span class="text-[11px] text-slate-400 dark:text-slate-500 w-12 tabular-nums">
-              옵션 {{ idx + 1 }}
+            <span class="text-xs text-slate-500 dark:text-slate-400 w-5 shrink-0 tabular-nums font-semibold text-right">
+              {{ sIdx + 1 }}.
             </span>
-            <select
-              v-model="row.stat"
-              @change="onAwakStatChange(idx)"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-            >
-              <option v-for="o in AWAK_STAT_OPTIONS" :key="o.key" :value="o.key">
-                {{ getStatLabel(stats.type, o.key) }}
-              </option>
-            </select>
-
-            <!-- 단위 토글: raw + pct 둘 다 가능한 스탯만 노출 -->
             <div
-              v-if="awakUnitsFor(row.stat).length > 1"
-              class="inline-flex rounded-md ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden text-xs"
+              v-for="(opt, oIdx) in stone.options"
+              :key="oIdx"
+              class="flex items-center gap-0.5 shrink-0"
+              :title="awakResult?.stonesInfo[sIdx]?.options[oIdx] ? `단독 ${sign(awakResult.stonesInfo[sIdx].options[oIdx].delta)} BP` : ''"
             >
-              <button
-                type="button"
-                v-for="u in awakUnitsFor(row.stat)"
-                :key="u"
-                @click="row.unit = u"
-                :class="[
-                  'px-2 py-1.5 transition',
-                  row.unit === u
-                    ? 'bg-indigo-600 text-white font-semibold'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
-                ]"
+              <select
+                :value="awakDropdownKey(opt)"
+                @change="(e) => onAwakDropdownChange(sIdx, oIdx, e.target.value)"
+                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1 py-1 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none w-24"
               >
-                {{ u === 'pct' ? '%' : '고정' }}
-              </button>
+                <option
+                  v-for="d in AWAK_DROPDOWN_OPTIONS"
+                  :key="d.key"
+                  :value="d.key"
+                  :disabled="isAwakDropdownKeyDisabled(sIdx, oIdx, d.key)"
+                >
+                  {{ awakDropdownLabel(d, stats.type) }}
+                </option>
+              </select>
+              <input
+                v-model="opt.value"
+                type="number"
+                step="any"
+                placeholder="값"
+                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1.5 py-1 text-xs tabular-nums w-14 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
             </div>
-            <span v-else class="text-[11px] text-slate-400 dark:text-slate-500">+</span>
-
-            <input
-              v-model="row.value"
-              type="number"
-              step="any"
-              placeholder="값"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm tabular-nums w-24 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-            />
-            <span class="text-slate-500 dark:text-slate-400 text-xs">
-              {{ awakUnitLabel(row.stat, row.unit) }}
-            </span>
-
+            <!-- 행(각성석)별 환산 합 — 우측 (주황색) -->
             <span
-              v-if="awakResult?.linesInfo[idx]"
-              class="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums"
-              title="이 옵션만 단독 적용 시 ΔBP (비선형 항 때문에 단순 합 ≠ 합산값)"
+              v-if="awakResult?.stonesInfo[sIdx]?.activeCount > 0"
+              class="ml-auto pl-2 text-xs text-orange-600 dark:text-orange-400 tabular-nums font-semibold shrink-0"
+              title="이 각성석 옵션 합 ≈ 크댐 환산"
             >
-              단독 {{ sign(awakResult.linesInfo[idx].delta) }} BP
+              ≈ {{ awakResult.stonesInfo[sIdx].refAmount >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmount.toFixed(2) }}{{ awakResult.refUnit }}급
             </span>
           </div>
         </div>
 
         <!-- 기준 스탯 셀렉터 + 결과 -->
         <div v-if="awakResult" class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-800 px-3 py-3 space-y-2">
-          <div class="flex items-center gap-2 flex-wrap text-sm">
-            <span class="text-slate-600 dark:text-slate-300">
+          <div class="flex items-start gap-2 flex-wrap text-sm">
+            <span class="text-slate-600 dark:text-slate-300 leading-6">
               합산 BP
             </span>
             <span
               :class="[
-                'font-bold tabular-nums',
+                'font-bold tabular-nums leading-6',
                 awakResult.totalDelta > 0
                   ? 'text-emerald-600 dark:text-emerald-400'
                   : awakResult.totalDelta < 0
@@ -752,33 +886,66 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             >
               {{ sign(awakResult.totalDelta) }}
             </span>
-            <span class="text-slate-500 dark:text-slate-400 text-xs tabular-nums">
+            <span class="text-slate-500 dark:text-slate-400 text-xs tabular-nums leading-6">
               ({{ awakResult.totalDeltaPct >= 0 ? '+' : '' }}{{ awakResult.totalDeltaPct.toFixed(2) }}%)
             </span>
-            <span class="text-[11px] text-slate-400 dark:text-slate-500">
-              · {{ awakResult.activeCount }} 옵션 동시 적용
+            <span class="text-[11px] text-slate-400 dark:text-slate-500 leading-6">
+              · {{ awakResult.activeCount }} 옵션 / {{ awakResult.activeStoneCount }} 각성석
             </span>
+
+            <!-- 우측: 모드별 ΔBP + 크댐 환산값 -->
+            <div class="ml-auto grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] tabular-nums leading-tight">
+              <div class="flex items-baseline gap-1 justify-end">
+                <span class="text-amber-700 dark:text-amber-300 font-semibold">
+                  직접 {{ sign(awakResult.totalDeltaByMode.direct) }}
+                </span>
+                <span class="text-indigo-600 dark:text-indigo-400">
+                  ≈ 크댐 {{ awakResult.refAmountByMode.direct >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.direct.toFixed(2) }}{{ awakResult.refUnit }}급
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 justify-end">
+                <span class="text-sky-700 dark:text-sky-300 font-semibold">
+                  소환 {{ sign(awakResult.totalDeltaByMode.summon) }}
+                </span>
+                <span class="text-indigo-600 dark:text-indigo-400">
+                  ≈ 크댐 {{ awakResult.refAmountByMode.summon >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.summon.toFixed(2) }}{{ awakResult.refUnit }}급
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 justify-end">
+                <span class="text-emerald-700 dark:text-emerald-300 font-semibold">
+                  vs 일반 {{ sign(awakResult.totalDeltaByMode.normal) }}
+                </span>
+                <span class="text-indigo-600 dark:text-indigo-400">
+                  ≈ 크댐 {{ awakResult.refAmountByMode.normal >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.normal.toFixed(2) }}{{ awakResult.refUnit }}급
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 justify-end">
+                <span class="text-rose-700 dark:text-rose-300 font-semibold">
+                  vs 보스 {{ sign(awakResult.totalDeltaByMode.boss) }}
+                </span>
+                <span class="text-indigo-600 dark:text-indigo-400">
+                  ≈ 크댐 {{ awakResult.refAmountByMode.boss >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.boss.toFixed(2) }}{{ awakResult.refUnit }}급
+                </span>
+              </div>
+            </div>
           </div>
 
           <div class="flex items-center gap-2 flex-wrap text-sm">
-            <span class="text-slate-600 dark:text-slate-300">≈</span>
-            <select
-              v-model="awakRefStat"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-            >
-              <option v-for="o in AWAK_STAT_OPTIONS" :key="o.key" :value="o.key">
-                {{ getStatLabel(stats.type, o.key) }}
-              </option>
-            </select>
-            <template v-if="awakResult.refAmount != null">
-              <span class="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums text-base">
-                {{ awakResult.refAmount >= 0 ? '+' : '' }}{{ awakResult.refAmount.toFixed(2) }}{{ awakResult.refUnit }}
-              </span>
-              <span class="text-slate-600 dark:text-slate-300 text-sm">급</span>
-            </template>
-            <span v-else class="text-[11px] text-rose-500 dark:text-rose-400 italic">
-              해당 스탯으로는 같은 효과 도달 불가
+            <span class="text-slate-600 dark:text-slate-300">≈ 크댐</span>
+            <span class="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums text-base">
+              {{ awakResult.refAmount >= 0 ? '+' : '' }}{{ awakResult.refAmount.toFixed(2) }}{{ awakResult.refUnit }}
             </span>
+            <span class="text-slate-600 dark:text-slate-300 text-sm">급</span>
+            <template v-if="awakShowAvg">
+              <span class="text-slate-400 dark:text-slate-500 text-xs">·</span>
+              <span class="text-slate-600 dark:text-slate-300 text-xs">평균</span>
+              <span class="font-bold text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">
+                {{ awakResult.refAmountAvg >= 0 ? '+' : '' }}{{ awakResult.refAmountAvg.toFixed(2) }}{{ awakResult.refUnit }}
+              </span>
+              <span class="text-slate-500 dark:text-slate-400 text-xs">
+                급 / 각성석 (÷{{ awakResult.activeStoneCount }})
+              </span>
+            </template>
           </div>
         </div>
         <p v-else class="text-xs text-slate-400 dark:text-slate-500 italic">
@@ -787,7 +954,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
         <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic leading-snug">
           ⓘ % 옵션 정확 계산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
-          단독 ΔBP 합 ≠ 합산 ΔBP — 크댐 × 최소/최대뎀 등 곱셈 항 상호작용 때문.
+          각 옵션을 단독 적용했을 때의 ΔBP 를 기준 스탯으로 환산해 합산합니다.
         </p>
       </div>
 
