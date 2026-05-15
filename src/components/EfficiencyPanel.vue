@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import {
   calculateBattlePower,
   calculateDirectBP,
@@ -10,9 +10,18 @@ import {
   STAT_KEYS,
 } from '../utils/battlePower.js';
 import { fmtRound as fmt } from '../utils/format.js';
+import { makeEmptyAwakStone } from '../utils/awakening.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
+});
+
+// 각성석 옵션 — 부모(App.vue)와 v-model:awak-stones 양방향 바인딩.
+//   부모가 활성 캐릭터의 awak_stones 와 묶어 자동 저장을 트리거한다.
+//   부모가 안 넘기면 (테스트/단독 사용) 자체 ref 로 동작.
+const awakStones = defineModel('awakStones', {
+  type: Array,
+  default: () => [],
 });
 
 // 8개 스탯은 기본값/누적%이 적용됨 (장비 % 옵션 환산용 기본 스탯)
@@ -254,20 +263,23 @@ const AWAK_STONE_MAX = 10;
 const AWAK_OPTIONS_PER_STONE = 4;
 
 // 각성석은 한 각성석 내 같은 옵션이 중복 출현하지 않으므로,
-// 신규 각성석 기본값은 서로 다른 옵션 4종으로 시작.
-const AWAK_DEFAULT_OPTIONS = [
-  { stat: '크댐',   unit: 'raw' },
-  { stat: '최대뎀', unit: 'raw' },
-  { stat: '공격력', unit: 'pct' },
-  { stat: '공격력', unit: 'raw' },
-];
-function makeEmptyStone() {
-  return {
-    options: AWAK_DEFAULT_OPTIONS.map((d) => ({ stat: d.stat, unit: d.unit, value: '' })),
-  };
-}
+// 신규 각성석 기본값은 서로 다른 옵션 4종으로 시작 — 정의는 utils/awakening.js 공유.
+const makeEmptyStone = makeEmptyAwakStone;
 
-const awakStones = ref([makeEmptyStone()]);
+// 빈 상태(=신규 캐릭터/비로그인 초기) 에서 첫 행 자동 추가. 양방향 바인딩이라
+// 부모(App.vue) 의 활성 캐릭터 awak_stones 도 1행으로 동기화된다.
+onMounted(() => {
+  if (!Array.isArray(awakStones.value) || awakStones.value.length === 0) {
+    awakStones.value = [makeEmptyStone()];
+  }
+});
+
+// 부모가 활성 캐릭터를 빈 awak_stones 로 교체했을 때 자동 1행 보장.
+watch(awakStones, (val) => {
+  if (Array.isArray(val) && val.length === 0) {
+    awakStones.value = [makeEmptyStone()];
+  }
+});
 
 // "급" 환산 기준 스탯 — 사용자가 가장 자주 비교하는 크댐을 디폴트
 const awakRefStat = ref('크댐');
@@ -326,6 +338,11 @@ function setAwakStonesMax() {
 }
 function resetAwakStones() {
   awakStones.value = [makeEmptyStone()];
+}
+function resetAwakStoneAt(idx) {
+  if (idx < 0 || idx >= awakStones.value.length) return;
+  // 마지막 한 행만 남았을 때도 그대로 빈 행으로 리셋 (전체 초기화와 동일한 결과).
+  awakStones.value.splice(idx, 1, makeEmptyStone());
 }
 
 // equip 객체를 stats 에 적용해 새 stats 객체 반환 (equipDelta 활용)
@@ -386,6 +403,8 @@ const awakResult = computed(() => {
     let stoneActive = 0;
     let stoneDelta = 0;
     let stoneRefAmount = 0;
+    const stoneDeltaByMode = { direct: 0, summon: 0, normal: 0, boss: 0 };
+    const stoneRefAmountByMode = { direct: 0, summon: 0, normal: 0, boss: 0 };
 
     for (const r of stone.options) {
       const v = Number(r.value);
@@ -421,9 +440,12 @@ const awakResult = computed(() => {
       for (const m of SPLIT_MODES) {
         const optDeltaM = (bpFor(singleStats, m) - baseBPByMode[m]) / measureScale;
         totalDeltaByMode[m] += optDeltaM;
-        refAmountByMode[m] += isSameAsRef
+        stoneDeltaByMode[m] += optDeltaM;
+        const optRefAmountM = isSameAsRef
           ? v
           : solveRefAmountForDelta(refKey, optDeltaM, baseBPByMode[m], m);
+        refAmountByMode[m] += optRefAmountM;
+        stoneRefAmountByMode[m] += optRefAmountM;
       }
 
       optionsInfo.push({ delta: optDelta, refAmount: optRefAmount });
@@ -435,6 +457,8 @@ const awakResult = computed(() => {
       activeCount: stoneActive,
       delta: stoneDelta,
       refAmount: stoneRefAmount,
+      deltaByMode: stoneDeltaByMode,
+      refAmountByMode: stoneRefAmountByMode,
       options: optionsInfo,
     });
   }
@@ -857,14 +881,60 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1.5 py-1 text-xs tabular-nums w-14 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
             </div>
-            <!-- 행(각성석)별 환산 합 — 우측 (주황색) -->
-            <span
+            <!-- 행(각성석)별 환산 합 + 행 초기화 — 우측 -->
+            <div class="ml-auto pl-2 flex items-center gap-1.5 shrink-0">
+              <span
+                v-if="awakResult?.stonesInfo[sIdx]?.activeCount > 0"
+                class="text-xs text-orange-600 dark:text-orange-400 tabular-nums font-semibold"
+                title="이 각성석 옵션 합 ≈ 크댐 환산"
+              >
+                ≈ {{ awakResult.stonesInfo[sIdx].refAmount >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmount.toFixed(2) }}{{ awakResult.refUnit }}급
+              </span>
+              <button
+                type="button"
+                @click="resetAwakStoneAt(sIdx)"
+                class="w-5 h-5 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition text-sm leading-none"
+                title="이 행 초기화"
+                aria-label="이 행 초기화"
+              >
+                ×
+              </button>
+            </div>
+
+            <!-- 행별 모드 분리 표시 (직접/소환/vs 일반/vs 보스) — w-full 로 wrap 강제 -->
+            <div
               v-if="awakResult?.stonesInfo[sIdx]?.activeCount > 0"
-              class="ml-auto pl-2 text-xs text-orange-600 dark:text-orange-400 tabular-nums font-semibold shrink-0"
-              title="이 각성석 옵션 합 ≈ 크댐 환산"
+              class="w-full grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-0.5 pl-6 pt-1 mt-0.5 border-t border-slate-100 dark:border-slate-700/50 text-[10px] tabular-nums leading-tight"
             >
-              ≈ {{ awakResult.stonesInfo[sIdx].refAmount >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmount.toFixed(2) }}{{ awakResult.refUnit }}급
-            </span>
+              <div class="flex items-baseline gap-1 min-w-0">
+                <span class="text-amber-700 dark:text-amber-300 font-semibold shrink-0">직접</span>
+                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.direct) }}</span>
+                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                  ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.direct >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.direct.toFixed(2) }}{{ awakResult.refUnit }}
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 min-w-0">
+                <span class="text-sky-700 dark:text-sky-300 font-semibold shrink-0">소환</span>
+                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.summon) }}</span>
+                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                  ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.summon >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.summon.toFixed(2) }}{{ awakResult.refUnit }}
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 min-w-0">
+                <span class="text-emerald-700 dark:text-emerald-300 font-semibold shrink-0">vs 일반</span>
+                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.normal) }}</span>
+                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                  ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.normal >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.normal.toFixed(2) }}{{ awakResult.refUnit }}
+                </span>
+              </div>
+              <div class="flex items-baseline gap-1 min-w-0">
+                <span class="text-rose-700 dark:text-rose-300 font-semibold shrink-0">vs 보스</span>
+                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.boss) }}</span>
+                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                  ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.boss >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.boss.toFixed(2) }}{{ awakResult.refUnit }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 

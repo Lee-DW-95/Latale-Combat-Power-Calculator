@@ -4,8 +4,8 @@ import { useCharacterStorage } from '../composables/useCharacterStorage.js';
 
 const props = defineProps({
   currentStats: { type: Object, required: true },
+  currentAwakStones: { type: Array, default: () => [] },
 });
-const emit = defineEmits(['load']);
 
 const { characters, activeId, saveCharacter, deleteCharacter, selectCharacter } =
   useCharacterStorage();
@@ -13,25 +13,28 @@ const { characters, activeId, saveCharacter, deleteCharacter, selectCharacter } 
 const newName = ref('');
 const errorMsg = ref('');
 
-function onSave() {
+async function onSave() {
   errorMsg.value = '';
   try {
-    const saved = saveCharacter(newName.value, props.currentStats);
+    // saveCharacter 가 activeId 를 갱신 → App.vue 의 watch(activeCharacter) 가
+    // stats/awakStones 동기화를 처리. 별도 emit 불필요.
+    await saveCharacter(newName.value, props.currentStats, props.currentAwakStones);
     newName.value = '';
-    emit('load', saved.stats);
   } catch (e) {
     errorMsg.value = e.message;
   }
 }
 
 function onSelect(id) {
-  const c = selectCharacter(id);
-  if (c) emit('load', c.stats);
+  selectCharacter(id); // activeId 변경 → App.vue watch 가 stats/awakStones 동기화.
 }
 
-function onDelete(id) {
-  if (confirm('이 캐릭터를 삭제하시겠습니까?')) {
-    deleteCharacter(id);
+async function onDelete(id) {
+  if (!confirm('이 캐릭터를 삭제하시겠습니까?')) return;
+  try {
+    await deleteCharacter(id);
+  } catch (e) {
+    errorMsg.value = e.message;
   }
 }
 </script>

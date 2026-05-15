@@ -39,3 +39,11 @@ _skill_dh.csv
 _skill_inst.csv
 _relic_preset.csv
 _relic2.csv
+
+# Backend (FastAPI)
+backend/.venv/
+backend/.env
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/.pytest_cache/
