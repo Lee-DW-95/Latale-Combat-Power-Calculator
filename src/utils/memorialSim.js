@@ -66,7 +66,7 @@ export function rollOnce(memorial) {
     const [lo, hi, , label, step] = pickedTier;
     const value = rollValue(lo, hi, step);
     const displayLabel = decorateLabelWithTier(memorial.tiers, pickedTier, label);
-    lines.push({ label: displayLabel, value });
+    lines.push({ label: displayLabel, value, lo, hi });
   }
   return lines;
 }

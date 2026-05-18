@@ -214,6 +214,7 @@ export function rollOnceShared() {
       type: opt.type,
       level: lvIdx + 1,
       value,
+      hi: tier.max,
       unit: sharedHasPercentUnit(opt.type) ? '%' : '',
     });
   }
@@ -258,6 +259,7 @@ export function constructSuccessCardShared(rawTargets) {
       type: opt.type,
       level: lvIdx + 1,
       value,
+      hi: tier.max,
       unit: sharedHasPercentUnit(opt.type) ? '%' : '',
       isTarget,
     });
@@ -312,6 +314,7 @@ export function rollOnceExclusive(stoneName) {
       level: i + 1,
       key: spec.key,
       value,
+      hi: range.max,
       unit: spec.isPercent || spec.forcePercent ? '%' : '',
     };
   }
@@ -392,6 +395,7 @@ export function constructSuccessCardExclusive(stoneName, targetValue) {
       level: chosen.extraIdx + 1,
       key: spec.key,
       value,
+      hi: tier.max,
       unit: spec.isPercent || spec.forcePercent ? '%' : '',
     },
   };

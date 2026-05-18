@@ -41,6 +41,8 @@ const sharedResult = ref(null);
 const sharedSampleCard = ref(null);
 const sharedSampleRoll = ref(null);
 const sharedRunning = ref(false);
+const sharedRollCount = ref(0);
+const sharedLastRollIndex = ref(0);
 
 const sharedValidTargets = computed(() =>
   sharedTargets.value
@@ -104,6 +106,14 @@ async function sharedRun() {
 
 function sharedRollSample() {
   sharedSampleRoll.value = rollOnceShared();
+  sharedRollCount.value += 1;
+  sharedLastRollIndex.value = sharedRollCount.value;
+}
+
+function sharedResetRollCount() {
+  sharedRollCount.value = 0;
+  sharedLastRollIndex.value = 0;
+  sharedSampleRoll.value = null;
 }
 
 const sharedMeanCost = computed(() => {
@@ -125,6 +135,8 @@ const exResult = ref(null);
 const exSampleCard = ref(null);
 const exSampleRoll = ref(null);
 const exRunning = ref(false);
+const exRollCount = ref(0);
+const exLastRollIndex = ref(0);
 
 const exStoneSpec = computed(() => EXCLUSIVE_STONES[exStone.value]);
 const exUnit = computed(() => exclusiveOptionUnit(exStone.value));
@@ -142,6 +154,8 @@ function onExStoneChange() {
   exResult.value = null;
   exSampleCard.value = null;
   exSampleRoll.value = null;
+  exRollCount.value = 0;
+  exLastRollIndex.value = 0;
 }
 
 async function exRun() {
@@ -166,6 +180,32 @@ async function exRun() {
 
 function exRollSample() {
   exSampleRoll.value = rollOnceExclusive(exStone.value);
+  exRollCount.value += 1;
+  exLastRollIndex.value = exRollCount.value;
+}
+
+function exResetRollCount() {
+  exRollCount.value = 0;
+  exLastRollIndex.value = 0;
+  exSampleRoll.value = null;
+}
+
+// ============================================================
+// 공통 — 라인 등급% (line.value / line.hi × 100, Math.floor)
+//   ≥90 빨강, ≥70 노랑, 외 회색 (인챈트 시뮬 규칙)
+// ============================================================
+function linePct(line) {
+  if (!line || line.value == null || !line.hi) return null;
+  const p = (Number(line.value) / Number(line.hi)) * 100;
+  if (!Number.isFinite(p)) return null;
+  return Math.floor(p);
+}
+
+function pctBadgeClass(p) {
+  if (p == null) return 'text-slate-400 dark:text-slate-500';
+  if (p >= 90) return 'text-rose-400 font-bold';
+  if (p >= 70) return 'text-amber-300 font-bold';
+  return 'text-slate-400 dark:text-slate-500';
 }
 
 const exMeanCost = computed(() => {
@@ -307,7 +347,16 @@ function fmtEly(n) {
             @click="sharedRollSample"
             class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
           >
-            🎰 1회 굴려보기
+            🎰 1회 굴려보기<span v-if="sharedRollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(sharedRollCount) }}회)</span>
+          </button>
+          <button
+            v-if="sharedRollCount > 0"
+            type="button"
+            @click="sharedResetRollCount"
+            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+            title="누적 횟수 초기화"
+          >
+            ↺ 초기화
           </button>
         </div>
       </section>
@@ -317,17 +366,27 @@ function fmtEly(n) {
         v-if="sharedSampleRoll"
         class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
       >
-        <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
-          <span>🎰 1회 굴림 결과</span>
-          <span class="text-xs text-slate-400 font-normal">{{ sharedSampleRoll.lineCount }}줄</span>
+        <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between gap-3">
+          <span>
+            🎰 1회 굴림 결과
+            <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(sharedLastRollIndex) }}회차</span>
+          </span>
+          <span class="text-xs text-slate-400 font-normal">{{ sharedSampleRoll.lineCount }}줄 · 누적 {{ fmt(sharedRollCount) }}회</span>
         </h2>
         <ul class="space-y-1.5 font-mono text-sm">
           <li
             v-for="(line, i) in sharedSampleRoll.lines"
             :key="i"
-            class="tabular-nums font-bold text-amber-300"
+            class="tabular-nums font-bold text-amber-300 flex items-center justify-between gap-3"
           >
-            ▶ Lv{{ line.level }} {{ line.type }} +{{ fmtVal(line.value) }}{{ line.unit }}
+            <span>▶ Lv{{ line.level }} {{ line.type }} +{{ fmtVal(line.value) }}{{ line.unit }}</span>
+            <span
+              v-if="linePct(line) != null"
+              :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+              :title="`Lv${line.level} 최대 ${fmtVal(line.hi)}${line.unit} 대비`"
+            >
+              [{{ linePct(line) }}%]
+            </span>
           </li>
         </ul>
       </section>
@@ -387,15 +446,21 @@ function fmtEly(n) {
               <li
                 v-for="(line, i) in sharedSampleCard.card.lines"
                 :key="i"
-                :class="[
-                  'tabular-nums',
-                  line.isTarget
-                    ? 'text-emerald-300 font-bold'
-                    : 'text-amber-300',
-                ]"
+                class="tabular-nums flex items-center justify-between gap-3"
               >
-                ▶ Lv{{ line.level }} {{ line.type }} +{{ fmtVal(line.value) }}{{ line.unit }}
-                <span v-if="line.isTarget" class="text-[10px]">★</span>
+                <span
+                  :class="line.isTarget ? 'text-emerald-300 font-bold' : 'text-amber-300'"
+                >
+                  ▶ Lv{{ line.level }} {{ line.type }} +{{ fmtVal(line.value) }}{{ line.unit }}
+                  <span v-if="line.isTarget" class="text-[10px]">★</span>
+                </span>
+                <span
+                  v-if="linePct(line) != null"
+                  :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+                  :title="`Lv${line.level} 최대 ${fmtVal(line.hi)}${line.unit} 대비`"
+                >
+                  [{{ linePct(line) }}%]
+                </span>
               </li>
             </ul>
             <div class="text-xs space-y-0.5 border-t border-emerald-700/50 pt-2 text-emerald-300">
@@ -479,7 +544,16 @@ function fmtEly(n) {
             @click="exRollSample"
             class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
           >
-            🎰 1회 굴려보기
+            🎰 1회 굴려보기<span v-if="exRollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(exRollCount) }}회)</span>
+          </button>
+          <button
+            v-if="exRollCount > 0"
+            type="button"
+            @click="exResetRollCount"
+            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+            title="누적 횟수 초기화"
+          >
+            ↺ 초기화
           </button>
         </div>
       </section>
@@ -508,16 +582,32 @@ function fmtEly(n) {
         v-if="exSampleRoll"
         class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
       >
-        <h2 class="text-base font-bold text-slate-200 mb-3">
-          🎰 1회 굴림 결과 — {{ exSampleRoll.stone }}
+        <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between gap-3">
+          <span>
+            🎰 1회 굴림 결과 — {{ exSampleRoll.stone }}
+            <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(exLastRollIndex) }}회차</span>
+          </span>
+          <span class="text-xs text-slate-400 font-normal">누적 {{ fmt(exRollCount) }}회</span>
         </h2>
         <div class="space-y-1.5 font-mono text-sm">
           <div class="text-amber-300 font-bold tabular-nums">
             ▶ [Lv.{{ exSampleRoll.level }}] {{ exSampleRoll.stone }}
           </div>
-          <div v-if="exSampleRoll.extra" class="text-sky-400 tabular-nums">
-            ▶ Lv{{ exSampleRoll.extra.level }} {{ exSampleRoll.extra.key }}
-            +{{ fmtVal(exSampleRoll.extra.value) }}{{ exSampleRoll.extra.unit }}
+          <div
+            v-if="exSampleRoll.extra"
+            class="text-sky-400 tabular-nums flex items-center justify-between gap-3"
+          >
+            <span>
+              ▶ Lv{{ exSampleRoll.extra.level }} {{ exSampleRoll.extra.key }}
+              +{{ fmtVal(exSampleRoll.extra.value) }}{{ exSampleRoll.extra.unit }}
+            </span>
+            <span
+              v-if="linePct(exSampleRoll.extra) != null"
+              :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(exSampleRoll.extra))]"
+              :title="`Lv${exSampleRoll.extra.level} 최대 ${fmtVal(exSampleRoll.extra.hi)}${exSampleRoll.extra.unit} 대비`"
+            >
+              [{{ linePct(exSampleRoll.extra) }}%]
+            </span>
           </div>
           <div v-else class="text-slate-500">▶ 추가 옵션 없음</div>
         </div>
@@ -572,9 +662,21 @@ function fmtEly(n) {
               <div class="text-amber-300 font-bold tabular-nums">
                 ▶ [Lv.{{ exSampleCard.card.level }}] {{ exSampleCard.card.stone }}
               </div>
-              <div v-if="exSampleCard.card.extra" class="text-emerald-300 font-bold tabular-nums">
-                ▶ Lv{{ exSampleCard.card.extra.level }} {{ exSampleCard.card.extra.key }}
-                +{{ fmtVal(exSampleCard.card.extra.value) }}{{ exSampleCard.card.extra.unit }} ★
+              <div
+                v-if="exSampleCard.card.extra"
+                class="text-emerald-300 font-bold tabular-nums flex items-center justify-between gap-3"
+              >
+                <span>
+                  ▶ Lv{{ exSampleCard.card.extra.level }} {{ exSampleCard.card.extra.key }}
+                  +{{ fmtVal(exSampleCard.card.extra.value) }}{{ exSampleCard.card.extra.unit }} ★
+                </span>
+                <span
+                  v-if="linePct(exSampleCard.card.extra) != null"
+                  :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(exSampleCard.card.extra))]"
+                  :title="`Lv${exSampleCard.card.extra.level} 최대 ${fmtVal(exSampleCard.card.extra.hi)}${exSampleCard.card.extra.unit} 대비`"
+                >
+                  [{{ linePct(exSampleCard.card.extra) }}%]
+                </span>
               </div>
             </div>
             <div class="text-xs border-t border-emerald-700/50 pt-2 mt-2 text-emerald-300 font-medium">

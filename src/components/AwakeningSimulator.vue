@@ -22,6 +22,8 @@ const isRunning = ref(false);
 const result = ref(null);          // 통계 결과
 const sampleWinningCard = ref(null); // 1번 실행 성공 카드
 const sampleRoll = ref(null);       // 1회 굴려보기 미리보기
+const rollCount = ref(0);          // 1회 굴려보기 누적 시도 횟수
+const lastRollIndex = ref(0);      // 마지막으로 표시된 굴림의 회차
 
 function addTarget() {
   if (targets.value.length >= MAX_TARGETS) return;
@@ -95,6 +97,60 @@ async function runSimulation() {
 
 function rollSample() {
   sampleRoll.value = rollOnce();
+  rollCount.value += 1;
+  lastRollIndex.value = rollCount.value;
+}
+
+function resetRollCount() {
+  rollCount.value = 0;
+  lastRollIndex.value = 0;
+  sampleRoll.value = null;
+}
+
+// ============================================================
+// 라인 등급% 및 색상 — 해당 옵션의 단일 줄 최대값(maxValue) 대비 비율
+// ============================================================
+function linePct(line) {
+  if (!line || line.value == null) return null;
+  const max = maxPossibleValue(line.displayLabel);
+  if (!max) return null;
+  const p = (Number(line.value) / Number(max)) * 100;
+  if (!Number.isFinite(p)) return null;
+  return Math.floor(p);
+}
+
+// % 배지 색상 (≥90 빨강, ≥70 주황, ≥30 인디고, 외 슬레이트)
+function pctBadgeClass(p) {
+  if (p == null) return 'text-slate-500';
+  if (p >= 90) return 'text-rose-400 font-bold';
+  if (p >= 70) return 'text-orange-300 font-bold';
+  if (p >= 30) return 'text-indigo-300';
+  return 'text-slate-500';
+}
+
+// 라인 텍스트 색상 — 선호옵(glow)에서 % 가 높으면 빨강/주황으로 승급
+function lineColorClass(line, stoneKey) {
+  if (line.glow) {
+    const p = linePct(line);
+    if (p != null) {
+      if (p >= 90) return 'text-rose-400';
+      if (p >= 70) return 'text-orange-300';
+    }
+  }
+  return stoneKey === 'PURPLE' ? 'text-amber-300' : 'text-sky-400';
+}
+
+// 라인 글로우(textShadow) — 선호옵 + % 가 높으면 빨강/주황 글로우
+function lineGlowShadow(line, stoneKey) {
+  if (!line.glow) return undefined;
+  const p = linePct(line);
+  if (p != null) {
+    if (p >= 90) return '0 0 2px #fb7185, 0 0 6px #fb7185';
+    if (p >= 70) return '0 0 2px #fdba74, 0 0 6px #fdba74';
+  }
+  return stoneKey === 'PURPLE'
+    ? '0 0 2px #fde047, 0 0 6px #fde047'
+    : '0 0 2px #38bdf8, 0 0 6px #38bdf8';
 }
 
 // ============================================================
@@ -231,7 +287,16 @@ function fmtVal(v) {
           @click="rollSample"
           class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
         >
-          🎰 1회 굴려보기
+          🎰 1회 굴려보기<span v-if="rollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(rollCount) }}회)</span>
+        </button>
+        <button
+          v-if="rollCount > 0"
+          type="button"
+          @click="resetRollCount"
+          class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+          title="누적 횟수 초기화"
+        >
+          ↺ 초기화
         </button>
       </div>
     </section>
@@ -242,8 +307,8 @@ function fmtVal(v) {
       class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
     >
       <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
-        <span>🎰 1회 굴림 결과</span>
-        <span class="text-xs text-slate-400 font-normal">{{ sampleRoll.lineCount }}줄</span>
+        <span>🎰 1회 굴림 결과 <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span></span>
+        <span class="text-xs text-slate-400 font-normal">{{ sampleRoll.lineCount }}줄 · 누적 {{ fmt(rollCount) }}회</span>
       </h2>
 
       <div
@@ -265,19 +330,21 @@ function fmtVal(v) {
         <li
           v-for="(line, i) in sampleRoll.lines"
           :key="i"
-          :class="[
-            'tabular-nums font-bold',
-            sampleRoll.stone.key === 'PURPLE' ? 'text-amber-300' : 'text-sky-400',
-          ]"
-          :style="{
-            textShadow: line.glow
-              ? sampleRoll.stone.key === 'PURPLE'
-                ? '0 0 2px #fde047, 0 0 6px #fde047'
-                : '0 0 2px #38bdf8, 0 0 6px #38bdf8'
-              : undefined,
-          }"
+          class="tabular-nums font-bold flex items-center justify-between gap-3"
         >
-          ▶ {{ line.base }} +{{ fmtVal(line.value) }}{{ line.unit }}
+          <span
+            :class="lineColorClass(line, sampleRoll.stone.key)"
+            :style="{ textShadow: lineGlowShadow(line, sampleRoll.stone.key) }"
+          >
+            ▶ {{ line.base }} +{{ fmtVal(line.value) }}{{ line.unit }}
+          </span>
+          <span
+            v-if="linePct(line) != null"
+            :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+            :title="`해당 옵션 최대값 ${fmtVal(maxPossibleValue(line.displayLabel))}${line.unit} 대비`"
+          >
+            {{ linePct(line) }}%
+          </span>
         </li>
       </ul>
     </section>
@@ -351,17 +418,30 @@ function fmtVal(v) {
             <li
               v-for="(line, i) in sampleWinningCard.card.lines"
               :key="i"
-              :class="[
-                'tabular-nums',
-                lineHighlights(line)
-                  ? 'text-emerald-300 font-bold'
-                  : sampleWinningCard.card.stone.key === 'PURPLE'
-                    ? 'text-amber-300'
-                    : 'text-sky-400',
-              ]"
+              class="tabular-nums flex items-center justify-between gap-3"
             >
-              ▶ {{ line.base }} +{{ fmtVal(line.value) }}{{ line.unit }}
-              <span v-if="lineHighlights(line)" class="text-[10px]">★</span>
+              <span
+                :class="
+                  lineHighlights(line)
+                    ? 'text-emerald-300 font-bold'
+                    : lineColorClass(line, sampleWinningCard.card.stone.key)
+                "
+                :style="{
+                  textShadow: lineHighlights(line)
+                    ? undefined
+                    : lineGlowShadow(line, sampleWinningCard.card.stone.key),
+                }"
+              >
+                ▶ {{ line.base }} +{{ fmtVal(line.value) }}{{ line.unit }}
+                <span v-if="lineHighlights(line)" class="text-[10px]">★</span>
+              </span>
+              <span
+                v-if="linePct(line) != null"
+                :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+                :title="`해당 옵션 최대값 ${fmtVal(maxPossibleValue(line.displayLabel))}${line.unit} 대비`"
+              >
+                {{ linePct(line) }}%
+              </span>
             </li>
           </ul>
           <div class="text-xs space-y-0.5 border-t border-emerald-700/50 pt-2 text-emerald-300">
