@@ -576,6 +576,91 @@ export function statMarginalEffect(stats, statKey, delta = 1) {
   return newBP - baseBP;
 }
 
+/**
+ * 옵션 동등 환산 솔버 — "이 ΔBP 를 내려면 스탯 X 옵션이 얼마 필요한가?"
+ *
+ *   deltaFn(amount) = 스탯 X 에 amount 옵션을 적용했을 때의 ΔBP (= BP(amount) - baseBP).
+ *   amount 에 대해 단조 비감소(monotone non-decreasing)인 계단 함수를 가정한다.
+ *
+ *   ⚠ 단순 이분법이 실패하는 세 가지 게임 메커니즘을 모두 처리한다:
+ *     1) floor 양자화 — 크댐/근마효율/고댐/지배력은 BP 식 내부 Math.floor 때문에
+ *        ΔBP 가 계단 함수다. 임의의 목표값에 "정확히" 수렴하지 못하므로, 기존 코드는
+ *        converged=false → '도달 불가' 로 잘못 표기했다 (예: 근력 +1% → 크댐 환산).
+ *        → 가장 근접한 amount 를 돌려주고 approx:true 로 표시한다.
+ *     2) 하드 캡 / 도메인 한계 — 관통(cap 99), 최소뎀(effectiveMinDmg 로 최대뎀까지만 효과)은
+ *        amount 를 아무리 키워도 ΔBP 가 천장(ceiling)에 막힌다.
+ *        → reachable:false + reachableDelta(천장값) 로 "진짜 도달 불가" 를 구분한다.
+ *     3) 주스탯² 비선형 감쇠 — 주스탯은 K0_sq 음수항 때문에 극단값에서 BP 가 꺾인다.
+ *        → 거대한 probe 로 overshoot 하지 않도록 ×WINDOW 배율로 점진 탐색한다.
+ *
+ *   양자화 평탄 구간과 진짜 캡의 구분 (핵심):
+ *     +1 옵션이 floor 스텝을 못 넘겨 ΔBP 가 0 이어도 그건 캡이 아니다.
+ *     amount 를 ×WINDOW(1024) 키워도 ΔBP 가 더 안 늘면 그때만 캡으로 판정한다.
+ *
+ * @param {(amount:number)=>number} deltaFn  amount → ΔBP (BP - baseBP)
+ * @param {number} targetDelta  맞추려는 ΔBP (음수 = 옵션 차감 방향)
+ * @returns {{amount:number, achieved:number, approx:boolean, coarse:boolean, reachable:true}
+ *          | {amount:null, reachable:false, reachableDelta:number}}
+ */
+export function solveEquivalentAmount(deltaFn, targetDelta) {
+  if (!Number.isFinite(targetDelta) || targetDelta === 0) {
+    return { amount: 0, achieved: 0, approx: false, coarse: false, reachable: true };
+  }
+  const sgn = targetDelta > 0 ? 1 : -1;
+  const WINDOW = 1024; // 양자화 평탄구간 vs 진짜 캡 판별 배율
+
+  // 1) bracket 탐색 — 목표를 넘어서는 상한 hi 를 찾거나, 천장(캡)을 검출.
+  let hi = sgn;
+  let dAtHi = deltaFn(hi);
+  let reached = false;
+  for (let i = 0; i < 40; i++) {
+    if (sgn * dAtHi >= sgn * targetDelta) { reached = true; break; }
+    const hiBig = hi * WINDOW;
+    const dBig = deltaFn(hiBig);
+    // ×WINDOW 키워도 개선 없음 → 천장(하드캡/도메인 한계)
+    if (sgn * dBig <= sgn * dAtHi + 1e-9) {
+      return { amount: null, reachable: false, reachableDelta: dBig };
+    }
+    hi = hiBig;
+    dAtHi = dBig;
+    if (Math.abs(hi) > 1e15) {
+      return { amount: null, reachable: false, reachableDelta: dAtHi };
+    }
+  }
+  if (!reached) {
+    return { amount: null, reachable: false, reachableDelta: dAtHi };
+  }
+
+  // 2) 이분법 — [0, hi] 구간에서 목표 ΔBP 교차점.
+  let aLo = 0;
+  let aHi = hi;
+  let mid = 0;
+  for (let i = 0; i < 100; i++) {
+    mid = (aLo + aHi) / 2;
+    const d = deltaFn(mid);
+    if (sgn > 0) {
+      if (d < targetDelta) aLo = mid; else aHi = mid;
+    } else {
+      if (d > targetDelta) aLo = mid; else aHi = mid;
+    }
+  }
+
+  let amount = mid;
+  let achieved = deltaFn(mid);
+  // 0.5% 이내면 사실상 정확 (1 BP 단위 floor 오차는 정확으로 간주)
+  const approx = Math.abs(achieved - targetDelta) > Math.abs(targetDelta) * 0.005;
+  // coarse: 옵션 한 스텝이 목표보다 커서 절반도 못 채움 → 선형 비율로 근사 추정.
+  let coarse = false;
+  if (approx && Math.abs(achieved) < Math.abs(targetDelta) * 0.5) {
+    const dHi = deltaFn(hi);
+    if (dHi !== 0) {
+      amount = (targetDelta * hi) / dHi;
+      coarse = true;
+    }
+  }
+  return { amount, achieved, approx, coarse, reachable: true };
+}
+
 export const STAT_LABELS = {
   P: {
     주스탯: '근력',

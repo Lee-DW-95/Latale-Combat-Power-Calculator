@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/formula.test.js"
+    "test": "node tests/formula.test.js && node tests/equivalence.test.js"
   },
   "dependencies": {
     "vue": "^3.4.21"

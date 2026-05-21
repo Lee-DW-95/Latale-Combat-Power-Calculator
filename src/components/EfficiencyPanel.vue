@@ -7,6 +7,7 @@ import {
   calculateBPVsMonster,
   getStatLabel,
   equipDelta,
+  solveEquivalentAmount,
   STAT_KEYS,
 } from '../utils/battlePower.js';
 import { fmtRound as fmt } from '../utils/format.js';
@@ -158,6 +159,14 @@ const equivMode = ref('avg'); // 'avg' | 'direct' | 'summon' | 'normal' | 'boss'
 
 const ALL_STAT_KEYS_FOR_EQUIV = MARGINAL_STEPS.map((m) => m.key);
 
+// 환산 불가 사유 — solveEquivalentAmount 가 reachable:false 를 줄 때 스탯별 안내.
+//   관통/최소뎀은 게임 메커니즘상 천장이 있어 "진짜" 도달 불가다 (양자화 근사와 구분).
+function unreachableReason(key) {
+  if (key === '관통') return 'cap(99) 도달 — 도달 불가';
+  if (key === '최소뎀') return '최대뎀까지만 효과 — 도달 불가';
+  return '도달 불가';
+}
+
 const equivalents = computed(() => {
   const refKey = equivStat.value;
   const refAmount = Number(equivPct.value) || 0;
@@ -181,38 +190,28 @@ const equivalents = computed(() => {
   const items = ALL_STAT_KEYS_FOR_EQUIV
     .filter((k) => k !== refKey)
     .map((k) => {
-      // 이분법 — 단조 함수 가정 (옵션 추가 ↑ → BP ↑)
-      let lo = -99, hi = 9999;
-      let mid = 0;
-      let lastDelta = 0;
-      for (let i = 0; i < 80; i++) {
-        mid = (lo + hi) / 2;
-        const bp = bpWithOption(props.stats, k, mid, mode);
-        const dBP = bp - baseBPForMode;
-        lastDelta = dBP;
-        if (refDeltaBP > 0) {
-          if (dBP < refDeltaBP) lo = mid;
-          else hi = mid;
-        } else {
-          if (dBP > refDeltaBP) lo = mid;
-          else hi = mid;
-        }
-        if (Math.abs(dBP - refDeltaBP) < Math.abs(refDeltaBP) * 1e-7) break;
-      }
-      // 관통 cap 검사
-      let capHit = false;
-      if (k === '관통') {
-        const requested = (Number(props.stats.관통) || 0) + mid;
-        if (requested > PEN_CAP) capHit = true;
-      }
-      const converged = Math.abs(lastDelta - refDeltaBP) < Math.abs(refDeltaBP) * 1e-3;
-      return {
+      // floor 양자화·하드캡·주스탯² 비선형을 모두 처리하는 공용 솔버 사용.
+      //   기존 brittle 이분법은 크댐 등 계단 스탯에서 수렴 실패 → '도달 불가' 오표기했음.
+      const r = solveEquivalentAmount(
+        (amt) => bpWithOption(props.stats, k, amt, mode) - baseBPForMode,
+        refDeltaBP,
+      );
+      const base = {
         key: k,
         label: getStatLabel(props.stats.type, k),
         unit: optionUnitLabel(k),
         unitMechanism: NATURAL_UNIT[k] === 'pct' ? '누적' : '가산',
-        amount: converged ? mid : null,
-        note: capHit ? 'cap(99) 도달 — 도달 불가' : (!converged ? '도달 불가' : null),
+      };
+      if (!r.reachable) {
+        return { ...base, amount: null, approx: false, coarse: false, note: unreachableReason(k) };
+      }
+      return {
+        ...base,
+        amount: r.amount,
+        approx: r.approx,
+        coarse: r.coarse,
+        achieved: r.achieved,
+        note: null,
       };
     })
     .sort((a, b) => {
@@ -355,23 +354,21 @@ function applyEquipToStats(baseStats, equip) {
   return out;
 }
 
-// 주어진 ΔBP 를 기준 스탯 옵션 하나로 재현했을 때 필요한 amount 를 이분법으로 탐색.
-//   BP 식 내부 Math.floor 들 때문에 ΔBP 가 mid 에 대해 계단(plateau) 함수지만,
-//   이분법은 plateau 가장자리(같은 ΔBP 를 내는 가장 작은 amount)에 단조적으로 수렴.
-//   80 회면 mid 정밀도가 사실상 무한대 — 결과를 그대로 돌려주면 충분.
+// 주어진 ΔBP 를 기준 스탯(기본 크댐) 옵션 하나로 재현했을 때 필요한 amount.
+//   공용 솔버로 floor 양자화·캡을 일관 처리. 기준 스탯이 천장에 막혀 도달 불가하면
+//   합산이 깨지지 않도록 천장값 기준 선형 근사로 폴백한다 (refStat=크댐 은 사실상 항상 도달).
 function solveRefAmountForDelta(refKey, targetDelta, baseBPForMode, mode) {
-  if (targetDelta === 0) return 0;
-  let lo = -99, hi = 99999, mid = 0;
-  for (let i = 0; i < 80; i++) {
-    mid = (lo + hi) / 2;
-    const dBP = bpWithOption(props.stats, refKey, mid, mode) - baseBPForMode;
-    if (targetDelta > 0) {
-      if (dBP < targetDelta) lo = mid; else hi = mid;
-    } else {
-      if (dBP > targetDelta) lo = mid; else hi = mid;
-    }
+  const r = solveEquivalentAmount(
+    (amt) => bpWithOption(props.stats, refKey, amt, mode) - baseBPForMode,
+    targetDelta,
+  );
+  if (r.reachable) return r.amount;
+  // 도달 불가(캡): 천장값에 비례한 선형 추정으로 폴백.
+  if (Number.isFinite(r.reachableDelta) && r.reachableDelta !== 0) {
+    const probe = bpWithOption(props.stats, refKey, 1, mode) - baseBPForMode;
+    if (probe !== 0) return targetDelta / probe;
   }
-  return mid;
+  return 0;
 }
 
 // 각성석 환산 결과 — 각 옵션을 단독 적용한 ΔBP 를 기준 스탯(예: 크댐) 환산값으로 바꾼 뒤 합산.
@@ -768,13 +765,23 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                     ? 'text-indigo-600 dark:text-indigo-400'
                     : 'text-slate-500 dark:text-slate-400',
                 ]"
-                :title="`${e.unitMechanism === '누적' ? '누적%P 추가 옵션' : 'raw 절대값 가산 옵션'} — ${
+                :title="`${e.unitMechanism === '누적' ? '누적%P 추가 옵션' : 'raw 절대값 가산 옵션'}${
+                  e.coarse ? ' · 옵션 한 단위가 기준 효과보다 커서 선형 근사값'
+                  : e.approx ? ' · floor 단위라 가장 근접한 근사 환산값' : ''
+                } — ${
                   Math.abs(e.amount) < Math.abs(equivPct)
                     ? getStatLabel(stats.type, equivStat) + ' 보다 효율 좋음'
                     : getStatLabel(stats.type, equivStat) + ' 보다 효율 낮음'
                 }`"
               >
-                {{ e.amount >= 0 ? '+' : '' }}{{ e.amount.toFixed(2) }}{{ e.unit }}
+                <span
+                  v-if="e.approx || e.coarse"
+                  class="text-slate-400 dark:text-slate-500 font-normal mr-0.5"
+                >≈</span>{{ e.amount >= 0 ? '+' : '' }}{{ e.amount.toFixed(2) }}{{ e.unit }}<span
+                  v-if="e.coarse"
+                  class="text-[9px] text-amber-500/80 dark:text-amber-400/80 ml-0.5"
+                  title="옵션 단위가 커서 정밀 환산 불가 — 선형 근사"
+                >단위큼</span>
               </span>
               <span
                 v-else
@@ -785,7 +792,9 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             </li>
           </ul>
           <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic leading-snug">
-            ⓘ 정확한 환산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
+            ⓘ <strong>≈</strong> 는 옵션이 정수 단위(floor)로만 적용돼 가장 근접한 근사 환산값임을 뜻합니다 ·
+            <strong>도달 불가</strong> 는 관통 cap(99)·최소뎀 한계처럼 게임상 천장에 막힌 경우입니다.
+            정확한 환산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
           </p>
         </div>
         <p v-else class="text-xs text-slate-400 dark:text-slate-500 italic">

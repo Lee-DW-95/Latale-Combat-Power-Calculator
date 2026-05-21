@@ -33,19 +33,44 @@ function rowLabel(def) {
   return def.addUnit === '%' ? `${base} (${def.addUnit})` : base;
 }
 
+// 올스탯은 근력/마법력/행운/체력을 동시에 올리지만, 전투력에 합산되는 건 근력/마법력(주스탯)뿐.
+//   → 올스탯 옵션의 기본값·누적%는 주스탯 풀을 그대로 따른다 (equipDelta 도 기본_주스탯 기준으로 계산).
+//   별도의 기본_올스탯 필드는 없으므로 올스탯 행은 주스탯의 표시값/기본값으로 환산한다.
+function poolKeysFor(def) {
+  if (def.key === '올스탯') return { displayKey: '주스탯', baseKey: '기본_주스탯' };
+  return { displayKey: def.key, baseKey: `기본_${def.key}` };
+}
+
 // 누적% 자동 계산 (기본값/표시값 비율 → %)
 // 주스탯은 올스탯%도 같은 풀이라 별도 분리 안 함 (표시는 합산값)
 function pctPoolFor(def) {
   if (!def.pctKey) return null;
-  const baseKey = `기본_${def.key}`;
+  const { displayKey, baseKey } = poolKeysFor(def);
   if (!props.stats?.[baseKey]) return null;
-  const ratio = pctPool(props.stats, def.key, baseKey);
+  const ratio = pctPool(props.stats, displayKey, baseKey);
   return ratio * 100;
 }
 
 function formatPct(p) {
   if (p == null) return '';
   return `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`;
+}
+
+// 누적% 배지 툴팁 — 올스탯은 주스탯 풀을 공유함을 명시.
+function pctBadgeTitle(def) {
+  const p = formatPct(pctPoolFor(def));
+  if (def.key === '올스탯') {
+    return `근력/마법력(주스탯)과 같은 누적 % 풀 — 자동 계산: ${p}`;
+  }
+  return `현재 누적 % (자동 계산): ${p}`;
+}
+
+// 기본값 미입력 경고 툴팁 — 올스탯은 기본 근력/마법력(기본_주스탯)을 가리킴.
+function fallbackTitle(def) {
+  if (def.key === '올스탯') {
+    return '기본 근력/마법력(기본_주스탯) 미입력 — 올스탯 %가 누적 0% 가정으로 추정됨. 추가 세부정보의 근력/마법력 +값을 입력하세요.';
+  }
+  return '기본값(추가 세부정보) 미입력 — % 옵션이 누적%=0 가정으로 추정됨. 정확도를 위해 추가 세부정보의 +값을 입력하세요.';
 }
 
 // 기본값 미입력 + % 옵션 입력된 행 — 폴백 추정값 사용 중임을 알림
@@ -125,16 +150,16 @@ function needsFallbackWarning(def) {
               <span
                 v-if="pctPoolFor(def) != null"
                 class="ml-1 text-[11px] font-normal text-indigo-500 dark:text-indigo-400"
-                :title="`현재 누적 % (자동 계산): ${formatPct(pctPoolFor(def))}`"
+                :title="pctBadgeTitle(def)"
               >
-                ({{ formatPct(pctPoolFor(def)) }})
+                ({{ formatPct(pctPoolFor(def)) }}<template v-if="def.key === '올스탯'"> · 주스탯 풀</template>)
               </span>
               <span
                 v-else-if="needsFallbackWarning(def)"
                 class="ml-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"
-                title="기본값(추가 세부정보) 미입력 — % 옵션이 누적%=0 가정으로 추정됨. 정확도를 위해 추가 세부정보의 +값을 입력하세요."
+                :title="fallbackTitle(def)"
               >
-                ⚠ 기본값 미입력 (추정)
+                ⚠ {{ def.key === '올스탯' ? '기본 근력/마법력 미입력' : '기본값 미입력' }} (추정)
               </span>
             </td>
             <!-- 현재 장비 가산 -->
