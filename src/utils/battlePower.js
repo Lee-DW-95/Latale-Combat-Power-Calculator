@@ -50,18 +50,38 @@
 //     자료6 +0.004% (perfect)   자료9 +0.071%   자료10 +0.010%   자료11 -0.019%   자료12 +0.001%
 //   SAMPLE P 56건 RMSE 0.375%, M 7건 0.224%.
 //   K0_sq = -0.00961908 (주스탯² 음의 기여, diminishing returns 메커니즘 모델링).
+// V_BIG18 자유 학습 — 기존 모델 가설 폐기 후 디테일 데이터(96건)만으로 처음부터 재학습.
+//   사용 데이터: 카톡 18 페어 + 박햇님 15 페어 + SAMPLE 직타/소타 분리 26 + 총BP 37 + img24 12페어
+//   박햇님 데이터의 "펫버프·길드유물 포함" 표기를 buff factor b_haet=1.04 로 동시 추정.
+//
+//   모델 후보 4가지 비교 결과:
+//     A) DOM=lin CROSS=mult K0_sq=in:    P 0.386% M 0.610% 세이버Δ -6946 카톡Δ -10664
+//     B) DOM=lin CROSS=K1add K0_sq=in:   P 0.566% M 0.682% 세이버Δ -6519 카톡Δ -11716
+//   ★ C) DOM=lin CROSS=mult K0_sq=out:   P 0.556% M 0.434% 세이버Δ -6742 카톡Δ -10374  ← 채택
+//     D) DOM=lin CROSS=K1add K0_sq=out:  P 1.409% M 1.204% 세이버Δ -6019 카톡Δ -10824
+//
+//   핵심 변경:
+//     1) K0_sq 항 제거 — 자유 학습에서 K0가 K0_sq 보상하여 더 좋은 fit (모델 C가 A 대비 M 우수)
+//     2) dominance mult 선형 유지 (v17 검증)
+//     3) cross-term multiplicative 유지 (K1 가산형보다 우수)
+//     4) D_crit 128 (이전 270) — 자유 학습에서 mult 식 전체가 재밸런싱됨
+//     5) base 3.15e-45 (이전 4.79e-45) — D_crit ↓ 보상
+//
+//   검증: 세이버 ΔBP -6742 = 실측 완벽 일치. 박햇님 sensitivity 0.135% (직 0.009%/소 0.177%).
+//   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
+//     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.65274862e+0,       // 주스탯 가중치 (선형)
-  K0_sq: -9.61908000e-3,   // 주스탯² 가중치 (비선형, V_BIG19 신규)
-  K1: 2.62218762e+2,       // 공격력 가중치
-  K2: 2.34202075e+0,       // 고댐 가중치
-  K_mon: 8.11455950e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.85116616e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 2.25471962e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.84179170e+2,    // 지배력 분모 (1% floor 적용)
-  K_cross: 1.98366680e-1,  // 근마효율 cross-term (1% floor 적용)
+  K0: 3.52843827e+0,       // 주스탯 가중치 (선형, K0_sq 제거로 K0가 자체 흡수)
+  K0_sq: 0,                // V_BIG18: 비선형 항 제거 (자유 학습에서 K0 가 보상)
+  K1: 3.18801664e+2,       // 공격력 가중치
+  K2: 2.46519185e+0,       // 고댐 가중치
+  K_mon: 8.62310800e-1,    // 일몬추+보몬추 가중치
+  D_crit: 1.28313266e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 3.72563332e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 2.12185448e+2,    // 지배력 분모 (V_BIG17: floor 없는 선형)
+  K_cross: 2.35668470e-1,  // 근마효율 cross-term (V_BIG17: floor 없는 연속)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.97359278e-45,    // 전체 보정 상수
+  base: 3.14623815e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -74,7 +94,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.64599709e+2,       // 마법 속성력 전용 (K1_phys × 1.00908, 비율 유지) — V_BIG19
+  K1: 3.21696384e+2,       // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG18
 });
 
 /**
@@ -146,11 +166,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG19 (주스탯² 비선형 항 포함)
-const SPLIT_U =   1.280441; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 143.011483; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.224051; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.462910; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG18 (96건 디테일 데이터 자유 학습)
+const SPLIT_U =   1.50742350; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 150.98129583; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.11812842; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.28898136; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
@@ -168,9 +188,11 @@ function multiplierFor(stats) {
   // 데미지 boost 1% floor (D_dmg ~1e-37 라 영향 무시 수준)
   const dmgMultiplier =
     1 + Math.floor((minDmg + maxDmg) / params.D_dmg * 100) / 100;
-  // 지배력 boost 1% 단위 floor
+  // V_BIG17: 지배력 mult 선형 (floor 없음).
+  //   기존 정수% floor 모델은 박햇님 보몬지 ±1pp 가 비대칭(+0.57%/-0.00%)으로 나와 실측(±0.293%) 과 어긋남.
+  //   카톡 보몬지 -2pp(-0.57%) + 박햇님 ±0.293% 가 선형식 D≈195 으로 동시 fit 검증됨.
   const dominanceMultiplier =
-    1 + Math.floor((Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom * 100) / 100;
+    1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
   // 관통 boost 1% 단위 floor
   const penetrationMultiplier =
     1 + Math.floor(Number(stats.관통 || 0) / params.D_pen * 100) / 100;
@@ -221,9 +243,10 @@ function attackBaseFor(stats, mode = 'avg') {
              + Math.floor(delta * 추가댐)
              + Math.floor((params.K0_sq || 0) * 주스탯 * 주스탯 / 1e7);
   if (mode === 'direct') {
-    // 게임 floor 메커니즘: K_cross × 근마효율 결과를 정수% 로 floor
-    //   예: K_cross 0.198 × 근마 32 = 6.34 → floor 6 → 1 + 6/100 = 1.06
-    result = Math.floor(result * (1 + Math.floor(params.K_cross * 근마효율) / 100));
+    // 근마효율은 1단위 변경에도 BP 가 변해야 함 (자료6 vs img24l 페어 BP -6,742 = floor 없는 연속).
+    // 따라서 K_cross × 근마효율 결과를 정수% 로 floor 하지 않고 연속 적용.
+    // 바깥쪽 ab_d 정수 floor 만 게임 truncate 메커니즘 유지.
+    result = Math.floor(result * (1 + params.K_cross * 근마효율 / 100));
   }
   return result;
 }
