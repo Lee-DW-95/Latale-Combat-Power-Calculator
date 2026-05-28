@@ -1,11 +1,10 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * V_BIG19 — A 단계(자료6/9 lock 100x) + B 단계(주스탯² 비선형 항 추가).
- *   사용자 자료 모두 ±0.07% 이내:
- *     자료6 +0.004% / 자료9 +0.071% / 자료10 +0.010% / 자료11 -0.019% / 자료12 +0.001%
- *   K0_sq = -0.00962 (주스탯² 음의 기여, 게임 diminishing returns 메커니즘).
- *   SAMPLE_DATA P 56건 RMSE 0.375%, M 7건 0.224%.
+ * 현재 채택: V_BIG18 모델 C (CROSS=mult, K0_sq=out) — 자료13 소드댄서 포함 97건 재학습.
+ *   4모델(A/B/C/D) 비교 후 C 채택 (물리 RMSE·학습 loss 최저, 현재 아키텍처 유지).
+ *   SAMPLE_DATA 물리 57건 RMSE 0.388% (max 1.163%), 마법 7건 0.355% (max 0.649%).
+ *   재학습 스크립트: scripts/refit_v18_freelearn.mjs
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
@@ -71,17 +70,17 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 3.52843827e+0,       // 주스탯 가중치 (선형, K0_sq 제거로 K0가 자체 흡수)
+  K0: 2.83132529e+0,       // 주스탯 가중치 (선형, K0_sq 제거로 K0가 자체 흡수)
   K0_sq: 0,                // V_BIG18: 비선형 항 제거 (자유 학습에서 K0 가 보상)
-  K1: 3.18801664e+2,       // 공격력 가중치
-  K2: 2.46519185e+0,       // 고댐 가중치
-  K_mon: 8.62310800e-1,    // 일몬추+보몬추 가중치
-  D_crit: 1.28313266e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 3.72563332e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 2.12185448e+2,    // 지배력 분모 (V_BIG17: floor 없는 선형)
-  K_cross: 2.35668470e-1,  // 근마효율 cross-term (V_BIG17: floor 없는 연속)
+  K1: 2.65637378e+2,       // 공격력 가중치
+  K2: 1.98724731e+0,       // 고댐 가중치
+  K_mon: 8.30226890e-1,    // 일몬추+보몬추 가중치
+  D_crit: 2.71514501e+2,   // 크댐 분모 (1% floor 적용)
+  D_dmg: 2.32743268e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 1.97936805e+2,    // 지배력 분모 (V_BIG17: floor 없는 선형)
+  K_cross: 2.33653950e-1,  // 근마효율 cross-term (V_BIG17: floor 없는 연속)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 3.14623815e-45,    // 전체 보정 상수
+  base: 4.84453438e-45,    // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -94,7 +93,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 3.21696384e+2,       // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG18
+  K1: 2.68049366e+2,       // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG18
 });
 
 /**
@@ -166,11 +165,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG18 (96건 디테일 데이터 자유 학습)
-const SPLIT_U =   1.50742350; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 150.98129583; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.11812842; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.28898136; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG18 (97건 디테일 데이터 자유 학습, 자료13 소드댄서 포함 재학습)
+const SPLIT_U =   1.34364033; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 145.00555980; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.26679503; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.40370346; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
