@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:desktop": "vite build --mode desktop",
     "preview": "vite preview",
+    "tauri": "tauri",
     "test": "node tests/formula.test.js && node tests/equivalence.test.js"
   },
   "dependencies": {
     "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
