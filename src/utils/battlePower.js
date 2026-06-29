@@ -1,13 +1,16 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG20 모델 C (CROSS=mult, K0_sq=out) — 자료16(마법 고속성력) 포함 67건 재학습.
- *   4모델(A/B/C/D)을 모델별 프로세스로 병렬 학습 후 P+M RMSE 합 최소 기준으로 C 채택.
- *   자료16 추가 후 C가 전 지표 최저(P+M 0.730 vs A 1.134) — 과거 C의 저스펙 과소평가(기존4
- *   -2.20%)가 해소되어 max 1.155%로 A(max 2.30%)보다 균일. K0_sq 항은 미적용(=0).
- *   SAMPLE_DATA 물리 RMSE 0.378% (max 1.155%), 마법 0.352% (max 0.654%). 카톡 0.208%, 박햇님 0.081%.
- *   자료16 마법 종합 -0.164% (직 0.291% / 소 -0.611%).
- *   재학습 스크립트: scripts/refit_v19_parallel_model.mjs (모델 인자 A|B|C|D 병렬 실행)
+ * 현재 채택: V_BIG23 — 근마효율 cross-term 을 "근력/마법력 비례 직접타격 가산" 으로 재설계.
+ *   게임 메커니즘(사용자 도메인): 근마효율 = "근력/마법력 효율" → 근력/마법력이 높을수록 직접타격이 오른다.
+ *   기존 V_BIG21 의 "직접 attackBase 전체 균일곱" 폐기 → 주스탯 비례 가산으로 교체:
+ *     ab_d += floor(K_cross × 주스탯 × 근마효율% / 100)   (직접 전용, 소환 무관).
+ *   동일 파라미터수로 물리 RMSE 0.361%→0.290%, 물리 max 1.326%→0.840% 개선 (마법 0.326%).
+ *   4개 함수형(균일곱/근력선형/+주스탯²/g거듭제곱) 을 Dcrit 고정(269.5, 비식별성 제거) 공정비교 후 근력선형 채택.
+ *     멀티에이전트 적대검증: 무상관 3지표(loss/물리RMSE/물리max) 동시 호전 → 진짜 개선.
+ *     g거듭제곱(mainpow)은 +1파라미터 loss 이득이 노이즈 수준이라 Occam 위반으로 기각.
+ *   알려진 한계: 카톡 근마 단일페어 직타Δ 실측 -21746 = 전 형태 예측의 정확히 2.0배(양자화 앨리어싱 의심) → 단일점 제외.
+ *   재학습 스크립트: scripts/refit_v22_geunma_mainstat.mjs (FORM 인자 wholebase|mainlin|mainlin_sq|mainpow)
  *
  * @see FORMULA_RESEARCH.md - 공식 도출 과정과 한계
  * @see SAMPLE_DATA.json - 검증용 데이터셋
@@ -73,17 +76,17 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.81074959e+0,       // 주스탯 가중치 (선형 항)
-  K0_sq: 0,                // V_BIG20 모델 C: 주스탯² 비선형 항 미적용 (K0가 자체 흡수)
-  K1: 2.64583790e+2,       // 공격력 가중치
-  K2: 1.97653211e+0,       // 고댐 가중치
-  K_mon: 8.32417876e-1,    // 일몬추+보몬추 가중치
-  D_crit: 2.70457753e+2,   // 크댐 분모 (1% floor 적용)
-  D_dmg: 2.32673215e-37,   // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.97033584e+2,    // 지배력 분모 (V_BIG17: floor 없는 선형)
-  K_cross: 2.34841290e-1,  // 근마효율 cross-term (V_BIG17: floor 없는 연속)
+  K0: 2.8070065481572826,  // 주스탯 가중치 (선형 항)
+  K0_sq: 0,                // V_BIG23: 주스탯² 비선형 항 미적용 (구조 보존용 0)
+  K1: 2.8552007164008150e+2, // 공격력 가중치
+  K2: 2.1140033529824507,  // 고댐 가중치
+  K_mon: 8.5632007626009770e-1, // 일몬추+보몬추 가중치
+  D_crit: 269.5,           // 크댐 분모 (V_BIG23 고정 — Dcrit↔base 비식별성 제거, 1% floor)
+  D_dmg: 1.758751086447347e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 2.0017954033183307e+2, // 지배력 분모 (floor 없는 선형)
+  K_cross: 1.3166346819587278, // V_BIG23: 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율/100)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.83983598e-45,    // 전체 보정 상수
+  base: 3.541812315150331e-45, // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -96,7 +99,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.66986212e+2,       // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG20
+  K1: 2.8811259481093050e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG23
 });
 
 /**
@@ -168,11 +171,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG20 모델 C (67건 디테일 데이터 자유 학습, 자료16 마법 고속성력 포함)
-const SPLIT_U =   1.34954940; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 145.80835632; // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.27306797; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.37529305; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG23 (근마효율 가산형 cross 동시 재학습, 61건)
+const SPLIT_U =   1.4482031699889142; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 161.36773554397496;   // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.1324358645438487; // 고댐 split    (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.6595663985653981; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
@@ -209,9 +212,9 @@ function multiplierFor(stats) {
 
 // attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
 //   세 모드 모두 K0/K1/K2/K_mon 기반. direct/summon 은 (u, v, w, x) 만큼 4-param split 적용.
-//   direct 모드에 한해 ab_d × (1 + K_cross × 근마효율%/100) multiplicative 적용
-//     (V_BIG4 신규 메커니즘: 근마효율은 주스탯 외 공격력/고댐 등 직접 attackBase 전체에 비례).
-//     카톡 페어 직접 측정 (1+0.27K)/(1+0.26K) = BP 비율 → K_cross ≈ 0.5366 으로 도출.
+//   V_BIG23: direct 모드에 한해 근마효율 가산 보너스 ab_d += floor(K_cross × 주스탯 × 근마효율%/100).
+//     게임 메커니즘 — 근마효율("근력/마법력 효율")은 근력/마법력에 비례해 직접타격만 올린다.
+//     (구 V_BIG21 의 "직접 base 전체 균일곱" 폐기 — 공격력/고댐까지 싸잡아 증폭해 부정확했음.)
 //   평균 = (direct + summon)/2 = avg.
 function attackBaseFor(stats, mode = 'avg') {
   if (!stats) return 0;
@@ -238,17 +241,17 @@ function attackBaseFor(stats, mode = 'avg') {
     delta += SPLIT_X;
   }
   // V_BIG10: attackBase 각 항 floor (게임 truncate 일관 적용)
-  // V_BIG19: 주스탯² 비선형 항 추가 (diminishing returns 메커니즘 — K0_sq 음수)
+  // 주스탯² 항(K0_sq): V_BIG23 에서 미사용(=0) → floor(0)=0 무해. 구조 보존용으로 남김.
   let result = Math.floor(alpha * 주스탯)
              + Math.floor(beta * 공격력)
              + Math.floor(gamma * 고댐)
              + Math.floor(delta * 추가댐)
              + Math.floor((params.K0_sq || 0) * 주스탯 * 주스탯 / 1e7);
   if (mode === 'direct') {
-    // 근마효율은 1단위 변경에도 BP 가 변해야 함 (자료6 vs img24l 페어 BP -6,742 = floor 없는 연속).
-    // 따라서 K_cross × 근마효율 결과를 정수% 로 floor 하지 않고 연속 적용.
-    // 바깥쪽 ab_d 정수 floor 만 게임 truncate 메커니즘 유지.
-    result = Math.floor(result * (1 + params.K_cross * 근마효율 / 100));
+    // V_BIG23: 근마효율 = "근력/마법력 효율" — 근력/마법력이 높을수록 직접타격이 오른다.
+    //   직접 전용 가산 보너스, 주스탯(근력/마법력)에 선형 비례. 소환엔 미적용.
+    //   균일곱(V_BIG21) 대비 동일 파라미터수로 물리 RMSE 0.361→0.290%, max 1.33→0.84% 개선.
+    result = result + Math.floor(params.K_cross * 주스탯 * 근마효율 / 100);
   }
   return result;
 }
