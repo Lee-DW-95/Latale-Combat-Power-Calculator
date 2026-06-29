@@ -14,7 +14,7 @@
  *
  * 카테고리별 풀강 레벨:
  *   노르니르의 눈물 / 플레로마 / 에메랄디아  → Lv4
- *   이카로스의 날개 / 리키모 펠케            → Lv5
+ *   이카로스의 날개 / 리키모 펠케 / 아마란스 노바 → Lv5
  */
 
 // ============================================================
@@ -49,6 +49,38 @@ export function rangeFor(opt, stage = 'base') {
 // 일반 장비 인챈트 — 카테고리 → 부위 → 옵션
 // ============================================================
 export const NORMAL_ENCHANT_CATEGORIES = {
+  '아마란스 노바': {
+    name: '아마란스 노바',
+    parts: {
+      '아마란스 노바 무기': {
+        name: '아마란스 노바 무기', level: 2, fullLevel: 5, slotCount: 5,
+        options: [
+          { key: 'crit',    label: '크리티컬 대미지 %',   unit: '%', lo: 1, hi: 201,   fullLo: 61,   fullHi: 261 },
+          { key: 'maxd',    label: '최대 대미지 %',       unit: '%', lo: 1, hi: 261,   fullLo: 79,   fullHi: 339 },
+          { key: 'mind',    label: '최소 대미지 %',       unit: '%', lo: 1, hi: 261,   fullLo: 79,   fullHi: 339 },
+          { key: 'back',    label: '백어택 대미지 %',     unit: '%', lo: 1, hi: 301,   fullLo: 91,   fullHi: 391 },
+          { key: 'wpn_pct', label: '무기공격력/속성력 %', unit: '%', lo: 1, hi: 21,    fullLo: 4,    fullHi: 24 },
+          { key: 'wpn',     label: '무기공격력/속성력 +', unit: '',  lo: 1, hi: 351,   fullLo: 106,  fullHi: 456 },
+          { key: 'all_pct', label: '올스탯 %',            unit: '%', lo: 1, hi: 21,    fullLo: 4,    fullHi: 24 },
+          { key: 'all',     label: '올스탯 +',            unit: '',  lo: 1, hi: 24001, fullLo: 7201, fullHi: 31201 },
+          { key: 'main',    label: '근력/마법력 +',       unit: '',  lo: 1, hi: 30001, fullLo: 9001, fullHi: 39001 },
+        ],
+      },
+      '아마란스 노바 정령석': {
+        name: '아마란스 노바 정령석', level: 2, fullLevel: 5, slotCount: 5,
+        options: [
+          { key: 'maxd',     label: '최대 대미지 %',       unit: '%', lo: 1, hi: 161,   fullLo: 49,   fullHi: 209 },
+          { key: 'mind',     label: '최소 대미지 %',       unit: '%', lo: 1, hi: 161,   fullLo: 49,   fullHi: 209 },
+          { key: 'back',     label: '백어택 대미지 %',     unit: '%', lo: 1, hi: 201,   fullLo: 61,   fullHi: 261 },
+          { key: 'wpn',      label: '무기공격력/속성력 +', unit: '',  lo: 1, hi: 201,   fullLo: 61,   fullHi: 261 },
+          { key: 'all',      label: '올스탯 +',            unit: '',  lo: 1, hi: 14001, fullLo: 4201, fullHi: 18201 },
+          { key: 'main_pct', label: '근력/마법력 %',       unit: '%', lo: 1, hi: 14,    fullLo: 4,    fullHi: 17 },
+          { key: 'main',     label: '근력/마법력 +',       unit: '',  lo: 1, hi: 18001, fullLo: 5401, fullHi: 23401 },
+        ],
+      },
+    },
+  },
+
   '플레로마': {
     name: '플레로마',
     parts: {
