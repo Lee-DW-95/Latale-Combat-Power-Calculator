@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "LaTale Battle Power",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.latale.battlepower",
   "build": {
     "frontendDist": "../dist",
@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "라테일 전투력 계산기",
+        "url": "https://latale-calculator.vercel.app",
         "width": 1280,
         "height": 860,
         "minWidth": 960,
