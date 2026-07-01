@@ -3,7 +3,7 @@
  *
  * 출처: lataleinfo.tistory.com/415 ("라테일 어드벤처 지도 1 ~ 56")
  * - 지도 이미지는 원본을 내려받아 public/assets/adventure/ 에 WebP 로 최적화 저장.
- * - 지도 1(map-01)은 원본 CDN 에서 삭제되어 확보 불가 → 2~56 만 제공.
+ * - 지도 1(z2U0Y)은 직접 CDN 이 404 라 daum 썸네일 프록시로 확보 → 1~56 전량 제공.
  */
 
 // ============================================================
@@ -34,10 +34,9 @@ export const BUFF_KIND_STYLE = {
 };
 
 // ============================================================
-// 지도 이미지 목록
-//   지도 1(map-01)은 원본 삭제로 누락, 2~56 만 존재.
+// 지도 이미지 목록 (1~56 전량)
 // ============================================================
-export const ADVENTURE_MAP_START = 2;
+export const ADVENTURE_MAP_START = 1;
 export const ADVENTURE_MAP_END = 56;
 
 export const ADVENTURE_MAPS = Array.from(

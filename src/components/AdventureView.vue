@@ -162,7 +162,7 @@ function jumpToStage() {
                 v-model="searchQuery"
                 type="number"
                 inputmode="numeric"
-                min="2"
+                min="1"
                 max="56"
                 placeholder="단계 (예: 35)"
                 @keyup.enter="jumpToStage"
