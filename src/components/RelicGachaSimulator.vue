@@ -689,5 +689,15 @@ function fmtEly(n) {
         </div>
       </section>
     </template>
+
+    <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 pt-2">
+      자료 출처 ·
+      <a
+        href="https://lataleinfo.tistory.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="underline decoration-dotted hover:text-indigo-500 dark:hover:text-indigo-400"
+      >라테일인포 (lataleinfo.tistory.com)</a>
+    </p>
   </div>
 </template>

@@ -459,5 +459,15 @@ function fmtVal(v) {
         ⚠ {{ fmt(sampleWinningCard.tries) }}회 굴렸지만 도달 실패 (maxTries 한도 초과).
       </div>
     </section>
+
+    <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 pt-2">
+      자료 출처 ·
+      <a
+        href="https://lataleinfo.tistory.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="underline decoration-dotted hover:text-indigo-500 dark:hover:text-indigo-400"
+      >라테일인포 (lataleinfo.tistory.com)</a>
+    </p>
   </div>
 </template>
