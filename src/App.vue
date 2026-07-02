@@ -86,16 +86,47 @@ async function onMigrationConfirm({ resolve, reject }) {
 // ============================================================
 const activeTab = ref('calc');
 
+// ── 탭 노출 게이팅 ──────────────────────────────────────────
+// 전투력 계산은 우리 고유 저작물이라 항상 공개. 나머지 탭(메모리얼/인챈트/성물/
+// 각성석/어드벤처)은 외부 자료(lataleinfo·게임 자산) 의존이라 저작권 이슈를 피하기 위해
+// 특정 계정(닉네임)에게만 노출한다.
+//   ⚠ 이건 프론트엔드 클라이언트 게이팅 — 번들 JS/localStorage 를 파면 우회 가능하다.
+//   민감 데이터 완전 은닉이 목적이 아니라 "일반 사용자에게 노출하지 않는" 소프트 게이트.
+//   토큰 기반 로그인(isLoggedIn)을 전제로 하되, 진짜 보호가 필요하면 서버측 검증 필요.
+const PRIVILEGED_NICKNAMES = ['선봉'];
+
 const TABS = [
   { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
-  { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수' },
-  { id: 'enchant', label: '🔨 인챈트 시뮬', desc: '장비 인챈트 / 특수장비 강화' },
+  { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수', restricted: true },
+  { id: 'enchant', label: '🔨 인챈트 시뮬', desc: '장비 인챈트 / 특수장비 강화', restricted: true },
   // { id: 'damage', label: '🎯 대미지 예측', desc: '스킬계수 + 캘리브레이션' }, // DB 작업 보류로 일시 숨김
   // { id: 'relic', label: '🌟 성물 환산', desc: '성물 레벨 + 전용석/공용석 합산' }, // 기존 환산기 — 임시 비활성
-  { id: 'relicGacha', label: '🌟 성물 시뮬', desc: '신성의 돌 / 전용석 뽑기 시뮬' },
-  { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기' },
-  { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도' },
+  { id: 'relicGacha', label: '🌟 성물 시뮬', desc: '신성의 돌 / 전용석 뽑기 시뮬', restricted: true },
+  { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기', restricted: true },
+  { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
 ];
+
+// 제한 탭 노출 여부 — 로그인 + 특권 닉네임.
+const canSeeRestricted = computed(
+  () => isLoggedIn.value && PRIVILEGED_NICKNAMES.includes((authNickname.value || '').trim()),
+);
+
+// 실제로 그릴 탭 목록.
+const visibleTabs = computed(() =>
+  TABS.filter((t) => !t.restricted || canSeeRestricted.value),
+);
+
+// 권한이 사라졌는데(로그아웃 등) 제한 탭을 보고 있으면 전투력 탭으로 되돌림.
+watch(
+  canSeeRestricted,
+  (ok) => {
+    if (!ok && activeTab.value !== 'calc') {
+      const cur = TABS.find((t) => t.id === activeTab.value);
+      if (cur?.restricted) activeTab.value = 'calc';
+    }
+  },
+  { immediate: true },
+);
 
 // ============================================================
 // 전투력 계산 탭 상태 (기존)
@@ -260,7 +291,7 @@ const savedTimeLabel = computed(() => {
       <!-- 탭 네비 -->
       <nav class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
         <button
-          v-for="tab in TABS"
+          v-for="tab in visibleTabs"
           :key="tab.id"
           type="button"
           @click="activeTab = tab.id"
