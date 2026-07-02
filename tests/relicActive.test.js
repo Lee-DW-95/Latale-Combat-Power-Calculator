@@ -22,7 +22,7 @@ import {
   RELIC_ACTIVE_MULT,
 } from '../src/utils/relicActive.js';
 import { relicBaseOptionValue } from '../src/data/relics.js';
-import { createEmptyStats } from '../src/utils/battlePower.js';
+import { createEmptyStats, calculateBattlePower } from '../src/utils/battlePower.js';
 
 let failures = 0;
 function check(name, actual, expected, tol = 1e-9) {
@@ -138,6 +138,36 @@ checkTrue(
   lo.cloud.enchantValue = 50;
   const r = compareRelicActivation(stats, lo, ['cloud']);
   check('크댐 flat: (2500+2500)×1.4 → Δ +3500', r.newStats.크댐 - stats.크댐, 3500, 0.01);
+}
+
+// ── 3.7) 최소뎀 > 최대뎀 cap (게임 메커니즘: 초과분 BP 미반영) ──
+// 사용자 확인: 최소 10000/최대 9000 은 최소 9000 일 때와 전투력 동일.
+// battlePower.js effectiveMinDmg 가 모든 BP 경로(성물 발동 포함)에서 cap 처리.
+{
+  const mk = (min) => {
+    const s = createEmptyStats('P');
+    s.주스탯 = 1000000;
+    s.공격력 = 10000;
+    s.크댐 = 3000;
+    s.최소뎀 = min;
+    s.최대뎀 = 9000;
+    return s;
+  };
+  check('BP(최소 10000/최대 9000) == BP(최소 9000/최대 9000)',
+    calculateBattlePower(mk(10000)), calculateBattlePower(mk(9000)));
+
+  // 글레 발동으로 최소가 최대를 추월하는 케이스 — cap 덕에 최소뎀 초과분은 BP 무영향
+  const stats = mk(9000); // 표시 최소 9000 / 최대 9000 (기본_* 미입력 → pool 0 폴백)
+  const lo = createEmptyRelicLoadout();
+  lo.gleipnir.level = 10;      // 기본 최소뎀 +50×50 = +2500 → 발동 후 최소 11500 > 최대
+  lo.gleipnir.enchantValue = 0; // 최대뎀 보너스 없음
+  const on = compareRelicActivation(stats, lo, ['gleipnir']);
+  checkTrue('글레 발동 후 최소뎀이 최대뎀 초과 상태', on.newStats.최소뎀 > on.newStats.최대뎀,
+    `min=${on.newStats.최소뎀} max=${on.newStats.최대뎀}`);
+  // cap 검증: 최소뎀을 최대뎀으로 눌러 계산한 BP 와 동일해야 함
+  const capped = { ...on.newStats, 최소뎀: on.newStats.최대뎀 };
+  check('초과 최소뎀 BP == cap BP (초과분 미반영)',
+    calculateBattlePower(on.newStats), calculateBattlePower(capped));
 }
 
 // ── 4) 발동 시 BP 증가 ──

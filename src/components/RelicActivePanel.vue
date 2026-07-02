@@ -172,6 +172,16 @@ const baseWarnings = computed(() =>
   missingBaseWarnings(props.stats, editing.value, activeKeysArr.value),
 );
 
+// 발동 후 최소뎀 > 최대뎀 — 게임 메커니즘상 초과분은 BP 미반영 (effectiveMinDmg cap).
+//   글레이프니르처럼 최소뎀 증폭이 큰 성물 발동 시 사용자가 오판하지 않게 안내.
+const minDmgCapped = computed(() => {
+  if (!anyActive.value) return null;
+  const ns = currentResult.value.newStats;
+  const mn = Number(ns?.최소뎀 || 0);
+  const mx = Number(ns?.최대뎀 || 0);
+  return mn > mx ? { min: mn, max: mx } : null;
+});
+
 // 접힘 상태 (성물 카드)
 const openCards = ref(new Set());
 function toggleCard(key) {
@@ -297,6 +307,15 @@ function fmtSigned(n) {
       >
         {{ getStatLabel(c.stat) }} {{ fmtSigned(c.diff) }}
       </span>
+    </div>
+
+    <!-- 최소뎀 cap 안내 (발동 후 최소 > 최대) -->
+    <div
+      v-if="minDmgCapped"
+      class="mt-2 rounded-md bg-sky-50 dark:bg-sky-950/20 ring-1 ring-sky-300 dark:ring-sky-800 px-3 py-2 text-xs text-sky-800 dark:text-sky-200 tabular-nums"
+    >
+      ℹ️ 발동 후 최소 대미지({{ fmt(Math.round(minDmgCapped.min)) }})가 최대 대미지({{ fmt(Math.round(minDmgCapped.max)) }})를
+      초과 — 게임 메커니즘상 초과분은 전투력에 반영되지 않아 <strong>최대 대미지 기준으로 cap 계산</strong>됩니다.
     </div>
 
     <!-- % 옵션 정확도 경고 -->
