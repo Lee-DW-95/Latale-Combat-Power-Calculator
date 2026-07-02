@@ -18,6 +18,11 @@
  *       % 옵션(마아트 근/마% ×50 등)은 누적% 풀에 가산된다.
  *     예: 기본근력 130만·누적 537% 캐릭이 공용석 근력×50=+10만, 마아트 250% 발동 시
  *         새 표시근력 = (130만+10만) × (1 + 537% + 250%)
+ *   - ⚠ 최소뎀/최대뎀/크댐 계열 성물 옵션은 게임 표기가 %여도 "% 풀" 이 아니라
+ *     앞의 flat 기본값에 가산된다 (사용자 확정 2026-07-02):
+ *       T창 "크리티컬 대미지 +2,500 (40%)" 에서 성물 ×50 은 앞의 2,500 에 더해지고
+ *       그 합에 (1+40%) 가 곱해진다. → equipDelta flat 키(최소뎀/최대뎀/크댐) 사용.
+ *     % 풀 가산은 마아트(근/마%)·타오르는바람(무공%) 두 기본옵션만.
  *   - 이 구조가 기존 equipDelta/applyEquipDelta 와 정확히 같으므로 재사용한다.
  *
  * BP 무관 옵션(HP/피해감소/이동속도/쿨감/방어/명중/체력/행운/크리확률)은 합산에서 제외하되
@@ -41,13 +46,15 @@ export const RELIC_ACTIVE_MULT = 50;
 //   enchant: 인챈트옵션(성물별 고정 1종) 값이 흘러갈 곳
 //   매핑 종류:
 //     { pct: '주스탯_퍼' }  → equip % 풀 가산 (누적%에 ×50 더함)
-//     { flat: '보몬지' }    → 스탯 직접 가산 (지배력은 풀 없이 %p 그대로)
+//     { flat: '최소뎀' }    → equip flat 가산 (기본값에 ×50 더한 뒤 누적% 곱셈)
+//     { flat: '보몬지' }    → 지배력 계열은 풀 없이 %p 그대로 (equipDelta 가 직접 통과)
 //     null                  → BP 무관 (미반영 표시)
+//   previewUnit: UI "→ 발동 +N" 표기용 단위 (풀 가산 %와 flat 가산을 구분해 표시)
 // ============================================================
 export const ACTIVE_RELICS = Object.freeze([
   {
     key: 'maat', name: '마아트의 눈', icon: '👁️',
-    base: { pct: '주스탯_퍼' },                       // 근력/마법력 %
+    base: { pct: '주스탯_퍼', previewUnit: '%' },      // 근력/마법력 % — 누적% 풀 가산
     enchant: { label: '스킬 쿨타임 감소', unit: '%', step: 0.1, map: null },
   },
   {
@@ -57,23 +64,25 @@ export const ACTIVE_RELICS = Object.freeze([
   },
   {
     key: 'gleipnir', name: '글레이프니르', icon: '💥',
-    base: { pct: '최소뎀_퍼' },                        // 최소 대미지 %
-    enchant: { label: '물리/마법 최대대미지', unit: '%', step: 1, map: { pct: '최대뎀_퍼' } },
+    // 최소 대미지 — 게임 표기는 % 지만 실제론 flat 기본값 가산 (Lv10: +50×50=+2500 → ×(1+누적%))
+    base: { flat: '최소뎀', previewUnit: '' },
+    enchant: { label: '물리/마법 최대대미지', unit: '%', step: 1, map: { flat: '최대뎀' }, previewUnit: '' },
   },
   {
     key: 'wind', name: '타오르는 바람의 숨결', icon: '⚔️',
-    base: { pct: '공격력_퍼' },                        // 무기 공격력/속성력 %
+    base: { pct: '공격력_퍼', previewUnit: '%' },      // 무기 공격력/속성력 % — 누적% 풀 가산
     enchant: { label: '이동속도', unit: '%', step: 1, map: null },
   },
   {
     key: 'fox', name: '여우구슬', icon: '🦊',
-    base: { flat: '일몬지' },                          // 일반 몬스터 지배력 % (직접 %p)
-    enchant: { label: '보스 몬스터 지배력', unit: '%', step: 0.1, map: { flat: '보몬지' } },
+    base: { flat: '일몬지', previewUnit: '%' },        // 일반 몬스터 지배력 % (직접 %p)
+    enchant: { label: '보스 몬스터 지배력', unit: '%', step: 0.1, map: { flat: '보몬지' }, previewUnit: '%' },
   },
   {
     key: 'cloud', name: '구름 방망이', icon: '⚡',
     base: null,                                        // 크리티컬 확률 % — BP 모델에 없음
-    enchant: { label: '물리/마법 크리티컬 대미지', unit: '%', step: 1, map: { pct: '크댐_퍼' } },
+    // 크리티컬 대미지 — flat 기본값 가산 (T창 "+2,500 (40%)" 의 앞 2,500 에 더해짐)
+    enchant: { label: '물리/마법 크리티컬 대미지', unit: '%', step: 1, map: { flat: '크댐' }, previewUnit: '' },
   },
 ]);
 
@@ -243,21 +252,27 @@ export function compareRelicActivation(stats, loadout, activeKeys) {
 }
 
 // ============================================================
-// % 옵션 정확도 경고 — 기본_* 미입력 시 % 옵션이 표시값 기준으로 과대 적용됨
-//   (applyEquipDelta 폴백: 누적% 0 가정 → 발동 % ×50 이 커서 오차가 극심해질 수 있음)
+// 정확도 경고 — 기본_* 미입력 시:
+//   · % 풀 옵션 (마아트/바람): 표시값 기준으로 과대 적용 (누적% 0 폴백)
+//   · flat 옵션 (최소뎀/최대뎀/크댐/공용석 flat): 누적% 미적용으로 과소 적용
 //   반환: 경고가 필요한 스탯 라벨 목록
 // ============================================================
-const PCT_BASE_REQUIREMENTS = [
-  { pctKey: '주스탯_퍼', baseKey: '기본_주스탯', label: '기본 근력/마법력' },
-  { pctKey: '공격력_퍼', baseKey: '기본_공격력', label: '기본 무기공격력/속성력' },
-  { pctKey: '크댐_퍼',   baseKey: '기본_크댐',   label: '기본 크리티컬 대미지' },
-  { pctKey: '최소뎀_퍼', baseKey: '기본_최소뎀', label: '기본 최소 대미지' },
-  { pctKey: '최대뎀_퍼', baseKey: '기본_최대뎀', label: '기본 최대 대미지' },
+const BASE_REQUIREMENTS = [
+  { pctKey: '주스탯_퍼', flatKeys: ['주스탯', '올스탯'], baseKey: '기본_주스탯', label: '기본 근력/마법력' },
+  { pctKey: '공격력_퍼', flatKeys: ['공격력'],           baseKey: '기본_공격력', label: '기본 무기공격력/속성력' },
+  { pctKey: '크댐_퍼',   flatKeys: ['크댐'],             baseKey: '기본_크댐',   label: '기본 크리티컬 대미지' },
+  { pctKey: '최소뎀_퍼', flatKeys: ['최소뎀'],           baseKey: '기본_최소뎀', label: '기본 최소 대미지' },
+  { pctKey: '최대뎀_퍼', flatKeys: ['최대뎀'],           baseKey: '기본_최대뎀', label: '기본 최대 대미지' },
 ];
 
 export function missingBaseWarnings(stats, loadout, activeKeys) {
   const { equip } = relicBundle(loadout, activeKeys);
-  return PCT_BASE_REQUIREMENTS
-    .filter((r) => (equip[r.pctKey] || 0) > 0 && Number(stats?.[r.baseKey] || 0) <= 0)
+  return BASE_REQUIREMENTS
+    .filter((r) => {
+      const used =
+        (equip[r.pctKey] || 0) > 0 ||
+        r.flatKeys.some((k) => (equip[k] || 0) > 0);
+      return used && Number(stats?.[r.baseKey] || 0) <= 0;
+    })
     .map((r) => r.label);
 }

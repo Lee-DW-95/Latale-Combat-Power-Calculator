@@ -498,7 +498,8 @@ function fmtSigned(n) {
               <div class="text-xs tabular-nums" :class="def.base ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500'">
                 {{ baseSummary(def, editing) }}%
                 <template v-if="def.base">
-                  → 발동 <strong>+{{ (relicBaseOptionValue(def.key, editing[def.key].level) * RELIC_ACTIVE_MULT).toFixed(1).replace(/\.0$/, '') }}%</strong>
+                  → 발동 <strong>+{{ (relicBaseOptionValue(def.key, editing[def.key].level) * RELIC_ACTIVE_MULT).toFixed(1).replace(/\.0$/, '') }}{{ def.base.previewUnit }}</strong>
+                  <span v-if="def.base.previewUnit === ''" class="ml-1 text-[10px] text-slate-400">(기본값 가산 → 누적% 적용)</span>
                 </template>
                 <template v-else>
                   <span class="ml-1 text-[10px]">(BP 미반영)</span>
@@ -523,7 +524,10 @@ function fmtSigned(n) {
                 class="text-[11px] tabular-nums"
                 :class="def.enchant.map ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'"
               >
-                <template v-if="def.enchant.map">→ 발동 +{{ (editing[def.key].enchantValue * RELIC_ACTIVE_MULT).toLocaleString() }}{{ def.enchant.unit }}</template>
+                <template v-if="def.enchant.map">
+                  → 발동 +{{ (editing[def.key].enchantValue * RELIC_ACTIVE_MULT).toLocaleString() }}{{ def.enchant.previewUnit ?? def.enchant.unit }}
+                  <span v-if="def.enchant.previewUnit === ''" class="text-[10px] text-slate-400">(기본값 가산)</span>
+                </template>
                 <template v-else>(BP 미반영)</template>
               </span>
             </div>

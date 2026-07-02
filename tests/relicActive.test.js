@@ -7,8 +7,9 @@
  *   1) 기본옵션 레벨 곡선 (A패턴 1,1,1,2,2,3,3,4,4,5 / 글레 10단위 / 여우 0.2단위)
  *   2) ×50 번들 매핑 — 사용자 확정 예시 재현:
  *      공용석 (근력1000 + 올스탯1000) → 주스탯 계열 flat 합 ×50 = 100,000
- *      마아트 Lv10 기본 5% → 주스탯_퍼 +250
- *      글레이프니르 Lv10 기본 최소뎀 50% → 최소뎀_퍼 +2500 / 인챈트 최대뎀 50 → 최대뎀_퍼 +2500
+ *      마아트 Lv10 기본 5% → 주스탯_퍼 +250 (% 풀 가산)
+ *      글레이프니르 Lv10 기본 최소뎀 50 → 최소뎀 flat +2500 / 인챈트 최대뎀 50 → 최대뎀 flat +2500
+ *      (최소/최대뎀·크댐은 % 풀이 아니라 flat 기본값 가산 — T창 "+2,500 (40%)" 의 앞 숫자에 더해짐)
  *   3) T창 메커니즘 결합 — (기본+flat×50) × (1+누적%+%×50) 정확 적용
  *   4) 발동 시 BP 증가 (compareRelicActivation)
  *   5) BP 무관 옵션은 ignored 로 분리
@@ -68,9 +69,11 @@ check('공용석 근력 flat ×50 = 50,000', equip.주스탯, 1000 * RELIC_ACTIV
 check('공용석 올스탯 flat ×50 = 100,000 (2줄 합)', equip.올스탯, 2000 * RELIC_ACTIVE_MULT);
 check('주스탯 계열 flat 총합 = 150,000', equip.주스탯 + equip.올스탯, 150000);
 check('공용석 무기공 ×50 = 750', equip.공격력, 15 * RELIC_ACTIVE_MULT);
-check('마아트 Lv10 기본 → 주스탯_퍼 +250', equip.주스탯_퍼, 5 * RELIC_ACTIVE_MULT);
-check('글레 Lv10 기본 최소뎀% → 최소뎀_퍼 +2500', equip.최소뎀_퍼, 50 * RELIC_ACTIVE_MULT);
-check('글레 인챈트 최대뎀 50 → 최대뎀_퍼 +2500', equip.최대뎀_퍼, 50 * RELIC_ACTIVE_MULT);
+check('마아트 Lv10 기본 → 주스탯_퍼 +250 (% 풀)', equip.주스탯_퍼, 5 * RELIC_ACTIVE_MULT);
+check('글레 Lv10 기본 최소뎀 → flat +2500 (기본값 가산)', equip.최소뎀, 50 * RELIC_ACTIVE_MULT);
+check('글레 인챈트 최대뎀 50 → flat +2500 (기본값 가산)', equip.최대뎀, 50 * RELIC_ACTIVE_MULT);
+check('글레 최소뎀_퍼 = 0 (% 풀 아님)', equip.최소뎀_퍼, 0);
+check('글레 최대뎀_퍼 = 0 (% 풀 아님)', equip.최대뎀_퍼, 0);
 // 기본 레벨 1인 나머지 성물: 타오르는바람 Lv1 무공% 1 → 공격력_퍼 50, 여우 Lv1 일몬지 0.2 → +10
 check('타오르는바람 Lv1 기본 → 공격력_퍼 +50', equip.공격력_퍼, 1 * RELIC_ACTIVE_MULT);
 check('여우구슬 Lv1 기본 → 일몬지 +10', equip.일몬지, 0.2 * RELIC_ACTIVE_MULT);
@@ -91,14 +94,14 @@ checkTrue(
   check('[글레만 발동] 마아트 주스탯_퍼 제외 = 0', g.equip.주스탯_퍼, 0);
   check('[글레만 발동] 바람 공격력_퍼 제외 = 0', g.equip.공격력_퍼, 0);
   check('[글레만 발동] 여우 일몬지 제외 = 0', g.equip.일몬지, 0);
-  check('[글레만 발동] 글레 최소뎀_퍼 포함 = 2500', g.equip.최소뎀_퍼, 2500);
-  check('[글레만 발동] 글레 인챈트 최대뎀_퍼 포함 = 2500', g.equip.최대뎀_퍼, 2500);
+  check('[글레만 발동] 글레 최소뎀 flat 포함 = 2500', g.equip.최소뎀, 2500);
+  check('[글레만 발동] 글레 인챈트 최대뎀 flat 포함 = 2500', g.equip.최대뎀, 2500);
   check('[글레만 발동] 글레 칸 공용석 근력 포함 = 50,000', g.equip.주스탯, 50000);
   check('[글레만 발동] 글레 칸 공용석 무기공 포함 = 750', g.equip.공격력, 750);
 
   const m = relicBundle(loadout, ['maat']);
   check('[마아트만 발동] 주스탯_퍼 포함 = 250', m.equip.주스탯_퍼, 250);
-  check('[마아트만 발동] 글레 최소뎀_퍼 제외 = 0', m.equip.최소뎀_퍼, 0);
+  check('[마아트만 발동] 글레 최소뎀 flat 제외 = 0', m.equip.최소뎀, 0);
   check('[마아트만 발동] 글레 칸 공용석 제외 = 0', m.equip.주스탯, 0);
 
   const none = relicBundle(loadout, []);
@@ -122,6 +125,19 @@ checkTrue(
   const r = compareRelicActivation(stats, lo, ['maat']); // 마아트 단일 발동
   const 주스탯Delta = r.newStats.주스탯 - stats.주스탯;
   check('T창 결합: (130만+15만)×(1+537%+250%) 주스탯 Δ', 주스탯Delta, 4580500, 0.01); // 부동소수점 허용
+}
+
+// ── 3.5) 크댐 flat 가산 + 누적% 결합 (사용자 예시: "2500 + 40%" 구조) ──
+// T창 크댐 표시 3,500 = 기본 2,500 × (1+40%). 구름 인챈트 50 발동 → 앞의 2,500 에 +2,500:
+//   새 표시 = (2,500 + 2,500) × 1.4 = 7,000  → Δ = +3,500
+{
+  const stats = createEmptyStats('P');
+  stats.크댐 = 3500;
+  stats.기본_크댐 = 2500;
+  const lo = createEmptyRelicLoadout();
+  lo.cloud.enchantValue = 50;
+  const r = compareRelicActivation(stats, lo, ['cloud']);
+  check('크댐 flat: (2500+2500)×1.4 → Δ +3500', r.newStats.크댐 - stats.크댐, 3500, 0.01);
 }
 
 // ── 4) 발동 시 BP 증가 ──
