@@ -10,6 +10,7 @@ import {
 
 import StatInputForm from './components/StatInputForm.vue';
 import EfficiencyPanel from './components/EfficiencyPanel.vue';
+import RelicActivePanel from './components/RelicActivePanel.vue';
 import EquipmentCompare from './components/EquipmentCompare.vue';
 import ResultDisplay from './components/ResultDisplay.vue';
 import CharacterList from './components/CharacterList.vue';
@@ -291,6 +292,8 @@ const savedTimeLabel = computed(() => {
             <StatInputForm v-model="stats" :battle-power="battlePower" />
 
             <EfficiencyPanel :stats="stats" v-model:awak-stones="awakStones" />
+
+            <RelicActivePanel :stats="stats" />
 
             <EquipmentCompare
               :stats="stats"

@@ -9,7 +9,7 @@
     "build:desktop": "vite build --mode desktop",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "node tests/formula.test.js && node tests/equivalence.test.js"
+    "test": "node tests/formula.test.js && node tests/equivalence.test.js && node tests/relicActive.test.js"
   },
   "dependencies": {
     "vue": "^3.4.21"

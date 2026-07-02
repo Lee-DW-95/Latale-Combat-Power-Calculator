@@ -60,6 +60,32 @@ export const RELICS = Object.freeze({
 export const RELIC_KEYS = Object.freeze(Object.keys(RELICS));
 
 // ============================================================
+// 전용석 기본옵션 (성물 고유 · 레벨 1~10 고정 %값)
+//   출처: 인게임 확인 (2026-07-02)
+//   레벨 곡선 = A패턴 [1,1,1,2,2,3,3,4,4,5] (상승 지점 Lv4·6·8·10)
+//     · 글레이프니르만 10단위 [10,10,10,20,20,30,30,40,40,50]
+//     · 여우구슬만 0.2단위 [0.2,0.2,0.2,0.4,0.4,0.6,0.6,0.8,0.8,1.0]
+//   ※ 성물은 액티브 스킬 — 발동 시 이 값이 ×50 증폭되어 적용됨.
+//   byLevel[i] = Lv(i+1) 값.
+// ============================================================
+export const RELIC_BASE_OPTIONS = Object.freeze({
+  maat:     { option: '근력/마법력%',           isPercent: true, byLevel: [1, 1, 1, 2, 2, 3, 3, 4, 4, 5] },
+  freering: { option: '최대HP%',                 isPercent: true, byLevel: [1, 1, 1, 2, 2, 3, 3, 4, 4, 5] },
+  wind:     { option: '무기공격력/속성력%',      isPercent: true, byLevel: [1, 1, 1, 2, 2, 3, 3, 4, 4, 5] },
+  cloud:    { option: '물리/마법 크리티컬 확률%', isPercent: true, byLevel: [1, 1, 1, 2, 2, 3, 3, 4, 4, 5] },
+  gleipnir: { option: '최소대미지%',             isPercent: true, byLevel: [10, 10, 10, 20, 20, 30, 30, 40, 40, 50] },
+  fox:      { option: '일반 몬스터 지배력%',      isPercent: true, byLevel: [0.2, 0.2, 0.2, 0.4, 0.4, 0.6, 0.6, 0.8, 0.8, 1.0] },
+});
+
+// 성물 key + 레벨(1~10) → 기본옵션 값 (증폭 전). 범위를 벗어나면 clamp.
+export function relicBaseOptionValue(key, level) {
+  const def = RELIC_BASE_OPTIONS[key];
+  if (!def) return 0;
+  const idx = Math.max(1, Math.min(10, Number(level) || 1)) - 1;
+  return def.byLevel[idx];
+}
+
+// ============================================================
 // 공용석 옵션 (모든 성물 공통)
 // ============================================================
 export const COMMON_STONE_OPTIONS = Object.freeze([
