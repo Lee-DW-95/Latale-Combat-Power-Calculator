@@ -190,9 +190,23 @@ export function relicBundle(loadout, activeKeys) {
 }
 
 // ============================================================
+// 백어택 가동률 override — 성물 발동 시뮬 전용
+//   백어택 % 는 항상 적용이 아니라 가동률(P(백어택 성립)) 기댓값으로 BP 환산된다.
+//   스탯 폼의 백어택활성/가동률이 꺼져 있어도 성물 백어택을 반영할 수 있게,
+//   opts.backAtkUptime (0~100) 이 주어지면 발동 후 스탯에서 활성+가동률을 덮어쓴다.
+//   null/undefined 면 기존처럼 스탯 폼 설정을 그대로 따른다 (하위호환).
+// ============================================================
+function withBackAtkUptime(newStats, backAtkUptime) {
+  if (backAtkUptime == null || !Number.isFinite(Number(backAtkUptime))) return newStats;
+  newStats.백어택활성 = true;
+  newStats.백어택가동률 = Math.max(0, Math.min(100, Number(backAtkUptime)));
+  return newStats;
+}
+
+// ============================================================
 // 발동 후 스탯 — equipDelta 재사용 (기본값 가산 + % 풀 가산의 T창 메커니즘)
 // ============================================================
-export function applyRelicActivation(stats, loadout, activeKeys) {
+export function applyRelicActivation(stats, loadout, activeKeys, opts = {}) {
   const { equip, backAtk } = relicBundle(loadout, activeKeys);
   const delta = equipDelta(stats, equip);
   const newStats = { ...stats };
@@ -201,6 +215,7 @@ export function applyRelicActivation(stats, loadout, activeKeys) {
   }
   if (backAtk > 0) {
     newStats.백어택 = (Number(stats.백어택) || 0) + backAtk;
+    withBackAtkUptime(newStats, opts.backAtkUptime);
   }
   return newStats;
 }
@@ -209,7 +224,7 @@ export function applyRelicActivation(stats, loadout, activeKeys) {
 // 발동 전/후 BP 비교
 //   contributions: 스탯별 (변화량, 단독 BP 기여) — compareEquipment 과 동일 방식
 // ============================================================
-export function compareRelicActivation(stats, loadout, activeKeys) {
+export function compareRelicActivation(stats, loadout, activeKeys, opts = {}) {
   const { equip, backAtk, ignored } = relicBundle(loadout, activeKeys);
   const delta = equipDelta(stats, equip);
 
@@ -217,7 +232,10 @@ export function compareRelicActivation(stats, loadout, activeKeys) {
   for (const k of STAT_KEYS) {
     newStats[k] = (Number(stats[k]) || 0) + (delta[k] || 0);
   }
-  if (backAtk > 0) newStats.백어택 = (Number(stats.백어택) || 0) + backAtk;
+  if (backAtk > 0) {
+    newStats.백어택 = (Number(stats.백어택) || 0) + backAtk;
+    withBackAtkUptime(newStats, opts.backAtkUptime);
+  }
 
   const offBP = calculateBattlePower(stats);
   const onBP = calculateBattlePower(newStats);
@@ -231,7 +249,10 @@ export function compareRelicActivation(stats, loadout, activeKeys) {
   }).filter((c) => c.diff !== 0);
 
   if (backAtk > 0) {
-    const partial = { ...stats, 백어택: (Number(stats.백어택) || 0) + backAtk };
+    const partial = withBackAtkUptime(
+      { ...stats, 백어택: (Number(stats.백어택) || 0) + backAtk },
+      opts.backAtkUptime,
+    );
     contributions.push({
       stat: '백어택',
       diff: backAtk,

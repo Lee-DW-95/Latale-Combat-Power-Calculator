@@ -62,8 +62,21 @@ function hydrateLoadout(saved) {
 
 const VALID_KEYS = new Set(ACTIVE_RELICS.map((r) => r.key));
 
+// 백어택 옵션 라벨 (STONE_OPTION_DEFS 의 special: '백어택' 항목)
+const BACK_ATK_LABEL = STONE_OPTION_DEFS.find((d) => d.special === '백어택')?.label ?? '';
+
 const saved = loadState();
 const current = ref(hydrateLoadout(saved?.current));
+// 백어택 가동률 (%) — 성물 백어택 옵션 BP 환산 가중치.
+//   스탯 폼의 백어택 활성/가동률과 무관하게 발동 계산에서 이 값이 우선 적용된다.
+//   초기값: 저장값 → 스탯 폼 가동률(활성 시) → 0
+const backAtkUptime = ref(
+  Number.isFinite(Number(saved?.backAtkUptime))
+    ? Math.max(0, Math.min(100, Number(saved.backAtkUptime)))
+    : props.stats?.백어택활성
+    ? Math.max(0, Math.min(100, Number(props.stats?.백어택가동률) || 0))
+    : 0,
+);
 // 발동 성물 (단일). 구버전 배열 저장(activeKeys)은 첫 항목만 승계.
 const activeKey = ref(
   VALID_KEYS.has(saved?.activeKey)
@@ -78,7 +91,7 @@ const candidate = ref(saved?.candidate ? hydrateLoadout(saved.candidate) : null)
 const editTarget = ref(previewOn.value && saved?.editTarget === 'candidate' ? 'candidate' : 'current');
 
 watch(
-  [current, activeKey, previewOn, candidate, editTarget],
+  [current, activeKey, previewOn, candidate, editTarget, backAtkUptime],
   () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -87,6 +100,7 @@ watch(
         previewOn: previewOn.value,
         candidate: candidate.value,
         editTarget: editTarget.value,
+        backAtkUptime: backAtkUptime.value,
       }));
     } catch { /* ignore */ }
   },
@@ -147,13 +161,25 @@ function resetAll() {
 // ============================================================
 // BP 비교 — 발동 중인 성물(단일)만 반영
 // ============================================================
+const activeOpts = computed(() => ({ backAtkUptime: backAtkUptime.value }));
+
 const currentResult = computed(() =>
-  compareRelicActivation(props.stats, current.value, activeKeysArr.value),
+  compareRelicActivation(props.stats, current.value, activeKeysArr.value, activeOpts.value),
 );
 const candidateResult = computed(() =>
   previewOn.value && candidate.value
-    ? compareRelicActivation(props.stats, candidate.value, activeKeysArr.value)
+    ? compareRelicActivation(props.stats, candidate.value, activeKeysArr.value, activeOpts.value)
     : null,
+);
+
+// 발동 성물에 백어택 옵션이 있는데 가동률 0 → BP 미반영 경고용
+const activeBackAtkNoUptime = computed(
+  () =>
+    anyActive.value &&
+    !(Number(backAtkUptime.value) > 0) &&
+    !!current.value[activeKey.value]?.stones?.some(
+      (st) => st.lines.some((ln) => ln.option === BACK_ATK_LABEL && Number(ln.value) > 0),
+    ),
 );
 
 // 교체 판정 — 발동(ON) 기준 BP 차이
@@ -316,6 +342,15 @@ function fmtSigned(n) {
     >
       ℹ️ 발동 후 최소 대미지({{ fmt(Math.round(minDmgCapped.min)) }})가 최대 대미지({{ fmt(Math.round(minDmgCapped.max)) }})를
       초과 — 게임 메커니즘상 초과분은 전투력에 반영되지 않아 <strong>최대 대미지 기준으로 cap 계산</strong>됩니다.
+    </div>
+
+    <!-- 백어택 가동률 미입력 경고 (발동 성물에 백어택 옵션이 있는데 가동률 0) -->
+    <div
+      v-if="activeBackAtkNoUptime"
+      class="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/20 ring-1 ring-amber-300 dark:ring-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+    >
+      ⚠️ 발동 성물에 <strong>백어택 대미지</strong> 옵션이 있지만 <strong>가동률이 0</strong>이라 BP에 반영되지 않았어요.
+      공용석의 백어택 입력 아래 가동률(%)을 입력하면 기댓값으로 환산됩니다.
     </div>
 
     <!-- % 옵션 정확도 경고 -->
@@ -561,29 +596,50 @@ function fmtSigned(n) {
             <div class="text-[11px] font-semibold text-sky-700 dark:text-sky-300 mb-2">
               공용석 {{ si + 1 }} <span class="font-normal text-slate-400">(최대 4줄)</span>
             </div>
-            <div
-              v-for="(line, li) in stone.lines"
-              :key="li"
-              class="grid grid-cols-[1fr_90px] gap-1.5 mb-1.5 last:mb-0"
-            >
-              <select
-                v-model="line.option"
-                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px]"
+            <template v-for="(line, li) in stone.lines" :key="li">
+              <div class="grid grid-cols-[1fr_90px] gap-1.5 mb-1.5 last:mb-0">
+                <select
+                  v-model="line.option"
+                  class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px]"
+                >
+                  <option value="">{{ li + 1 }}줄 없음</option>
+                  <option v-for="opt in STONE_OPTION_DEFS" :key="opt.label" :value="opt.label">
+                    {{ opt.label }}{{ opt.equip || opt.special ? '' : ' (BP 미반영)' }}
+                  </option>
+                </select>
+                <input
+                  v-model.number="line.value"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="수치"
+                  class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px] tabular-nums"
+                />
+              </div>
+              <!-- 백어택 옵션 선택 시 → 가동률 입력 (전 성물 공용 값, 발동 BP 환산 가중치) -->
+              <div
+                v-if="line.option === BACK_ATK_LABEL"
+                class="mb-1.5 rounded-md ring-1 ring-amber-200 dark:ring-amber-800 bg-amber-50/50 dark:bg-amber-950/10 px-2 py-1.5"
               >
-                <option value="">{{ li + 1 }}줄 없음</option>
-                <option v-for="opt in STONE_OPTION_DEFS" :key="opt.label" :value="opt.label">
-                  {{ opt.label }}{{ opt.equip || opt.special ? '' : ' (BP 미반영)' }}
-                </option>
-              </select>
-              <input
-                v-model.number="line.value"
-                type="number"
-                min="0"
-                step="any"
-                placeholder="수치"
-                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px] tabular-nums"
-              />
-            </div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="text-[11px] text-amber-700 dark:text-amber-300 font-medium">↳ 백어택 가동률</span>
+                  <input
+                    v-model.number="backAtkUptime"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="any"
+                    placeholder="0~100"
+                    class="w-16 rounded-md border-0 ring-1 ring-amber-300 dark:ring-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-0.5 text-[11px] tabular-nums"
+                  />
+                  <span class="text-[11px] text-amber-700 dark:text-amber-300">%</span>
+                </div>
+                <p class="mt-0.5 text-[10px] leading-snug text-amber-600/80 dark:text-amber-400/70">
+                  백어택 성립 비율 (직타비중 × 백어택 유지율). 발동 BP 환산에만 쓰이며
+                  스탯 입력의 백어택 가동률보다 우선 적용 · <strong>0이면 백어택 옵션은 BP 미반영</strong>
+                </p>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -598,7 +654,8 @@ function fmtSigned(n) {
     <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
       ※ 성물 발동은 액티브 스킬 지속시간(예: 30초) 동안만 적용되며, 다른 성물 발동 시 기존 버프는 사라집니다.
       "발동 후 BP"는 선택한 성물 1종이 발동 중인 순간의 스탯 기준 추정치입니다.
-      백어택 옵션은 스탯 입력의 백어택 활성/가동률 설정을 따릅니다.
+      백어택 옵션은 공용석 입력 아래의 <strong>가동률(%)</strong> 값으로 기댓값 환산되며,
+      발동 계산에서는 스탯 입력의 백어택 활성/가동률 설정보다 우선 적용됩니다.
     </p>
   </section>
 </template>

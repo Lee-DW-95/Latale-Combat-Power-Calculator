@@ -208,6 +208,46 @@ checkTrue(
   checkTrue('빈 로드아웃(전 성물 Lv1)도 onBP ≥ offBP', r.onBP >= r.offBP, `off=${r.offBP} on=${r.onBP}`);
 }
 
+// ── 6) 백어택 가동률 override (backAtkUptime 옵션) ──
+//   스탯 폼의 백어택활성/가동률이 꺼져 있어도, opts.backAtkUptime 이 주어지면
+//   발동 후 스탯에서 활성+가동률을 덮어써 기댓값 환산이 BP 에 반영돼야 한다.
+{
+  const stats = createEmptyStats('P');
+  stats.주스탯 = 1000000;
+  stats.공격력 = 10000;
+  stats.크댐 = 5000;
+  stats.최소뎀 = 100000;
+  stats.최대뎀 = 150000;
+  stats.관통 = 90;
+  // 스탯 폼 백어택 미설정 (활성 false, 가동률 0) — 기본 상태
+
+  const lo = createEmptyRelicLoadout();
+  lo.maat.stones[0].lines[0] = { option: '물리/마법 백어택 대미지', value: 20 }; // ×50 = +1000%
+
+  // 가동률 미지정(기존 동작): 스탯 폼 설정을 따름 → 활성 false 라 백어택 기여 0
+  const noUp = compareRelicActivation(stats, lo, ['maat']);
+  const backNoUp = noUp.contributions.find((c) => c.stat === '백어택');
+  checkTrue('가동률 미지정 시 백어택 기여 0 (스탯 폼 비활성)', backNoUp && backNoUp.impact === 0,
+    `impact=${backNoUp?.impact}`);
+
+  // 가동률 70 지정: 백어택 기여 > 0, onBP 도 미지정 대비 증가
+  const up = compareRelicActivation(stats, lo, ['maat'], { backAtkUptime: 70 });
+  const backUp = up.contributions.find((c) => c.stat === '백어택');
+  checkTrue('가동률 70 지정 시 백어택 기여 > 0', backUp && backUp.impact > 0, `impact=${backUp?.impact}`);
+  checkTrue('가동률 70 onBP > 가동률 미지정 onBP', up.onBP > noUp.onBP,
+    `up=${up.onBP} noUp=${noUp.onBP}`);
+  checkTrue('발동 후 스탯에 가동률 반영', up.newStats.백어택활성 === true && up.newStats.백어택가동률 === 70);
+
+  // 가동률 0 명시: 기여 0 (기댓값 0)
+  const zero = compareRelicActivation(stats, lo, ['maat'], { backAtkUptime: 0 });
+  const backZero = zero.contributions.find((c) => c.stat === '백어택');
+  checkTrue('가동률 0 명시 시 백어택 기여 0', backZero && backZero.impact === 0, `impact=${backZero?.impact}`);
+
+  // 범위 클램프: 150 → 100
+  const over = compareRelicActivation(stats, lo, ['maat'], { backAtkUptime: 150 });
+  check('가동률 150 → 100 클램프', over.newStats.백어택가동률, 100);
+}
+
 console.log('───────────────────────────────────────────────────');
 if (failures > 0) {
   console.error(`✗ ${failures}개 항목 실패`);

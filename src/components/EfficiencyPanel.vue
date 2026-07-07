@@ -647,8 +647,8 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </p>
       </div>
 
-      <!-- (C) 스탯간 옵션 % 동등 환산 -->
-      <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
+      <!-- (C) 스탯간 옵션 % 동등 환산 — 숨김 처리 (v-if="false"), 재노출 시 조건만 제거 -->
+      <div v-if="false" class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
         <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
           🔄 스탯간 옵션 % 동등 환산
         </h3>

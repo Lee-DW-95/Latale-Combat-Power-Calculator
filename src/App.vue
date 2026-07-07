@@ -93,7 +93,7 @@ const activeTab = ref('calc');
 //   ⚠ 이건 프론트엔드 클라이언트 게이팅 — 번들 JS/localStorage 를 파면 우회 가능하다.
 //   민감 데이터 완전 은닉이 목적이 아니라 "일반 사용자에게 노출하지 않는" 소프트 게이트.
 //   토큰 기반 로그인(isLoggedIn)을 전제로 하되, 진짜 보호가 필요하면 서버측 검증 필요.
-const PRIVILEGED_NICKNAMES = ['선봉'];
+const PRIVILEGED_NICKNAMES = ['선봉', '백르'];
 
 const TABS = [
   { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
