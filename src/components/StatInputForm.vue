@@ -10,6 +10,7 @@ import {
 } from '../utils/battlePower.js';
 import { STAT_FIELD_DEFS, BASE_FIELD_DEFS } from '../data/statLabels.js';
 import { fmt as formatBP } from '../utils/format.js';
+import NumInput from './NumInput.vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -42,105 +43,119 @@ const baseFilledCount = computed(() =>
 );
 
 // 조건부 환산 표시용 — 가동률 가중 (직접 BP 에만 곱셈 적용됨, 소환은 영향 없음)
-//   props.battlePower 는 부모에서 'boss' 디폴트로 계산됨. 여기선 직접/소환 비율도 보여줌.
 const expectedMultNormal = computed(() => expectedConditionalMultiplier(props.modelValue, 'normal'));
 const expectedMultBoss = computed(() => expectedConditionalMultiplier(props.modelValue, 'boss'));
 
-// 평균 BP — base / normal / boss (= (직접+소환)/2)
+// 환산 없이 base / 일반 / 보스 환경별 평균 — 배지 툴팁에 노출
 const baseBP = computed(() => calculateBattlePower(props.modelValue, 'base'));
 const normalBP = computed(() => calculateBattlePower(props.modelValue, 'normal'));
 const bossBP = computed(() => calculateBattlePower(props.modelValue, 'boss'));
 
-// 직접 / 소환 분리 BP — base 기준 (소환은 가동률 무관)
-const directBPBase = computed(() => calculateDirectBP(props.modelValue, 'base'));
+// 직접 / 소환 / vs일반 / vs보스 — 브레이크다운 미니 카드
 const directBPBoss = computed(() => calculateDirectBP(props.modelValue, 'boss'));
 const summonBP = computed(() => calculateSummonBP(props.modelValue));
-
-// 일반몹 / 보스몹 분리 BP — 무관 항(보몬추/지 또는 일몬추/지) 0 가정
-//   monsterType 에 맞는 백/근/상 가동률 환산 자동 적용 (normal/boss target).
 const bpVsNormal = computed(() => calculateBPVsMonster(props.modelValue, 'normal'));
 const bpVsBoss = computed(() => calculateBPVsMonster(props.modelValue, 'boss'));
 
 const anyConditionalActive = computed(
   () => expectedMultNormal.value > 1 || expectedMultBoss.value > 1
 );
+
+const conditionalBadgeTitle = computed(() =>
+  [
+    '가동률 가중 환산 — 직접 BP에만 곱셈, 소환은 영향 없음.',
+    `환산 없는 평균: base ${formatBP(baseBP.value)} · 일반 ${formatBP(normalBP.value)} · 보스 ${formatBP(bossBP.value)}`,
+  ].join('\n')
+);
+
+const BREAKDOWN_CARDS = [
+  {
+    key: 'direct',
+    label: '직접',
+    value: directBPBoss,
+    cls: 'text-orange-600 dark:text-orange-300',
+    title: '직접 타격 전투력 (보스 환산) — 백/근/상 조건부 환산이 곱해지는 영역',
+  },
+  {
+    key: 'summon',
+    label: '소환',
+    value: summonBP,
+    cls: 'text-teal-600 dark:text-teal-300',
+    title: '소환 타격 전투력 — 조건부 환산 영향 없음',
+  },
+  {
+    key: 'vsNormal',
+    label: '🗡 vs 일반',
+    value: bpVsNormal,
+    cls: 'text-sky-600 dark:text-sky-300',
+    title:
+      '일몬추/일몬지만 적용한 일반 몬스터 상대 전투력.\n(vs 일반 + vs 보스) ÷ 2 는 곱셈 항 비선형성 때문에 종합 BP와 ±0.01% 미세 오차가 있을 수 있습니다.',
+  },
+  {
+    key: 'vsBoss',
+    label: '👑 vs 보스',
+    value: bpVsBoss,
+    cls: 'text-violet-600 dark:text-violet-300',
+    title:
+      '보몬추/보몬지만 적용한 보스 몬스터 상대 전투력.\n(vs 일반 + vs 보스) ÷ 2 는 곱셈 항 비선형성 때문에 종합 BP와 ±0.01% 미세 오차가 있을 수 있습니다.',
+  },
+];
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
-    <header class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">⚔️ 캐릭터 T창 정보</h2>
+  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+    <!-- ── 헤더: 제목 + 계산된 전투력 ── -->
+    <header class="flex flex-wrap items-start justify-between gap-3 mb-4">
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">⚔️ 캐릭터 T창 정보</h2>
       <div class="text-right">
-        <div class="text-xs text-slate-500 dark:text-slate-400">
+        <div class="text-xs text-stone-500 dark:text-stone-400">
           계산된 전투력
           <span
             v-if="anyConditionalActive"
-            class="ml-1 text-amber-600 dark:text-amber-400 font-semibold tabular-nums"
-            title="가동률 가중 환산 — 직접 BP에만 곱셈, 소환은 영향 없음"
+            class="ml-1 text-orange-600 dark:text-orange-400 font-semibold cursor-help"
+            :title="conditionalBadgeTitle"
           >
-            (보스 환산)
+            (보스 환산) ⓘ
           </span>
         </div>
-        <div class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tabular-nums">
+        <div class="text-3xl font-extrabold text-cyan-600 dark:text-cyan-400 tabular-nums leading-tight">
           {{ formatBP(battlePower) }}
-        </div>
-        <!-- 직접/소환 분리 (항상 표시) -->
-        <div class="text-[10px] tabular-nums mt-0.5">
-          <span class="text-amber-700 dark:text-amber-300 font-semibold">
-            직접 {{ formatBP(directBPBoss) }}
-          </span>
-          <span class="text-slate-400 mx-1">·</span>
-          <span class="text-sky-700 dark:text-sky-300 font-semibold">
-            소환 {{ formatBP(summonBP) }}
-          </span>
-        </div>
-        <!-- 일반몹/보스몹 분리 (항상 표시) -->
-        <div
-          class="text-[10px] tabular-nums mt-0.5"
-          title="일몬추/일몬지 만 적용한 일반몹 BP, 보몬추/보몬지 만 적용한 보스몹 BP. 백/근/상 가동률은 각 환경에 맞춰 환산됨."
-        >
-          <span class="text-emerald-700 dark:text-emerald-300 font-semibold">
-            vs 일반 {{ formatBP(bpVsNormal) }}
-          </span>
-          <span class="text-slate-400 mx-1">·</span>
-          <span class="text-rose-700 dark:text-rose-300 font-semibold">
-            vs 보스 {{ formatBP(bpVsBoss) }}
-          </span>
-        </div>
-        <p
-          class="text-[9px] text-slate-400 dark:text-slate-500 italic mt-0.5 max-w-[280px] leading-snug"
-          title="모델은 BP = aBase × multiplier 곱셈 형태라 (vs 일반 + vs 보스) / 2 가 종합 BP 와 정확히 일치하지 않습니다. 일=보 캐릭은 자명 성립."
-        >
-          ⓘ (vs 일반 + vs 보스) ÷ 2 ≈ 종합 BP — 곱셈 항 비선형성 때문에
-          ±0.01% 미세 오차 발생 (일몬·보몬 수치가 같으면 0)
-        </p>
-        <div
-          v-if="anyConditionalActive"
-          class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums mt-0.5"
-          title="환산 없이 base 평균 / 일반·보스 환경별 평균 (일/보 추가댐·지배력 합산)"
-        >
-          base {{ formatBP(baseBP) }} · 일반 {{ formatBP(normalBP) }} · 보스 {{ formatBP(bossBP) }}
         </div>
       </div>
     </header>
 
+    <!-- ── 브레이크다운 미니 카드 (직접/소환/vs일반/vs보스) ── -->
+    <div v-if="battlePower > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <div
+        v-for="card in BREAKDOWN_CARDS"
+        :key="card.key"
+        class="rounded-lg bg-stone-50 dark:bg-stone-900/50 ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2 cursor-help"
+        :title="card.title"
+      >
+        <div class="text-[11px] text-stone-400 dark:text-stone-500 leading-none mb-1">{{ card.label }}</div>
+        <div :class="['text-sm font-bold tabular-nums leading-none', card.cls]">
+          {{ formatBP(card.value.value) }}
+        </div>
+      </div>
+    </div>
+
     <div class="mb-4">
-      <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">직업 타입</span>
-      <div class="inline-flex rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden">
+      <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">직업 타입</span>
+      <div class="inline-flex rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden">
         <button
           type="button"
           @click="setType('P')"
           :class="[
             'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition',
             stats.type === 'P'
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
+              ? 'bg-cyan-600 text-white'
+              : 'bg-white text-stone-700 hover:bg-stone-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700',
           ]"
         >
           <img
             src="/assets/latale/roguemaster.png"
             alt="로그마스터"
-            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-slate-200 dark:bg-slate-700"
+            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-stone-200 dark:bg-stone-700"
             style="object-position: 50% 12%"
             draggable="false"
           />
@@ -150,16 +165,16 @@ const anyConditionalActive = computed(
           type="button"
           @click="setType('M')"
           :class="[
-            'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition border-l border-slate-300 dark:border-slate-600',
+            'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition border-l border-stone-300 dark:border-stone-600',
             stats.type === 'M'
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
+              ? 'bg-cyan-600 text-white'
+              : 'bg-white text-stone-700 hover:bg-stone-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700',
           ]"
         >
           <img
             src="/assets/latale/rainia.png"
             alt="레이니아"
-            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-slate-200 dark:bg-slate-700"
+            class="w-8 h-8 rounded-full ring-1 ring-white/40 object-cover bg-stone-200 dark:bg-stone-700"
             style="object-position: 50% 22%"
             draggable="false"
           />
@@ -174,17 +189,16 @@ const anyConditionalActive = computed(
         :key="def.key"
         class="block"
       >
-        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+        <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
           {{ getStatLabel(stats.type, def.key) }}
-          <span v-if="def.unit" class="text-slate-400">({{ def.unit }})</span>
+          <span v-if="def.unit" class="text-stone-400">({{ def.unit }})</span>
         </span>
-        <input
-          type="number"
+        <NumInput
           :step="def.step"
-          :value="stats[def.key]"
-          @input="setField(def.key, $event.target.value)"
+          :model-value="stats[def.key]"
+          @update:model-value="setField(def.key, $event)"
           :title="def.tooltip"
-          class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
         />
         <span
           v-if="def.key === '최소뎀' && Number(stats.최소뎀) > Number(stats.최대뎀)"
@@ -196,60 +210,73 @@ const anyConditionalActive = computed(
     </div>
 
     <!-- ─── 추가 세부정보 (% 옵션 환산용 기본 스탯) ─── -->
-    <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
+    <div class="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700">
       <header class="flex items-center justify-between mb-1">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200">
           📐 추가 세부정보
-          <span class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">
+          <span class="ml-1 text-xs font-normal text-stone-400 dark:text-stone-500">
             (선택 · % 옵션 환산용)
           </span>
         </h3>
-        <span class="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+        <span class="text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">
           {{ baseFilledCount }} / {{ BASE_FIELD_DEFS.length }} 입력됨
         </span>
       </header>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        T창 <strong>추가 세부정보</strong> 패널의 우측 +값(녹색 숫자)을 입력하세요.
-        예: "근력 +1,118,069 (506%)" → 기본 근력 = <strong>1,118,069</strong>.
-        장비 비교의 % 옵션과 빠른 시뮬의 % 옵션을 정확히 환산할 때 사용됩니다.
+      <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
+        T창 <strong>추가 세부정보</strong> 패널의 우측 <strong class="text-emerald-600 dark:text-emerald-400">+값(녹색 숫자)</strong>을 입력하면
+        장비 비교의 % 옵션이 정확히 환산됩니다.
+        <span
+          class="cursor-help underline decoration-dotted"
+          title='예: "근력 +1,118,069 (506%)" 로 표시되면 기본 근력 = 1,118,069 입니다. 입력하지 않으면 % 옵션이 누적 0% 가정으로 추정됩니다.'
+        >어디서 보나요? ⓘ</span>
       </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <label v-for="def in BASE_FIELD_DEFS" :key="def.key" class="block">
-          <span class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+          <span class="block text-xs font-medium text-stone-600 dark:text-stone-300 mb-1">
             {{ def.label }}
           </span>
-          <input
-            type="number"
+          <NumInput
             :step="def.step"
-            :value="stats[def.key]"
-            @input="setField(def.key, $event.target.value)"
+            :model-value="stats[def.key]"
+            @update:model-value="setField(def.key, $event)"
             :title="def.tooltip"
-            class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+            class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
           />
         </label>
       </div>
     </div>
 
     <!-- ─── 조건부 대미지 환산 (백어택/근거리/상태이상) ─── -->
-    <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
+    <div class="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700">
       <header class="flex items-center justify-between mb-2">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200">
           🎯 조건부 대미지 환산
         </h3>
         <span v-if="anyConditionalActive" class="text-xs tabular-nums font-semibold">
           <span class="text-sky-700 dark:text-sky-300">일반 ×{{ expectedMultNormal.toFixed(3) }}</span>
-          <span class="mx-1 text-slate-400">/</span>
+          <span class="mx-1 text-stone-400">/</span>
           <span class="text-rose-700 dark:text-rose-300">보스 ×{{ expectedMultBoss.toFixed(3) }}</span>
         </span>
       </header>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        엑셀 공식 (B!P18/19): <code class="text-amber-700 dark:text-amber-300">multiplier = 1 + Σ(값% × 가동률) / (D × (1 + 크댐%))</code>,
-        D=0.6(일반)/0.3(보스). <strong>가동률</strong>은 직타비중 × 조건충족율 → 0~100 사이로 입력.
-        <br />
-        ⚠️ 백/근/상은 <strong class="text-amber-700 dark:text-amber-300">직접타격에만 영향</strong> — 소환 BP는 그대로, 직접 BP만 곱셈 → 표시(평균) BP는 직접 효과의 절반 정도 상승.
-        <br />
-        예: 백어택 1000% × 가동률 70% (크댐 9000%) → 직접 BP ×1.26, 소환 BP ×1.00, 표시 BP ×1.13.
+      <p class="text-xs text-stone-500 dark:text-stone-400 mb-2">
+        T창 수치와 <strong>가동률</strong>(직타비중 × 조건충족율, 0~100)을 입력하면 기댓값으로 전투력에 환산됩니다.
+        직접 타격에만 적용되고 소환은 영향이 없습니다.
       </p>
+      <details class="mb-3 text-xs text-stone-500 dark:text-stone-400">
+        <summary class="cursor-pointer select-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300">
+          계산 방식 자세히 보기
+        </summary>
+        <div class="mt-2 rounded-md bg-stone-50 dark:bg-stone-900/50 p-3 space-y-1">
+          <p>
+            공식: <code class="text-orange-700 dark:text-orange-300">multiplier = 1 + Σ(값% × 가동률) / (D × (1 + 크댐%))</code>,
+            D=0.6(일반) / 0.3(보스).
+          </p>
+          <p>
+            백/근/상은 직접타격에만 곱해지므로, 표시(평균) BP는 직접 효과의 절반 정도 상승합니다.
+            예: 백어택 1000% × 가동률 70% (크댐 9000%) → 직접 BP ×1.26, 소환 BP ×1.00, 표시 BP ×1.13.
+          </p>
+        </div>
+      </details>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div
           v-for="cfg in [
@@ -258,40 +285,38 @@ const anyConditionalActive = computed(
             { activeKey: '상태대미지활성', valueKey: '상태대미지', uptimeKey: '상태대미지가동률', label: '상태이상 대미지', hint: '예: 50' },
           ]"
           :key="cfg.activeKey"
-          class="rounded-md ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/40 dark:bg-amber-950/20 p-3"
+          class="rounded-md ring-1 ring-orange-200 dark:ring-orange-900 bg-orange-50/40 dark:bg-orange-950/20 p-3"
         >
           <label class="flex items-center gap-2 mb-2 cursor-pointer">
             <input
               type="checkbox"
               :checked="!!stats[cfg.activeKey]"
               @change="setField(cfg.activeKey, $event.target.checked)"
-              class="accent-amber-500"
+              class="accent-orange-500"
             />
-            <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              {{ cfg.label }} <span class="text-slate-400">(%)</span>
+            <span class="text-xs font-semibold text-stone-700 dark:text-stone-200">
+              {{ cfg.label }} <span class="text-stone-400">(%)</span>
             </span>
           </label>
-          <input
-            type="number"
+          <NumInput
             step="any"
-            :value="stats[cfg.valueKey]"
-            @input="setField(cfg.valueKey, $event.target.value)"
+            :model-value="stats[cfg.valueKey]"
+            @update:model-value="setField(cfg.valueKey, $event)"
             :placeholder="cfg.hint"
-            class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none mb-2"
+            class="w-full rounded-md border-0 ring-1 ring-orange-200 dark:ring-orange-900 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-orange-400 focus:outline-none mb-2"
           />
           <label class="block">
-            <span class="block text-[10px] font-medium text-slate-600 dark:text-slate-300 mb-0.5">
+            <span class="block text-[10px] font-medium text-stone-600 dark:text-stone-300 mb-0.5">
               가동률 (%) — BP 환산 가중치
             </span>
-            <input
-              type="number"
+            <NumInput
               step="any"
-              min="0"
-              max="100"
-              :value="stats[cfg.uptimeKey]"
-              @input="setField(cfg.uptimeKey, $event.target.value)"
+              :min="0"
+              :max="100"
+              :model-value="stats[cfg.uptimeKey]"
+              @update:model-value="setField(cfg.uptimeKey, $event)"
               placeholder="0~100"
-              class="w-full rounded-md border-0 ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-xs tabular-nums focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-orange-200 dark:ring-orange-900 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-1.5 text-xs tabular-nums focus:ring-2 focus:ring-orange-400 focus:outline-none"
             />
           </label>
         </div>

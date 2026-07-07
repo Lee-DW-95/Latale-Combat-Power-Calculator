@@ -75,12 +75,12 @@ function jumpToStage() {
   <div class="space-y-5">
     <!-- ───── 소개 카드 ───── -->
     <div
-      class="rounded-xl bg-gradient-to-br from-indigo-50 to-sky-50 dark:from-indigo-950/40 dark:to-sky-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 sm:px-5 py-4"
+      class="rounded-xl bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/40 dark:to-sky-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 sm:px-5 py-4"
     >
-      <h2 class="text-base sm:text-lg font-extrabold text-indigo-800 dark:text-indigo-200">
+      <h2 class="text-base sm:text-lg font-extrabold text-cyan-800 dark:text-cyan-200">
         🗺️ 라테일 어드벤처 지도
       </h2>
-      <p class="mt-1 text-sm text-indigo-700/90 dark:text-indigo-300/90 leading-relaxed">
+      <p class="mt-1 text-sm text-cyan-700/90 dark:text-cyan-300/90 leading-relaxed">
         어드벤처는 스테이지를 진행하며 칸을 밟아 나가는 콘텐츠입니다.
         <strong>5단계 단위(30·35·40…)로 진입에 성공하면 특별한 버프</strong>를 획득합니다.
         아래에서 단계별 보상과 전체 지도(2~56)를 확인하세요.
@@ -89,13 +89,13 @@ function jumpToStage() {
 
     <!-- ───── 버프 테이블 ───── -->
     <section
-      class="rounded-xl bg-white dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
     >
-      <div class="px-4 sm:px-5 py-3 border-b border-slate-100 dark:border-slate-700">
-        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">
+      <div class="px-4 sm:px-5 py-3 border-b border-stone-100 dark:border-stone-700">
+        <h3 class="text-sm font-bold text-stone-700 dark:text-stone-200">
           🎁 단계별 진입 보상
         </h3>
-        <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+        <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
           해당 스테이지 진입에 필요한 누적 칸 수와 획득 버프
         </p>
       </div>
@@ -103,25 +103,25 @@ function jumpToStage() {
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800">
+            <tr class="text-left text-[11px] uppercase tracking-wide text-stone-400 dark:text-stone-500 bg-stone-50 dark:bg-stone-800">
               <th class="px-4 py-2 font-semibold">스테이지</th>
               <th class="px-4 py-2 font-semibold text-right">필요 칸 수</th>
               <th class="px-4 py-2 font-semibold">버프</th>
               <th class="px-4 py-2 font-semibold text-right">수치</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/70">
+          <tbody class="divide-y divide-stone-100 dark:divide-stone-700/70">
             <tr
               v-for="row in ADVENTURE_BUFFS"
               :key="row.stage"
-              class="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition"
+              class="hover:bg-stone-50 dark:hover:bg-stone-700/40 transition"
             >
               <td class="px-4 py-2.5">
-                <span class="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+                <span class="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-xs font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
                   {{ row.stage }}
                 </span>
               </td>
-              <td class="px-4 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
+              <td class="px-4 py-2.5 text-right tabular-nums text-stone-500 dark:text-stone-400">
                 {{ row.squares.toLocaleString() }}칸
               </td>
               <td class="px-4 py-2.5">
@@ -131,7 +131,7 @@ function jumpToStage() {
                   {{ row.buff }}
                 </span>
               </td>
-              <td class="px-4 py-2.5 text-right tabular-nums font-bold text-slate-700 dark:text-slate-200">
+              <td class="px-4 py-2.5 text-right tabular-nums font-bold text-stone-700 dark:text-stone-200">
                 {{ row.value }}
               </td>
             </tr>
@@ -142,14 +142,14 @@ function jumpToStage() {
 
     <!-- ───── 지도 갤러리 ───── -->
     <section
-      class="rounded-xl bg-white dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
     >
-      <div class="px-4 sm:px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="px-4 sm:px-5 py-3 border-b border-stone-100 dark:border-stone-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">
+          <h3 class="text-sm font-bold text-stone-700 dark:text-stone-200">
             🧭 어드벤처 지도
           </h3>
-          <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+          <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
             이미지를 누르면 크게 볼 수 있어요 · 총 {{ ADVENTURE_MAPS.length }}장
           </p>
         </div>
@@ -167,14 +167,14 @@ function jumpToStage() {
                 placeholder="단계 (예: 35)"
                 @keyup.enter="jumpToStage"
                 @input="searchError = ''"
-                class="w-32 sm:w-36 pl-8 pr-2 py-1.5 text-sm rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none tabular-nums"
+                class="w-32 sm:w-36 pl-8 pr-2 py-1.5 text-sm rounded-lg bg-stone-50 dark:bg-stone-900 ring-1 ring-stone-200 dark:ring-stone-700 focus:ring-2 focus:ring-cyan-500 outline-none tabular-nums"
               />
-              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">🔍</span>
+              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none">🔍</span>
             </div>
             <button
               type="button"
               @click="jumpToStage"
-              class="px-3 py-1.5 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition"
+              class="px-3 py-1.5 text-sm font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white transition"
             >
               이동
             </button>
@@ -194,10 +194,10 @@ function jumpToStage() {
             type="button"
             @click="openLightbox(idx)"
             :class="[
-              'group relative rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 focus:outline-none transition',
+              'group relative rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-900 focus:outline-none transition',
               highlightStage === map.stage
-                ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 scale-[1.02]'
-                : 'ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500',
+                ? 'ring-2 ring-cyan-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-800 scale-[1.02]'
+                : 'ring-1 ring-stone-200 dark:ring-stone-700 focus:ring-2 focus:ring-cyan-500',
             ]"
           >
             <img
@@ -217,13 +217,13 @@ function jumpToStage() {
     </section>
 
     <!-- ───── 출처 ───── -->
-    <p class="text-center text-[11px] text-slate-400 dark:text-slate-500">
+    <p class="text-center text-[11px] text-stone-400 dark:text-stone-500">
       자료 출처 ·
       <a
         :href="ADVENTURE_SOURCE_URL"
         target="_blank"
         rel="noopener noreferrer"
-        class="underline decoration-dotted hover:text-indigo-500 dark:hover:text-indigo-400"
+        class="underline decoration-dotted hover:text-cyan-500 dark:hover:text-cyan-400"
       >라테일 정보 블로그 (lataleinfo.tistory.com/415)</a>
     </p>
 

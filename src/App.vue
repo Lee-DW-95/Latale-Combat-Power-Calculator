@@ -9,6 +9,7 @@ import {
 } from './utils/battlePower.js';
 
 import StatInputForm from './components/StatInputForm.vue';
+import BpSummaryBar from './components/BpSummaryBar.vue';
 import EfficiencyPanel from './components/EfficiencyPanel.vue';
 import RelicActivePanel from './components/RelicActivePanel.vue';
 import EquipmentCompare from './components/EquipmentCompare.vue';
@@ -26,6 +27,7 @@ import AuthModal from './components/AuthModal.vue';
 import MigrationModal from './components/MigrationModal.vue';
 import { useAuth } from './composables/useAuth.js';
 import { useCharacterStorage } from './composables/useCharacterStorage.js';
+import { createSampleStats } from './data/sampleStats.js';
 
 // ============================================================
 // 인증 상태 + 모달 트리거
@@ -151,6 +153,14 @@ function resetEquipment() {
   newEquip.value = createEmptyEquipment();
 }
 
+// ── 빈 상태 온보딩 — 입력이 하나도 없고 활성 캐릭터도 없을 때 예시 데이터 제안 ──
+const showOnboarding = computed(() => battlePower.value === 0 && !activeCharacter.value);
+
+function loadSampleStats() {
+  // 활성 캐릭터가 없는 상태에서만 호출되므로 자동 저장을 트리거하지 않는다 (체험용 일회성).
+  stats.value = createSampleStats();
+}
+
 // ============================================================
 // 활성 캐릭터 ↔ 작업영역 (stats / awakStones) 양방향 동기화 + 자동 저장
 // ============================================================
@@ -220,9 +230,9 @@ const savedTimeLabel = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+  <div class="min-h-screen bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100">
     <header
-      class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700"
+      class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-700"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -232,12 +242,12 @@ const savedTimeLabel = computed(() => {
             class="h-10 sm:h-12 w-auto select-none"
             draggable="false"
           />
-          <div class="border-l border-slate-300 dark:border-slate-600 pl-3">
-            <h1 class="text-base sm:text-lg font-extrabold text-indigo-700 dark:text-indigo-300 leading-tight">
+          <div class="border-l border-stone-300 dark:border-stone-600 pl-3">
+            <h1 class="text-base sm:text-lg font-extrabold text-cyan-700 dark:text-cyan-300 leading-tight">
               라테일 유틸리티
             </h1>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">
-              전투력 계산 · 메모리얼 시뮬 (베타)
+            <p class="text-[11px] text-stone-500 dark:text-stone-400">
+              전투력 계산기 (베타)
             </p>
           </div>
         </div>
@@ -253,7 +263,7 @@ const savedTimeLabel = computed(() => {
                 ? 'text-rose-600 dark:text-rose-400'
                 : saveStatus === 'saving' || saveStatus === 'pending'
                 ? 'text-amber-600 dark:text-amber-400'
-                : 'text-slate-500 dark:text-slate-400',
+                : 'text-stone-500 dark:text-stone-400',
             ]"
             :title="saveStatus === 'error' ? saveError : (lastSavedAt ? `마지막 저장 ${new Date(lastSavedAt).toLocaleString()}` : '')"
           >
@@ -264,13 +274,13 @@ const savedTimeLabel = computed(() => {
           </span>
 
           <template v-if="isLoggedIn">
-            <span class="hidden sm:inline text-xs text-slate-600 dark:text-slate-300 max-w-[120px] truncate">
+            <span class="hidden sm:inline text-xs text-stone-600 dark:text-stone-300 max-w-[120px] truncate">
               👤 {{ authNickname }}
             </span>
             <button
               type="button"
               @click="logout"
-              class="text-xs px-2 py-1 rounded ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              class="text-xs px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
             >
               로그아웃
             </button>
@@ -279,7 +289,7 @@ const savedTimeLabel = computed(() => {
             <button
               type="button"
               @click="openAuth('login')"
-              class="text-xs px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition"
+              class="text-xs px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition"
             >
               로그인
             </button>
@@ -288,8 +298,8 @@ const savedTimeLabel = computed(() => {
         </div>
       </div>
 
-      <!-- 탭 네비 -->
-      <nav class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
+      <!-- 탭 네비 — 보이는 탭이 1개뿐이면 (일반 유저) 탭바 자체를 숨김 -->
+      <nav v-if="visibleTabs.length > 1" class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
         <button
           v-for="tab in visibleTabs"
           :key="tab.id"
@@ -298,8 +308,8 @@ const savedTimeLabel = computed(() => {
           :class="[
             'px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap',
             activeTab === tab.id
-              ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+              ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
+              : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
           ]"
         >
           {{ tab.label }}
@@ -307,14 +317,28 @@ const savedTimeLabel = computed(() => {
       </nav>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-5">
       <!-- ───── 탭 1: 전투력 계산 ───── -->
       <template v-if="activeTab === 'calc'">
+        <!-- 빈 상태 온보딩 — 예시 데이터 체험 -->
         <div
-          class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
+          v-if="showOnboarding"
+          class="rounded-2xl border-2 border-dashed border-cyan-300 dark:border-cyan-700 bg-cyan-50/50 dark:bg-cyan-950/20 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
         >
-          <strong>ℹ️ 모델 정확도</strong> · 57건의 검증된 실측 T창 데이터 회귀분석 기반
-          (물리 RMSE <strong>0.28%</strong> / 마법 RMSE <strong>0.13%</strong>, 모든 케이스 오차 1% 이내).
+          <div class="text-sm text-stone-700 dark:text-stone-200">
+            <strong>처음이신가요?</strong>
+            게임 <strong>T창(능력치 세부정보)</strong>의 숫자를 그대로 옮겨 적으면 전투력이 계산됩니다.
+            <span class="block text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              먼저 예시 데이터로 어떤 결과가 나오는지 구경해보세요 — 입력을 시작하면 언제든 덮어쓸 수 있습니다.
+            </span>
+          </div>
+          <button
+            type="button"
+            @click="loadSampleStats"
+            class="shrink-0 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold px-4 py-2 transition"
+          >
+            📋 예시 데이터 불러오기
+          </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
@@ -385,10 +409,13 @@ const savedTimeLabel = computed(() => {
         <AdventureView />
       </template>
 
-      <footer class="pt-4 text-center text-xs text-slate-400 dark:text-slate-500">
+      <footer class="pt-4 text-center text-xs text-stone-400 dark:text-stone-500">
         <p>비공식 팬 도구 · 라테일은 액토즈소프트(Actoz Soft)의 IP입니다.</p>
       </footer>
     </main>
+
+    <!-- 하단 고정 전투력 요약 바 — 전투력 계산 탭에서만 -->
+    <BpSummaryBar v-if="activeTab === 'calc'" :stats="stats" :result="result" />
 
     <AuthModal v-model="authModalOpen" :initial-step="authModalInitialStep" />
     <MigrationModal

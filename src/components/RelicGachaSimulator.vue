@@ -202,10 +202,10 @@ function linePct(line) {
 }
 
 function pctBadgeClass(p) {
-  if (p == null) return 'text-slate-400 dark:text-slate-500';
+  if (p == null) return 'text-stone-400 dark:text-stone-500';
   if (p >= 90) return 'text-rose-400 font-bold';
   if (p >= 70) return 'text-amber-300 font-bold';
-  return 'text-slate-400 dark:text-slate-500';
+  return 'text-stone-400 dark:text-stone-500';
 }
 
 const exMeanCost = computed(() => {
@@ -234,14 +234,14 @@ function fmtEly(n) {
   <div class="space-y-5">
     <!-- 안내 -->
     <div
-      class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
+      class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
     >
       <strong>🌟 성물 뽑기 시뮬레이터</strong> · 원하는 성물 옵션이 나올 때까지 평균 몇 회 뽑아야 하는지 분석합니다.
       <br />
     </div>
 
     <!-- 서브 탭 -->
-    <div class="flex gap-1 border-b border-slate-200 dark:border-slate-700">
+    <div class="flex gap-1 border-b border-stone-200 dark:border-stone-700">
       <button
         v-for="tab in SUB_TABS"
         :key="tab.id"
@@ -250,8 +250,8 @@ function fmtEly(n) {
         :class="[
           'px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap',
           subTab === tab.id
-            ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
-            : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+            ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
+            : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
         ]"
       >
         {{ tab.label }}
@@ -261,21 +261,21 @@ function fmtEly(n) {
     <!-- ════════════════════ 신성의 돌 (공용석) ════════════════════ -->
     <template v-if="subTab === 'shared'">
       <!-- 입력 -->
-      <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
-        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">⚙️ 시뮬 조건</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           1회당 신비한 파편 50개 + 엘리 30,000,000 소비 · 옵션 15종 (1~4줄, 35/30/20/15) · 5레벨 균등.
         </p>
 
         <div class="mb-2 flex items-center justify-between">
-          <span class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          <span class="block text-sm font-medium text-stone-700 dark:text-stone-300">
             목표 옵션 (최대 {{ MAX_TARGETS }}개 — 한 카드 동시 만족)
           </span>
           <button
             type="button"
             @click="sharedAddTarget"
             :disabled="sharedTargets.length >= MAX_TARGETS"
-            class="text-xs rounded-md ring-1 ring-indigo-300 dark:ring-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
+            class="text-xs rounded-md ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
           >
             + 옵션 추가
           </button>
@@ -289,7 +289,7 @@ function fmtEly(n) {
           >
             <select
               v-model="t.type"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             >
               <option
                 v-for="lbl in SHARED_OPTION_LABELS"
@@ -306,7 +306,7 @@ function fmtEly(n) {
                 type="number"
                 step="any"
                 placeholder="목표 ≥"
-                class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
               />
               <span
                 v-if="sharedFeasibilities[i]?.feasible === false"
@@ -316,7 +316,7 @@ function fmtEly(n) {
               </span>
               <span
                 v-else-if="sharedFeasibilities[i]?.max != null"
-                class="block mt-1 text-xs text-slate-400"
+                class="block mt-1 text-xs text-stone-400"
               >
                 최대 {{ sharedFeasibilities[i].max }}{{ sharedHasPercentUnit(t.type) ? '%' : '' }}
               </span>
@@ -325,7 +325,7 @@ function fmtEly(n) {
               type="button"
               @click="sharedRemoveTarget(i)"
               :disabled="sharedTargets.length <= 1"
-              class="rounded-md ring-1 ring-slate-300 dark:ring-slate-600 text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
+              class="rounded-md ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
               title="이 옵션 제거"
             >
               ✕
@@ -338,22 +338,22 @@ function fmtEly(n) {
             type="button"
             @click="sharedRun"
             :disabled="sharedRunning || sharedValidTargets.length === 0 || !sharedAllFeasible"
-            class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
+            class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
           >
             {{ sharedRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
           </button>
           <button
             type="button"
             @click="sharedRollSample"
-            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
+            class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 px-5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-200 transition"
           >
-            🎰 1회 굴려보기<span v-if="sharedRollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(sharedRollCount) }}회)</span>
+            🎰 1회 굴려보기<span v-if="sharedRollCount > 0" class="ml-1 text-xs text-stone-500 dark:text-stone-400">(누적 {{ fmt(sharedRollCount) }}회)</span>
           </button>
           <button
             v-if="sharedRollCount > 0"
             type="button"
             @click="sharedResetRollCount"
-            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+            class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400 transition"
             title="누적 횟수 초기화"
           >
             ↺ 초기화
@@ -364,14 +364,14 @@ function fmtEly(n) {
       <!-- 1회 굴림 미리보기 -->
       <section
         v-if="sharedSampleRoll"
-        class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
+        class="rounded-2xl bg-stone-900 ring-1 ring-stone-700 p-5 shadow-lg"
       >
-        <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between gap-3">
+        <h2 class="text-base font-bold text-stone-200 mb-3 flex items-center justify-between gap-3">
           <span>
             🎰 1회 굴림 결과
             <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(sharedLastRollIndex) }}회차</span>
           </span>
-          <span class="text-xs text-slate-400 font-normal">{{ sharedSampleRoll.lineCount }}줄 · 누적 {{ fmt(sharedRollCount) }}회</span>
+          <span class="text-xs text-stone-400 font-normal">{{ sharedSampleRoll.lineCount }}줄 · 누적 {{ fmt(sharedRollCount) }}회</span>
         </h2>
         <ul class="space-y-1.5 font-mono text-sm">
           <li
@@ -394,22 +394,22 @@ function fmtEly(n) {
       <!-- 시뮬 조건 요약 -->
       <section
         v-if="sharedResult"
-        class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
           🎯 시뮬 조건 요약
         </h2>
         <ul class="space-y-0.5 mb-2">
           <li
             v-for="(t, i) in sharedResult.targets"
             :key="i"
-            class="text-sm text-indigo-600 dark:text-indigo-400 font-medium"
+            class="text-sm text-cyan-600 dark:text-cyan-400 font-medium"
           >
             ▸ {{ t.type }} ≥ {{ t.value }}{{ sharedHasPercentUnit(t.type) ? '%' : '' }}
           </li>
         </ul>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          평균 <strong class="text-slate-700 dark:text-slate-200">{{ fmt(sharedResult.mean) }}회</strong> 시도 예상
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(sharedResult.mean) }}회</strong> 시도 예상
           <span v-if="sharedMeanCost">
             (평균 파편 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(sharedMeanCost.shard) }}</strong>개,
             엘리 <strong class="text-rose-700 dark:text-rose-300">{{ fmtEly(sharedMeanCost.ely) }}</strong>)
@@ -421,14 +421,14 @@ function fmtEly(n) {
       <!-- 1번 실행의 성공 카드 -->
       <section
         v-if="sharedSampleCard"
-        class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div v-if="sharedSampleCard.success" class="space-y-3">
-          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-200 dark:border-slate-700 pb-3">
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">
             <span class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
               🎉 {{ fmt(sharedSampleCard.tries) }}회차에 성공
             </span>
-            <span class="text-sm text-slate-600 dark:text-slate-300 tabular-nums">
+            <span class="text-sm text-stone-600 dark:text-stone-300 tabular-nums">
               <span class="text-amber-700 dark:text-amber-300 font-semibold">
                 파편 {{ fmt(sharedSampleCard.tries * COST_SHARED.shard) }}개
               </span>
@@ -438,10 +438,10 @@ function fmtEly(n) {
               </span>
             </span>
           </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
+          <p class="text-xs text-stone-500 dark:text-stone-400">
             이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다 (위 버튼 다시 누르면 재실행).
           </p>
-          <div class="rounded-lg bg-slate-900 ring-1 ring-emerald-500 p-3">
+          <div class="rounded-lg bg-stone-900 ring-1 ring-emerald-500 p-3">
             <ul class="space-y-1 font-mono text-sm mb-3">
               <li
                 v-for="(line, i) in sharedSampleCard.card.lines"
@@ -483,9 +483,9 @@ function fmtEly(n) {
     <!-- ════════════════════ 전용석 ════════════════════ -->
     <template v-if="subTab === 'exclusive'">
       <!-- 입력 -->
-      <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
-        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">⚙️ 시뮬 조건</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           1회당 신비한 파편 150개 + 엘리 50,000,000 소비 · 메인 Lv 1~10 가중 추첨 (Lv1 18% → Lv10 2.5%) · 등급에 따라 추가 옵션 Lv1~5 1개.
           <br />
           목표는 <strong>추가 옵션 수치</strong>로 입력합니다 (예: 구름 방망이 크리댐 ≥ 30%).
@@ -493,11 +493,11 @@ function fmtEly(n) {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <label class="block">
-            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">전용석</span>
+            <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">전용석</span>
             <select
               v-model="exStone"
               @change="onExStoneChange"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             >
               <option v-for="name in EXCLUSIVE_STONE_NAMES" :key="name" :value="name">
                 {{ name }} — {{ EXCLUSIVE_STONES[name].key }}
@@ -505,7 +505,7 @@ function fmtEly(n) {
             </select>
           </label>
           <label class="block">
-            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
               목표 {{ exStoneSpec?.key }} (≥){{ exUnit ? ' ' + exUnit : '' }}
             </span>
             <input
@@ -513,7 +513,7 @@ function fmtEly(n) {
               type="number"
               step="any"
               :placeholder="`최대 ${exMaxVal}${exUnit}`"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
             <span
               v-if="exFeasible === false"
@@ -523,7 +523,7 @@ function fmtEly(n) {
             </span>
             <span
               v-else-if="exMaxVal > 0"
-              class="block mt-1 text-xs text-slate-400"
+              class="block mt-1 text-xs text-stone-400"
             >
               최대 가능: {{ exMaxVal }}{{ exUnit }}
             </span>
@@ -535,22 +535,22 @@ function fmtEly(n) {
             type="button"
             @click="exRun"
             :disabled="exRunning || !exTargetValueNum || exFeasible === false"
-            class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
+            class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
           >
             {{ exRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
           </button>
           <button
             type="button"
             @click="exRollSample"
-            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
+            class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 px-5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-200 transition"
           >
-            🎰 1회 굴려보기<span v-if="exRollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(exRollCount) }}회)</span>
+            🎰 1회 굴려보기<span v-if="exRollCount > 0" class="ml-1 text-xs text-stone-500 dark:text-stone-400">(누적 {{ fmt(exRollCount) }}회)</span>
           </button>
           <button
             v-if="exRollCount > 0"
             type="button"
             @click="exResetRollCount"
-            class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+            class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400 transition"
             title="누적 횟수 초기화"
           >
             ↺ 초기화
@@ -559,19 +559,19 @@ function fmtEly(n) {
       </section>
 
       <!-- 레벨 분포 표시 (참고용) -->
-      <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
-        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">📊 메인 Lv 등장 확률 (참고)</h3>
+      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h3 class="text-sm font-bold text-stone-700 dark:text-stone-200 mb-2">📊 메인 Lv 등장 확률 (참고)</h3>
         <div class="grid grid-cols-5 sm:grid-cols-10 gap-1 text-center text-xs">
           <div
             v-for="lp in EXCLUSIVE_LEVEL_PROBS"
             :key="lp.level"
-            class="rounded-md py-1.5 ring-1 tabular-nums ring-slate-200 dark:ring-slate-700 text-slate-500 dark:text-slate-400"
+            class="rounded-md py-1.5 ring-1 tabular-nums ring-stone-200 dark:ring-stone-700 text-stone-500 dark:text-stone-400"
           >
             <div class="font-semibold">Lv{{ lp.level }}</div>
             <div>{{ (lp.p * 100).toFixed(1) }}%</div>
           </div>
         </div>
-        <p class="text-xs text-slate-400 mt-2">
+        <p class="text-xs text-stone-400 mt-2">
           메인 Lv가 높을수록 추가 옵션 풀이 넓어집니다 (Lv2~3: Lv1만, Lv4~5: Lv1~2, ..., Lv10: Lv1~5).
           높은 옵션 수치는 상위 추가 옵션 Lv 풀에서 나옵니다.
         </p>
@@ -580,14 +580,14 @@ function fmtEly(n) {
       <!-- 1회 굴림 미리보기 -->
       <section
         v-if="exSampleRoll"
-        class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
+        class="rounded-2xl bg-stone-900 ring-1 ring-stone-700 p-5 shadow-lg"
       >
-        <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between gap-3">
+        <h2 class="text-base font-bold text-stone-200 mb-3 flex items-center justify-between gap-3">
           <span>
             🎰 1회 굴림 결과 — {{ exSampleRoll.stone }}
             <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(exLastRollIndex) }}회차</span>
           </span>
-          <span class="text-xs text-slate-400 font-normal">누적 {{ fmt(exRollCount) }}회</span>
+          <span class="text-xs text-stone-400 font-normal">누적 {{ fmt(exRollCount) }}회</span>
         </h2>
         <div class="space-y-1.5 font-mono text-sm">
           <div class="text-amber-300 font-bold tabular-nums">
@@ -609,23 +609,23 @@ function fmtEly(n) {
               [{{ linePct(exSampleRoll.extra) }}%]
             </span>
           </div>
-          <div v-else class="text-slate-500">▶ 추가 옵션 없음</div>
+          <div v-else class="text-stone-500">▶ 추가 옵션 없음</div>
         </div>
       </section>
 
       <!-- 시뮬 조건 요약 -->
       <section
         v-if="exResult"
-        class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
           🎯 시뮬 조건 요약
         </h2>
-        <p class="text-sm text-indigo-600 dark:text-indigo-400 font-medium mb-2">
+        <p class="text-sm text-cyan-600 dark:text-cyan-400 font-medium mb-2">
           ▸ {{ exResult.stone }} — {{ exResult.key }} ≥ {{ exResult.targetValue }}{{ exResult.unit }}
         </p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          평균 <strong class="text-slate-700 dark:text-slate-200">{{ fmt(exResult.mean) }}회</strong> 시도 예상
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(exResult.mean) }}회</strong> 시도 예상
           <span v-if="exMeanCost">
             (평균 파편 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(exMeanCost.shard) }}</strong>개,
             엘리 <strong class="text-rose-700 dark:text-rose-300">{{ fmtEly(exMeanCost.ely) }}</strong>)
@@ -637,14 +637,14 @@ function fmtEly(n) {
       <!-- 1번 실행의 성공 카드 -->
       <section
         v-if="exSampleCard"
-        class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div v-if="exSampleCard.success" class="space-y-3">
-          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-200 dark:border-slate-700 pb-3">
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">
             <span class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
               🎉 {{ fmt(exSampleCard.tries) }}회차에 성공
             </span>
-            <span class="text-sm text-slate-600 dark:text-slate-300 tabular-nums">
+            <span class="text-sm text-stone-600 dark:text-stone-300 tabular-nums">
               <span class="text-amber-700 dark:text-amber-300 font-semibold">
                 파편 {{ fmt(exSampleCard.tries * COST_EXCLUSIVE.shard) }}개
               </span>
@@ -654,10 +654,10 @@ function fmtEly(n) {
               </span>
             </span>
           </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
+          <p class="text-xs text-stone-500 dark:text-stone-400">
             이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다.
           </p>
-          <div class="rounded-lg bg-slate-900 ring-1 ring-emerald-500 p-3">
+          <div class="rounded-lg bg-stone-900 ring-1 ring-emerald-500 p-3">
             <div class="font-mono text-sm space-y-1">
               <div class="text-amber-300 font-bold tabular-nums">
                 ▶ [Lv.{{ exSampleCard.card.level }}] {{ exSampleCard.card.stone }}
@@ -690,13 +690,13 @@ function fmtEly(n) {
       </section>
     </template>
 
-    <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 pt-2">
+    <p class="text-center text-[11px] text-stone-400 dark:text-stone-500 pt-2">
       자료 출처 ·
       <a
         href="https://lataleinfo.tistory.com"
         target="_blank"
         rel="noopener noreferrer"
-        class="underline decoration-dotted hover:text-indigo-500 dark:hover:text-indigo-400"
+        class="underline decoration-dotted hover:text-cyan-500 dark:hover:text-cyan-400"
       >라테일인포 (lataleinfo.tistory.com)</a>
     </p>
   </div>

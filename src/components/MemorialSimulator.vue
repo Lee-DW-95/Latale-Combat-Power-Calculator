@@ -143,10 +143,10 @@ function linePct(line) {
 
 // % 배지 색상 (≥90 빨강, ≥70 노랑, 그 외 회색) — 인챈트 시뮬 규칙
 function pctBadgeClass(p) {
-  if (p == null) return 'text-slate-400 dark:text-slate-500';
+  if (p == null) return 'text-stone-400 dark:text-stone-500';
   if (p >= 90) return 'text-rose-600 dark:text-rose-400 font-bold';
   if (p >= 70) return 'text-amber-600 dark:text-amber-400 font-bold';
-  return 'text-slate-400 dark:text-slate-500';
+  return 'text-stone-400 dark:text-stone-500';
 }
 
 // 라벨에서 [N] prefix 추출 (없으면 null). decorateLabelWithTier 가 [N]을 붙임.
@@ -213,7 +213,7 @@ const meanCost = computed(() => {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
+    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
       <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 설정한 모든 목표를
       <strong>동시에</strong> 만족하는 카드를 만나기까지 <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
       <br />
@@ -225,17 +225,17 @@ const meanCost = computed(() => {
     </div>
 
     <!-- 입력 -->
-    <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">⚙️ 시뮬 조건</h2>
+    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
 
       <label class="block mb-4">
-        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+        <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
           메모리얼 종류
         </span>
         <select
           v-model="selectedMemorialKey"
           @change="onMemorialChange"
-          class="w-full md:w-1/2 rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          class="w-full md:w-1/2 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
         >
           <option v-for="key in memorialKeys" :key="key" :value="key">
             {{ ALL_MEMORIALS[key].name }}
@@ -244,14 +244,14 @@ const meanCost = computed(() => {
       </label>
 
       <div class="mb-2 flex items-center justify-between">
-        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <span class="block text-sm font-medium text-stone-700 dark:text-stone-300">
           목표 옵션 (최대 4개 — 한 카드 안에서 모두 동시 만족)
         </span>
         <button
           type="button"
           @click="addTarget"
           :disabled="targets.length >= 4"
-          class="text-xs rounded-md ring-1 ring-indigo-300 dark:ring-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
+          class="text-xs rounded-md ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
         >
           + 옵션 추가
         </button>
@@ -265,7 +265,7 @@ const meanCost = computed(() => {
         >
           <select
             v-model="t.base"
-            class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
             <option v-for="lbl in availableLabels" :key="lbl" :value="lbl">
               {{ lbl }}
@@ -277,7 +277,7 @@ const meanCost = computed(() => {
               type="number"
               step="any"
               placeholder="목표 합 (≥)"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
             <span
               v-if="targetFeasibilities[i]?.feasible === false"
@@ -287,7 +287,7 @@ const meanCost = computed(() => {
             </span>
             <span
               v-else-if="targetFeasibilities[i]?.max != null"
-              class="block mt-1 text-xs text-slate-400"
+              class="block mt-1 text-xs text-stone-400"
             >
               최대 가능: {{ targetFeasibilities[i].max }}
             </span>
@@ -296,7 +296,7 @@ const meanCost = computed(() => {
             type="button"
             @click="removeTarget(i)"
             :disabled="targets.length <= 1"
-            class="rounded-md ring-1 ring-slate-300 dark:ring-slate-600 text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
+            class="rounded-md ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
             title="이 옵션 제거"
           >
             ✕
@@ -309,22 +309,22 @@ const meanCost = computed(() => {
           type="button"
           @click="runSimulation"
           :disabled="isRunning || validTargets.length === 0 || !allTargetsFeasible"
-          class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
+          class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
         >
           {{ isRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
         </button>
         <button
           type="button"
           @click="rollSample"
-          class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
+          class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 px-5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-200 transition"
         >
-          🎰 1회 굴려보기<span v-if="rollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(rollCount) }}회)</span>
+          🎰 1회 굴려보기<span v-if="rollCount > 0" class="ml-1 text-xs text-stone-500 dark:text-stone-400">(누적 {{ fmt(rollCount) }}회)</span>
         </button>
         <button
           v-if="rollCount > 0"
           type="button"
           @click="resetRollCount"
-          class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+          class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400 transition"
           title="누적 횟수 초기화"
         >
           ↺ 초기화
@@ -335,14 +335,14 @@ const meanCost = computed(() => {
     <!-- 1회 굴림 -->
     <section
       v-if="sampleRoll"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 flex items-center justify-between gap-3">
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 flex items-center justify-between gap-3">
         <span>
           🎰 1회 굴림 결과
           <span class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span>
         </span>
-        <span class="text-xs text-slate-500 dark:text-slate-400 font-normal">{{ sampleRoll.length }}줄 · 누적 {{ fmt(rollCount) }}회</span>
+        <span class="text-xs text-stone-500 dark:text-stone-400 font-normal">{{ sampleRoll.length }}줄 · 누적 {{ fmt(rollCount) }}회</span>
       </h2>
       <ul class="space-y-1.5">
         <li
@@ -353,7 +353,7 @@ const meanCost = computed(() => {
             finalDamageBgClass(line.label)
               || (lineHighlights(line.label)
                 ? 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 font-semibold text-amber-800 dark:text-amber-200'
-                : 'bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300'),
+                : 'bg-stone-50 dark:bg-stone-900/40 text-stone-700 dark:text-stone-300'),
           ]"
         >
           <span>▶ {{ line.label }} +{{ fmtLineVal(line.value) }}</span>
@@ -372,22 +372,22 @@ const meanCost = computed(() => {
     <!-- 시뮬 결과 (목표 요약 한 줄) -->
     <section
       v-if="result"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
         🎯 시뮬 조건 요약
       </h2>
       <ul class="space-y-0.5 mb-2">
         <li
           v-for="(t, i) in result.targets"
           :key="i"
-          class="text-sm text-indigo-600 dark:text-indigo-400 font-medium"
+          class="text-sm text-cyan-600 dark:text-cyan-400 font-medium"
         >
           ▸ {{ t.base }} 합 ≥ {{ t.value }}
         </li>
       </ul>
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        평균 <strong class="text-slate-700 dark:text-slate-200">{{ fmt(result.mean) }}회</strong> 시도 예상
+      <p class="text-xs text-stone-500 dark:text-stone-400">
+        평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(result.mean) }}회</strong> 시도 예상
         <span v-if="meanCost">
           (평균 조각 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(meanCost.frag) }}</strong>개,
           결정 <strong class="text-rose-700 dark:text-rose-300">{{ fmt(meanCost.crystal) }}</strong>개)
@@ -399,17 +399,17 @@ const meanCost = computed(() => {
     <!-- 1번 실행의 성공 카드 -->
     <section
       v-if="sampleWinningCard"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
       <div v-if="sampleWinningCard.success" class="space-y-3">
         <!-- 핵심 헤드라인 — N회차 + 실제 소비 -->
-        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-200 dark:border-slate-700 pb-3">
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">
           <span class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
             🎉 {{ fmt(sampleWinningCard.tries) }}회차에 성공
           </span>
           <span
             v-if="selectedMemorial?.cost"
-            class="text-sm text-slate-600 dark:text-slate-300 tabular-nums"
+            class="text-sm text-stone-600 dark:text-stone-300 tabular-nums"
           >
             <span class="text-amber-700 dark:text-amber-300 font-semibold">
               조각 {{ fmt(Math.round(sampleWinningCard.tries * selectedMemorial.cost.frag * 10) / 10) }}개
@@ -421,12 +421,12 @@ const meanCost = computed(() => {
           </span>
         </div>
 
-        <p class="text-xs text-slate-500 dark:text-slate-400">
+        <p class="text-xs text-stone-500 dark:text-stone-400">
           이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다 (위 버튼 다시 누르면 재실행).
         </p>
 
         <!-- 카드 -->
-        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/60 ring-1 ring-emerald-400 dark:ring-emerald-600 p-3">
+        <div class="rounded-lg bg-stone-50 dark:bg-stone-900/60 ring-1 ring-emerald-400 dark:ring-emerald-600 p-3">
           <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
             성공한 카드 ({{ sampleWinningCard.winningLines.length }}줄)
           </div>
@@ -440,7 +440,7 @@ const meanCost = computed(() => {
                 :class="
                   lineHighlights(line.label)
                     ? 'text-emerald-700 dark:text-emerald-300 font-bold'
-                    : (finalDamageTextClass(line.label) || 'text-slate-700 dark:text-slate-200')
+                    : (finalDamageTextClass(line.label) || 'text-stone-700 dark:text-stone-200')
                 "
               >
                 ▶ {{ line.label }} +{{ fmtLineVal(line.value) }}

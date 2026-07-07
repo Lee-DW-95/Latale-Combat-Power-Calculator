@@ -121,11 +121,11 @@ function linePct(line) {
 
 // % 배지 색상 (≥90 빨강, ≥70 주황, ≥30 인디고, 외 슬레이트)
 function pctBadgeClass(p) {
-  if (p == null) return 'text-slate-500';
+  if (p == null) return 'text-stone-500';
   if (p >= 90) return 'text-rose-400 font-bold';
   if (p >= 70) return 'text-orange-300 font-bold';
-  if (p >= 30) return 'text-indigo-300';
-  return 'text-slate-500';
+  if (p >= 30) return 'text-cyan-300';
+  return 'text-stone-500';
 }
 
 // 라인 텍스트 색상 — 선호옵(glow)에서 % 가 높으면 빨강/주황으로 승급
@@ -175,7 +175,7 @@ function fmtVal(v) {
   <div class="space-y-5">
     <!-- 안내 -->
     <div
-      class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200"
+      class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
     >
       <strong>💎 (기간제) 상급 각성석 시뮬레이터</strong> ·
       원하는 옵션 + 수치를 설정하면 <strong>한 카드 안에서 모두 동시에 만족</strong>하는 카드를
@@ -190,19 +190,19 @@ function fmtVal(v) {
 
     <!-- 입력 -->
     <section
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">⚙️ 시뮬 조건</h2>
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
 
       <div class="mb-2 flex items-center justify-between">
-        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <span class="block text-sm font-medium text-stone-700 dark:text-stone-300">
           목표 옵션 (최대 {{ MAX_TARGETS }}개 — 한 카드 안에서 모두 동시 만족)
         </span>
         <button
           type="button"
           @click="addTarget"
           :disabled="targets.length >= MAX_TARGETS"
-          class="text-xs rounded-md ring-1 ring-indigo-300 dark:ring-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
+          class="text-xs rounded-md ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
         >
           + 옵션 추가
         </button>
@@ -216,7 +216,7 @@ function fmtVal(v) {
         >
           <select
             v-model="t.displayLabel"
-            class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
             <option
               v-for="lbl in ALL_OPTION_LABELS"
@@ -233,7 +233,7 @@ function fmtVal(v) {
               type="number"
               step="any"
               placeholder="목표 ≥"
-              class="w-full rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
             <span
               v-if="targetFeasibilities[i]?.feasible === false"
@@ -243,7 +243,7 @@ function fmtVal(v) {
             </span>
             <span
               v-else-if="targetFeasibilities[i]?.max != null"
-              class="block mt-1 text-xs text-slate-400"
+              class="block mt-1 text-xs text-stone-400"
             >
               최대 {{ targetFeasibilities[i].max }}
               <span v-if="targetFeasibilities[i].stones.length === 1" class="ml-0.5">
@@ -265,7 +265,7 @@ function fmtVal(v) {
             type="button"
             @click="removeTarget(i)"
             :disabled="targets.length <= 1"
-            class="rounded-md ring-1 ring-slate-300 dark:ring-slate-600 text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
+            class="rounded-md ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 text-xs transition"
             title="이 옵션 제거"
           >
             ✕
@@ -278,22 +278,22 @@ function fmtVal(v) {
           type="button"
           @click="runSimulation"
           :disabled="isRunning || validTargets.length === 0 || !allTargetsFeasible"
-          class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:dark:bg-slate-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
+          class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
         >
           {{ isRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
         </button>
         <button
           type="button"
           @click="rollSample"
-          class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition"
+          class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 px-5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-200 transition"
         >
-          🎰 1회 굴려보기<span v-if="rollCount > 0" class="ml-1 text-xs text-slate-500 dark:text-slate-400">(누적 {{ fmt(rollCount) }}회)</span>
+          🎰 1회 굴려보기<span v-if="rollCount > 0" class="ml-1 text-xs text-stone-500 dark:text-stone-400">(누적 {{ fmt(rollCount) }}회)</span>
         </button>
         <button
           v-if="rollCount > 0"
           type="button"
           @click="resetRollCount"
-          class="rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition"
+          class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400 transition"
           title="누적 횟수 초기화"
         >
           ↺ 초기화
@@ -304,11 +304,11 @@ function fmtVal(v) {
     <!-- 1회 굴림 미리보기 -->
     <section
       v-if="sampleRoll"
-      class="rounded-2xl bg-slate-900 ring-1 ring-slate-700 p-5 shadow-lg"
+      class="rounded-2xl bg-stone-900 ring-1 ring-stone-700 p-5 shadow-lg"
     >
-      <h2 class="text-base font-bold text-slate-200 mb-3 flex items-center justify-between">
+      <h2 class="text-base font-bold text-stone-200 mb-3 flex items-center justify-between">
         <span>🎰 1회 굴림 결과 <span class="text-xs text-emerald-300 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span></span>
-        <span class="text-xs text-slate-400 font-normal">{{ sampleRoll.lineCount }}줄 · 누적 {{ fmt(rollCount) }}회</span>
+        <span class="text-xs text-stone-400 font-normal">{{ sampleRoll.lineCount }}줄 · 누적 {{ fmt(rollCount) }}회</span>
       </h2>
 
       <div
@@ -352,22 +352,22 @@ function fmtVal(v) {
     <!-- 시뮬 조건 요약 -->
     <section
       v-if="result"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
         🎯 시뮬 조건 요약
       </h2>
       <ul class="space-y-0.5 mb-2">
         <li
           v-for="(t, i) in result.targets"
           :key="i"
-          class="text-sm text-indigo-600 dark:text-indigo-400 font-medium"
+          class="text-sm text-cyan-600 dark:text-cyan-400 font-medium"
         >
           ▸ {{ t.displayLabel }} ≥ {{ t.value }}
         </li>
       </ul>
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        평균 <strong class="text-slate-700 dark:text-slate-200">{{ fmt(result.mean) }}회</strong> 시도 예상
+      <p class="text-xs text-stone-500 dark:text-stone-400">
+        평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(result.mean) }}회</strong> 시도 예상
         <span v-if="meanCost">
           (평균 인던 재료 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(meanCost.material) }}</strong>개,
           망치 <strong class="text-rose-700 dark:text-rose-300">{{ fmt(meanCost.hammer) }}</strong>개)
@@ -379,15 +379,15 @@ function fmtVal(v) {
     <!-- 1번 실행의 성공 카드 -->
     <section
       v-if="sampleWinningCard"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
       <div v-if="sampleWinningCard.success" class="space-y-3">
         <!-- 핵심 헤드라인 — N회차 + 실제 소비 -->
-        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-200 dark:border-slate-700 pb-3">
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">
           <span class="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
             🎉 {{ fmt(sampleWinningCard.tries) }}회차에 성공
           </span>
-          <span class="text-sm text-slate-600 dark:text-slate-300 tabular-nums">
+          <span class="text-sm text-stone-600 dark:text-stone-300 tabular-nums">
             <span class="text-amber-700 dark:text-amber-300 font-semibold">
               인던 재료 {{ fmt(sampleWinningCard.tries * COST_PER_ROLL.material) }}개
             </span>
@@ -398,12 +398,12 @@ function fmtVal(v) {
           </span>
         </div>
 
-        <p class="text-xs text-slate-500 dark:text-slate-400">
+        <p class="text-xs text-stone-500 dark:text-stone-400">
           이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다 (위 버튼 다시 누르면 재실행).
         </p>
 
         <!-- 카드 -->
-        <div class="rounded-lg bg-slate-900 ring-1 ring-emerald-500 p-3">
+        <div class="rounded-lg bg-stone-900 ring-1 ring-emerald-500 p-3">
           <div
             :class="[
               'inline-block px-3 py-1 rounded ring-1 mb-2 text-xs font-extrabold tracking-wide',
@@ -460,13 +460,13 @@ function fmtVal(v) {
       </div>
     </section>
 
-    <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 pt-2">
+    <p class="text-center text-[11px] text-stone-400 dark:text-stone-500 pt-2">
       자료 출처 ·
       <a
         href="https://lataleinfo.tistory.com"
         target="_blank"
         rel="noopener noreferrer"
-        class="underline decoration-dotted hover:text-indigo-500 dark:hover:text-indigo-400"
+        class="underline decoration-dotted hover:text-cyan-500 dark:hover:text-cyan-400"
       >라테일인포 (lataleinfo.tistory.com)</a>
     </p>
   </div>

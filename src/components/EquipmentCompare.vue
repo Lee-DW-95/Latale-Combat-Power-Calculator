@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { getStatLabel, pctPool } from '../utils/battlePower.js';
 import { EQUIP_ROW_DEFS } from '../data/statLabels.js';
+import NumInput from './NumInput.vue';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -91,43 +92,54 @@ function needsFallbackWarning(def) {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
+  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
     <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">🛡️ 장비 비교</h2>
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🛡️ 장비 비교</h2>
       <button
         type="button"
         @click="emit('reset')"
-        class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+        class="rounded-md px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 dark:text-stone-200 dark:hover:bg-stone-700"
       >
         초기화
       </button>
     </header>
 
-    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-      한 부위 장비의 옵션을 그대로 입력하세요.
+    <p class="text-xs text-stone-500 dark:text-stone-400 mb-1">
+      한 부위 장비의 옵션을 그대로 입력하세요 —
       <span class="text-rose-600 dark:text-rose-400 font-semibold">현재 장비</span>는 빼는 옵션,
       <span class="text-emerald-600 dark:text-emerald-400 font-semibold">새 장비</span>는 끼는 옵션.
-      <br />
-      📐 <strong>새 표시값 = (기본값 + 가산옵션) × (1 + 누적% + %옵션)</strong>
-      — 같은 부적이라도 <strong>본인의 기본값과 누적%</strong>에 따라 변화량이 달라집니다.
-      스탯명 옆 <span class="text-indigo-500 dark:text-indigo-400">파란 (+X%)</span>이 자동 계산된 현재 누적%입니다.
-      <br />
-      ※ <strong>% 옵션</strong> 컬럼은 게임의 <strong>"최종 크리티컬 데미지 %"</strong>처럼 누적 풀에 더해지는 값입니다
-      (부적의 "크댐 +5%" 옵션이라면 그대로 5 입력).
-      <br />
-      ※ 크리/최소/최대 데미지는 게임 내에서 기본 스탯이 % 형태로 표기될 수 있으나
-      (예: "크리티컬 데미지 135%"), 본 도구는 T창 능력치 세부정보의 영역값 숫자(예: 9,628)를 그대로 입력받습니다.
+      결과는 하단 고정 바와 아래 결과 카드에 실시간 반영됩니다.
     </p>
+    <details class="mb-3 text-xs text-stone-500 dark:text-stone-400">
+      <summary class="cursor-pointer select-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300">
+        % 옵션 · 계산 방식 자세히 보기
+      </summary>
+      <div class="mt-2 rounded-md bg-stone-50 dark:bg-stone-900/50 p-3 space-y-1">
+        <p>
+          📐 <strong>새 표시값 = (기본값 + 가산옵션) × (1 + 누적% + %옵션)</strong>
+          — 같은 부적이라도 <strong>본인의 기본값과 누적%</strong>에 따라 변화량이 달라집니다.
+          스탯명 옆 <span class="text-cyan-500 dark:text-cyan-400">파란 (+X%)</span>이 자동 계산된 현재 누적%입니다.
+        </p>
+        <p>
+          ※ <strong>% 옵션</strong> 컬럼은 게임의 <strong>"최종 크리티컬 데미지 %"</strong>처럼 누적 풀에 더해지는 값입니다
+          (부적의 "크댐 +5%" 옵션이라면 그대로 5 입력).
+        </p>
+        <p>
+          ※ 크리/최소/최대 데미지는 게임 내에서 기본 스탯이 % 형태로 표기될 수 있으나
+          (예: "크리티컬 데미지 135%"), 본 도구는 T창 능력치 세부정보의 영역값 숫자(예: 9,628)를 그대로 입력받습니다.
+        </p>
+      </div>
+    </details>
 
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="text-left text-slate-500 dark:text-slate-400 text-xs">
+          <tr class="text-left text-stone-500 dark:text-stone-400 text-xs">
             <th class="py-2 pr-3 font-medium">스탯</th>
             <th class="py-2 px-2 font-medium text-rose-600 dark:text-rose-400 text-center" colspan="2">현재 장비 (-)</th>
             <th class="py-2 px-2 font-medium text-emerald-600 dark:text-emerald-400 text-center" colspan="2">새 장비 (+)</th>
           </tr>
-          <tr class="text-left text-slate-400 dark:text-slate-500 text-[11px]">
+          <tr class="text-left text-stone-400 dark:text-stone-500 text-[11px]">
             <th></th>
             <th class="py-1 px-2 font-normal">가산값</th>
             <th class="py-1 px-2 font-normal" title="누적% 풀에 더해지는 최종 % (예: 크리티컬 데미지 +5% 부적이면 5)">
@@ -143,13 +155,13 @@ function needsFallbackWarning(def) {
           <tr
             v-for="def in EQUIP_ROW_DEFS"
             :key="def.key"
-            class="border-t border-slate-100 dark:border-slate-700"
+            class="border-t border-stone-100 dark:border-stone-700"
           >
-            <td class="py-2 pr-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+            <td class="py-2 pr-3 text-stone-700 dark:text-stone-300 whitespace-nowrap">
               {{ rowLabel(def) }}
               <span
                 v-if="pctPoolFor(def) != null"
-                class="ml-1 text-[11px] font-normal text-indigo-500 dark:text-indigo-400"
+                class="ml-1 text-[11px] font-normal text-cyan-500 dark:text-cyan-400"
                 :title="pctBadgeTitle(def)"
               >
                 ({{ formatPct(pctPoolFor(def)) }}<template v-if="def.key === '올스탯'"> · 주스탯 풀</template>)
@@ -164,49 +176,45 @@ function needsFallbackWarning(def) {
             </td>
             <!-- 현재 장비 가산 -->
             <td class="py-2 px-2">
-              <input
-                type="number"
+              <NumInput
                 :step="def.addStep"
-                :value="oldEquip[def.addKey]"
-                @input="setOld(def.addKey, $event.target.value)"
-                class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/30 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                :model-value="oldEquip[def.addKey]"
+                @update:model-value="setOld(def.addKey, $event)"
+                class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
               />
             </td>
             <!-- 현재 장비 % -->
             <td class="py-2 px-2">
-              <input
+              <NumInput
                 v-if="def.pctKey"
-                type="number"
                 step="1"
-                :value="oldEquip[def.pctKey]"
-                @input="setOld(def.pctKey, $event.target.value)"
-                placeholder="최종 %"
-                class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                :model-value="oldEquip[def.pctKey]"
+                @update:model-value="setOld(def.pctKey, $event)"
+                placeholder="%"
+                class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
               />
-              <span v-else class="block text-center text-slate-400 dark:text-slate-600">—</span>
+              <span v-else class="block text-center text-stone-400 dark:text-stone-600">—</span>
             </td>
             <!-- 새 장비 가산 -->
             <td class="py-2 px-2">
-              <input
-                type="number"
+              <NumInput
                 :step="def.addStep"
-                :value="newEquip[def.addKey]"
-                @input="setNew(def.addKey, $event.target.value)"
-                class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+                :model-value="newEquip[def.addKey]"
+                @update:model-value="setNew(def.addKey, $event)"
+                class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
               />
             </td>
             <!-- 새 장비 % -->
             <td class="py-2 px-2">
-              <input
+              <NumInput
                 v-if="def.pctKey"
-                type="number"
                 step="1"
-                :value="newEquip[def.pctKey]"
-                @input="setNew(def.pctKey, $event.target.value)"
-                placeholder="최종 %"
-                class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+                :model-value="newEquip[def.pctKey]"
+                @update:model-value="setNew(def.pctKey, $event)"
+                placeholder="%"
+                class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
               />
-              <span v-else class="block text-center text-slate-400 dark:text-slate-600">—</span>
+              <span v-else class="block text-center text-stone-400 dark:text-stone-600">—</span>
             </td>
           </tr>
         </tbody>

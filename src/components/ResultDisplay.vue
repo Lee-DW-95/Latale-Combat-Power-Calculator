@@ -35,12 +35,12 @@ const sortedContribs = computed(() => {
 
 <template>
   <section
-    class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+    class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
-    <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">📊 결과</h2>
+    <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">📊 결과</h2>
 
-    <div v-if="!result" class="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 py-2">
-      <img src="/assets/latale/char-82.png" alt="" class="w-12 h-12 rounded-full ring-1 ring-indigo-200 dark:ring-slate-600 shrink-0" draggable="false" />
+    <div v-if="!result" class="flex items-center gap-3 text-sm text-stone-500 dark:text-stone-400 py-2">
+      <img src="/assets/latale/char-82.png" alt="" class="w-12 h-12 rounded-full ring-1 ring-cyan-200 dark:ring-stone-600 shrink-0" draggable="false" />
       <span>현재/새 장비 옵션을 입력하면 결과가 여기 표시됩니다.</span>
     </div>
 
@@ -54,46 +54,46 @@ const sortedContribs = computed(() => {
               ? 'text-emerald-600 dark:text-emerald-400'
               : result.direction === 'down'
               ? 'text-rose-600 dark:text-rose-400'
-              : 'text-slate-700 dark:text-slate-200',
+              : 'text-stone-700 dark:text-stone-200',
           ]"
         >
           {{ headline }}
         </h3>
-        <span class="text-sm text-slate-500 dark:text-slate-400">
+        <span class="text-sm text-stone-500 dark:text-stone-400">
           ({{ result.changePercent >= 0 ? '+' : '' }}{{ result.changePercent.toFixed(2) }}%)
         </span>
       </div>
 
       <dl class="grid grid-cols-2 gap-3 mb-5 text-sm">
         <div
-          class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 ring-1 ring-slate-200 dark:ring-slate-700"
+          class="rounded-lg bg-stone-50 dark:bg-stone-900/50 p-3 ring-1 ring-stone-200 dark:ring-stone-700"
         >
-          <dt class="text-slate-500 dark:text-slate-400">기존 전투력</dt>
-          <dd class="text-lg font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+          <dt class="text-stone-500 dark:text-stone-400">기존 전투력</dt>
+          <dd class="text-lg font-bold text-stone-800 dark:text-stone-100 tabular-nums">
             {{ fmt(result.currentBP) }}
           </dd>
         </div>
         <div
-          class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 p-3 ring-1 ring-indigo-200 dark:ring-indigo-800"
+          class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 p-3 ring-1 ring-cyan-200 dark:ring-cyan-800"
         >
-          <dt class="text-indigo-600 dark:text-indigo-300">교체 후 예상</dt>
-          <dd class="text-lg font-bold text-indigo-700 dark:text-indigo-200 tabular-nums">
+          <dt class="text-cyan-600 dark:text-cyan-300">교체 후 예상</dt>
+          <dd class="text-lg font-bold text-cyan-700 dark:text-cyan-200 tabular-nums">
             {{ fmt(result.newBP) }}
           </dd>
         </div>
       </dl>
 
       <div v-if="sortedContribs.length > 0">
-        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">세부 변화</h4>
+        <h4 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">세부 변화</h4>
         <ul class="space-y-1">
           <li
             v-for="c in sortedContribs"
             :key="c.stat"
-            class="flex items-center justify-between text-sm rounded-md px-3 py-2 bg-slate-50 dark:bg-slate-900/40"
+            class="flex items-center justify-between text-sm rounded-md px-3 py-2 bg-stone-50 dark:bg-stone-900/40"
           >
-            <span class="text-slate-700 dark:text-slate-300">
+            <span class="text-stone-700 dark:text-stone-300">
               {{ getStatLabel(type, c.stat) }}
-              <span class="text-slate-500 dark:text-slate-400 tabular-nums">
+              <span class="text-stone-500 dark:text-stone-400 tabular-nums">
                 {{ c.diff >= 0 ? '+' : '' }}{{ Math.round(c.diff).toLocaleString('ko-KR') }}
               </span>
             </span>
@@ -104,7 +104,7 @@ const sortedContribs = computed(() => {
                   ? 'text-emerald-600 dark:text-emerald-400'
                   : c.impact < 0
                   ? 'text-rose-600 dark:text-rose-400'
-                  : 'text-slate-500',
+                  : 'text-stone-500',
               ]"
             >
               전투력 {{ signed(c.impact) }}
@@ -112,7 +112,7 @@ const sortedContribs = computed(() => {
           </li>
         </ul>
       </div>
-      <p v-else class="text-sm text-slate-500 dark:text-slate-400">
+      <p v-else class="text-sm text-stone-500 dark:text-stone-400">
         변경된 옵션이 없습니다.
       </p>
     </div>

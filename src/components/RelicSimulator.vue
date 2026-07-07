@@ -97,7 +97,7 @@ function fmtVal(v, option) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
+    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
       <strong>🌟 성물 시뮬</strong> · 5개 성물(대미지 영향) 각각의 레벨 + 전용석 옵션 + 공용석 2슬롯을 입력하면 합산 보너스가 산출됩니다.
       <br />
       <strong class="text-xs">계산</strong>: 성물 배율 = 레벨 × (50/90) (Lv90 ≈ 50.0). 옵션 보너스 = 옵션값 × 배율 / 100.
@@ -118,10 +118,10 @@ function fmtVal(v, option) {
       <section
         v-for="(relic, i) in relicSet"
         :key="relic.key"
-        class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-bold text-slate-800 dark:text-slate-100">
+          <h3 class="text-base font-bold text-stone-800 dark:text-stone-100">
             🌟 {{ relic.name }}
           </h3>
           <div class="text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -131,13 +131,13 @@ function fmtVal(v, option) {
 
         <!-- 레벨 -->
         <label class="block mb-3">
-          <span class="block text-xs text-slate-500 dark:text-slate-400 mb-1">성물 레벨 (1~99)</span>
+          <span class="block text-xs text-stone-500 dark:text-stone-400 mb-1">성물 레벨 (1~99)</span>
           <input
             v-model.number="relic.level"
             type="number"
             min="1"
             max="99"
-            class="w-32 rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="w-32 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           />
         </label>
 
@@ -147,7 +147,7 @@ function fmtVal(v, option) {
           <div class="grid grid-cols-[1fr_120px] gap-2">
             <select
               v-model="relic.exclusiveOptionType"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-xs"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1.5 text-xs"
             >
               <option value="">옵션 없음</option>
               <option v-for="opt in RELICS[relic.key].exclusiveOptions" :key="opt" :value="opt">
@@ -159,7 +159,7 @@ function fmtVal(v, option) {
               type="number"
               step="any"
               placeholder="수치"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-xs tabular-nums"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1.5 text-xs tabular-nums"
             />
           </div>
         </div>
@@ -174,7 +174,7 @@ function fmtVal(v, option) {
           >
             <select
               v-model="cs.option"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-xs"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1.5 text-xs"
             >
               <option value="">슬롯 {{ j + 1 }} 없음</option>
               <option v-for="opt in COMMON_STONE_OPTIONS" :key="opt" :value="opt">
@@ -186,7 +186,7 @@ function fmtVal(v, option) {
               type="number"
               step="any"
               placeholder="수치"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-xs tabular-nums"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1.5 text-xs tabular-nums"
             />
           </div>
         </div>
@@ -196,10 +196,10 @@ function fmtVal(v, option) {
     <!-- 합산 결과 -->
     <section
       v-if="totalsList.length > 0"
-      class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
+      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
     >
       <h2 class="text-lg font-bold text-emerald-700 dark:text-emerald-300 mb-3">📊 성물 합산 보너스</h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
         모든 성물의 전용석 + 공용석 옵션을 성물 배율로 환산한 합계. 인게임 적용 시 추가되는 스탯/효과 추정치.
       </p>
 
@@ -209,7 +209,7 @@ function fmtVal(v, option) {
           :key="t.option"
           class="flex items-center justify-between rounded-md ring-1 ring-emerald-200 dark:ring-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 px-3 py-2 text-sm"
         >
-          <span class="text-slate-700 dark:text-slate-200">{{ t.option }}</span>
+          <span class="text-stone-700 dark:text-stone-200">{{ t.option }}</span>
           <span class="font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
             +{{ fmtVal(t.value, t.option) }}
           </span>
@@ -218,7 +218,7 @@ function fmtVal(v, option) {
     </section>
     <section
       v-else
-      class="rounded-2xl bg-slate-50 dark:bg-slate-900/40 ring-1 ring-slate-200 dark:ring-slate-700 p-5 text-center text-sm text-slate-500 dark:text-slate-400"
+      class="rounded-2xl bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-center text-sm text-stone-500 dark:text-stone-400"
     >
       성물 옵션 입력 시 합산 보너스가 여기에 표시됩니다.
     </section>

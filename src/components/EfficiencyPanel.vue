@@ -572,19 +572,17 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
 <template>
   <section
-    class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5"
+    class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
-    <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">⚡ 효율 분석</h2>
-
-    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-      현재 캐릭터 스탯 기준으로 자동 계산됩니다. 같은 옵션이라도
-      <strong>본인 스탯과 누적%</strong>에 따라 BP 변화량이 다르게 산출됩니다.
-    </p>
+    <h2
+      class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 cursor-help"
+      title="현재 캐릭터 스탯 기준 자동 계산 — 같은 옵션이라도 본인 스탯과 누적%에 따라 BP 변화량이 다르게 산출됩니다."
+    >⚡ 효율 분석</h2>
 
     <!-- 빈 상태 -->
     <div
       v-if="baseBP <= 0"
-      class="text-sm text-slate-500 dark:text-slate-400 py-4 text-center bg-slate-50 dark:bg-slate-900/40 rounded-lg"
+      class="text-sm text-stone-500 dark:text-stone-400 py-4 text-center bg-stone-50 dark:bg-stone-900/40 rounded-lg"
     >
       먼저 위에서 <strong>캐릭터 T창 정보</strong>를 입력해주세요.
     </div>
@@ -592,32 +590,31 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
     <div v-else>
       <!-- (B) 마진 효율 분석 -->
       <div class="mb-5">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
-          📊 스탯별 한계 효율 — 옵션 +1 단위 객관 비교
+        <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-1">
+          📊 스탯별 효율 — 지금 뭘 올리는 게 이득일까?
         </h3>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-snug">
-          모든 스탯을 게임 부적 옵션 단위 (+1%) 로 통일해 BP 영향 직접 비교.
-          각 스탯의 메커니즘은 항목별 (누적/가산) 표시.
+        <p class="text-[11px] text-stone-500 dark:text-stone-400 mb-3 leading-snug">
+          같은 크기(+1% 단위)의 옵션 기준으로 어떤 스탯이 전투력을 가장 많이 올리는지 비교합니다.
         </p>
         <ul class="space-y-1.5">
           <li
             v-for="e in efficiencies"
             :key="e.key"
-            class="group flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/40 rounded px-2 py-1 transition"
+            class="group flex items-center gap-2 text-sm cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/40 rounded px-2 py-1 transition"
             @click="pickStat(e.key)"
             :title="`'${e.label}' 빠른 시뮬에 적용`"
           >
             <span class="flex flex-col flex-shrink-0 w-32 sm:w-44 leading-tight">
-              <span class="text-slate-700 dark:text-slate-300 text-xs sm:text-sm truncate">
+              <span class="text-stone-700 dark:text-stone-300 text-xs sm:text-sm truncate">
                 {{ e.label }}
               </span>
               <span class="text-[10px] tabular-nums">
-                <span class="text-slate-400 dark:text-slate-500">{{ e.stepLabel }}</span>
+                <span class="text-stone-400 dark:text-stone-500">{{ e.stepLabel }}</span>
                 <span
                   :class="[
                     'ml-1',
                     e.unitNote === '누적'
-                      ? 'text-indigo-500/70 dark:text-indigo-400/70'
+                      ? 'text-cyan-500/70 dark:text-cyan-400/70'
                       : 'text-rose-500/70 dark:text-rose-400/70',
                   ]"
                   :title="e.unitNote === '누적' ? '누적%P 옵션' : 'raw 가산 옵션'"
@@ -626,62 +623,62 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 </span>
               </span>
             </span>
-            <div class="flex-1 bg-slate-100 dark:bg-slate-900/50 rounded h-5 overflow-hidden relative min-w-0">
+            <div class="flex-1 bg-stone-100 dark:bg-stone-900/50 rounded h-5 overflow-hidden relative min-w-0">
               <div
-                class="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 dark:from-indigo-500 dark:to-indigo-300 transition-all"
+                class="h-full bg-gradient-to-r from-cyan-400 to-cyan-600 dark:from-cyan-500 dark:to-cyan-300 transition-all"
                 :style="{ width: `${Math.max(2, (e.delta / maxDelta) * 100)}%` }"
               />
             </div>
             <span class="flex flex-col flex-shrink-0 w-24 sm:w-32 text-right leading-tight">
-              <span class="text-slate-800 dark:text-slate-100 tabular-nums font-semibold text-xs sm:text-sm">
+              <span class="text-stone-800 dark:text-stone-100 tabular-nums font-semibold text-xs sm:text-sm">
                 {{ sign(e.delta) }}
               </span>
-              <span class="text-slate-500 dark:text-slate-400 text-[10px] tabular-nums">
+              <span class="text-stone-500 dark:text-stone-400 text-[10px] tabular-nums">
                 ({{ e.deltaPct >= 0 ? '+' : '' }}{{ e.deltaPct.toFixed(3) }}%)
               </span>
             </span>
           </li>
         </ul>
-        <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+        <p class="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
           💡 표 항목 클릭 시 아래 빠른 시뮬에 자동 적용됩니다.
         </p>
       </div>
 
       <!-- (C) 스탯간 옵션 % 동등 환산 — 숨김 처리 (v-if="false"), 재노출 시 조건만 제거 -->
-      <div v-if="false" class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+      <div v-if="false" class="border-t border-stone-200 dark:border-stone-700 pt-4 mb-5">
+        <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">
           🔄 스탯간 옵션 % 동등 환산
         </h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           기준 옵션과 같은 BP 효과를 내는 다른 옵션 환산 — <strong>"근력 +8% = 크댐 +45%"</strong> 식.
           작은 %로 같은 효과 = 효율 좋음 (인디고 색).
-          <span class="text-slate-400 dark:text-slate-500">결과에 마우스 올리면 옵션 메커니즘 표시.</span>
+          <span class="text-stone-400 dark:text-stone-500">결과에 마우스 올리면 옵션 메커니즘 표시.</span>
         </p>
         <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="text-slate-500 dark:text-slate-400 text-sm">기준</span>
+          <span class="text-stone-500 dark:text-stone-400 text-sm">기준</span>
           <select
             v-model="equivStat"
-            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
             <option v-for="m in MARGINAL_STEPS" :key="m.key" :value="m.key">
               {{ getStatLabel(stats.type, m.key) }}
             </option>
           </select>
-          <span class="text-slate-500 dark:text-slate-400 font-medium">옵션 +</span>
+          <span class="text-stone-500 dark:text-stone-400 font-medium">옵션 +</span>
           <input
             v-model.number="equivPct"
             type="number"
             step="any"
-            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-20 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums w-20 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           />
-          <span class="text-slate-500 dark:text-slate-400 text-sm">{{ equivalents?.refUnit ?? '%' }}</span>
+          <span class="text-stone-500 dark:text-stone-400 text-sm">{{ equivalents?.refUnit ?? '%' }}</span>
         </div>
 
         <!-- BP 기준 모드 토글 -->
         <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
-          <span class="text-slate-500 dark:text-slate-400">BP 기준:</span>
+          <span class="text-stone-500 dark:text-stone-400">BP 기준:</span>
           <!-- 직접/소환 분리 -->
-          <div class="inline-flex rounded-md ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden">
+          <div class="inline-flex rounded-md ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden">
             <button
               type="button"
               v-for="m in [
@@ -694,16 +691,16 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               :class="[
                 'px-3 py-1 transition',
                 equivMode === m.v
-                  ? 'bg-indigo-600 text-white font-semibold'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+                  ? 'bg-cyan-600 text-white font-semibold'
+                  : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
               {{ m.label }}
             </button>
           </div>
-          <span class="text-slate-300 dark:text-slate-600">·</span>
+          <span class="text-stone-300 dark:text-stone-600">·</span>
           <!-- 일반/보스 몬스터 분리 -->
-          <div class="inline-flex rounded-md ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden">
+          <div class="inline-flex rounded-md ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden">
             <button
               type="button"
               v-for="m in [
@@ -716,24 +713,24 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 'px-3 py-1 transition',
                 equivMode === m.v
                   ? (m.v === 'normal' ? 'bg-emerald-600 text-white font-semibold' : 'bg-rose-600 text-white font-semibold')
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+                  : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
               {{ m.label }}
             </button>
           </div>
         </div>
-        <p class="text-[10px] text-slate-400 dark:text-slate-500 italic mb-3 leading-snug">
+        <p class="text-[10px] text-stone-400 dark:text-stone-500 italic mb-3 leading-snug">
           직타/소환 비중에 맞춰 직접·소환 모드 / 일반·보스 던전 콘텐츠에 맞춰 vs 일반·vs 보스 모드 선택.
         </p>
 
         <div v-if="equivalents" class="text-sm">
-          <p class="text-slate-600 dark:text-slate-300 mb-2">
+          <p class="text-stone-600 dark:text-stone-300 mb-2">
             <strong>{{ getStatLabel(stats.type, equivStat) }}</strong>
             <span :class="equivPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
               {{ equivPct >= 0 ? '+' : '' }}{{ equivPct }}{{ equivalents.refUnit }} 옵션
             </span>
-            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+            <span class="text-[11px] text-stone-500 dark:text-stone-400">
               ({{
                 equivMode === 'avg' ? '종합' :
                 equivMode === 'direct' ? '직접' :
@@ -742,7 +739,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               }} BP
               {{ equivalents.refDeltaBP >= 0 ? '+' : '' }}{{ fmt(equivalents.refDeltaBP) }})
             </span>
-            <span class="text-slate-500 dark:text-slate-400">≈ 다른 옵션</span>
+            <span class="text-stone-500 dark:text-stone-400">≈ 다른 옵션</span>
           </p>
           <p
             v-if="equivalents.refCapped"
@@ -754,16 +751,16 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             <li
               v-for="e in equivalents.items"
               :key="e.key"
-              class="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-900/40"
+              class="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-stone-50 dark:hover:bg-stone-900/40"
             >
-              <span class="text-slate-700 dark:text-slate-300 truncate">{{ e.label }}</span>
+              <span class="text-stone-700 dark:text-stone-300 truncate">{{ e.label }}</span>
               <span
                 v-if="e.amount != null"
                 :class="[
                   'tabular-nums font-semibold',
                   Math.abs(e.amount) < Math.abs(equivPct)
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-slate-500 dark:text-slate-400',
+                    ? 'text-cyan-600 dark:text-cyan-400'
+                    : 'text-stone-500 dark:text-stone-400',
                 ]"
                 :title="`${e.unitMechanism === '누적' ? '누적%P 추가 옵션' : 'raw 절대값 가산 옵션'}${
                   e.coarse ? ' · 옵션 한 단위가 기준 효과보다 커서 선형 근사값'
@@ -776,7 +773,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               >
                 <span
                   v-if="e.approx || e.coarse"
-                  class="text-slate-400 dark:text-slate-500 font-normal mr-0.5"
+                  class="text-stone-400 dark:text-stone-500 font-normal mr-0.5"
                 >≈</span>{{ e.amount >= 0 ? '+' : '' }}{{ e.amount.toFixed(2) }}{{ e.unit }}<span
                   v-if="e.coarse"
                   class="text-[9px] text-amber-500/80 dark:text-amber-400/80 ml-0.5"
@@ -785,27 +782,27 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               </span>
               <span
                 v-else
-                class="text-[10px] text-slate-400 dark:text-slate-500 italic"
+                class="text-[10px] text-stone-400 dark:text-stone-500 italic"
               >
                 {{ e.note }}
               </span>
             </li>
           </ul>
-          <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic leading-snug">
+          <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
             ⓘ <strong>≈</strong> 는 옵션이 정수 단위(floor)로만 적용돼 가장 근접한 근사 환산값임을 뜻합니다 ·
             <strong>도달 불가</strong> 는 관통 cap(99)·최소뎀 한계처럼 게임상 천장에 막힌 경우입니다.
             정확한 환산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
           </p>
         </div>
-        <p v-else class="text-xs text-slate-400 dark:text-slate-500 italic">
+        <p v-else class="text-xs text-stone-400 dark:text-stone-500 italic">
           기준 스탯과 옵션 값을 입력하면 다른 옵션들의 동등 변화량이 표시됩니다.
         </p>
       </div>
 
       <!-- (D) 각성석 종합 환산 -->
-      <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
+      <div class="border-t border-stone-200 dark:border-stone-700 pt-4 mb-5">
         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200">
             💎 각성석 종합 환산
           </h3>
           <div class="flex items-center gap-1.5 text-[11px]">
@@ -813,7 +810,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               type="button"
               @click="addAwakStone"
               :disabled="awakStones.length >= AWAK_STONE_MAX"
-              class="px-2 py-1 rounded ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               + 행 추가
             </button>
@@ -821,7 +818,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               type="button"
               @click="setAwakStonesMax"
               :disabled="awakStones.length >= AWAK_STONE_MAX"
-              class="px-2 py-1 rounded ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               행 MAX ({{ AWAK_STONE_MAX }})
             </button>
@@ -831,8 +828,8 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               :class="[
                 'px-2 py-1 rounded ring-1 transition',
                 awakShowAvg
-                  ? 'bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700'
-                  : 'ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+                  ? 'bg-cyan-600 text-white ring-cyan-600 hover:bg-cyan-700'
+                  : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
               title="활성 각성석 수로 나눈 평균 급 표시"
             >
@@ -841,25 +838,27 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             <button
               type="button"
               @click="resetAwakStones"
-              class="px-2 py-1 rounded text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              class="px-2 py-1 rounded text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
             >
               초기화
             </button>
           </div>
         </div>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-snug">
-          각 옵션을 <strong>단독 적용했을 때의 ΔBP</strong> 를 기준 스탯으로 환산해 합산합니다 —
-          예: "최대대미지 +100% + 크리티컬 대미지 +100%" → <strong>합산 160%급</strong>.
-          각성석은 최대 10 개 장착 가능하며, 위쪽 환산 섹션과 같은 <strong>BP 기준 모드</strong>를 공유합니다.
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
+          각성석(최대 10개) 옵션을 입력하면 전투력 상승량을 합산하고
+          <span
+            class="cursor-help underline decoration-dotted"
+            title='각 옵션을 단독 적용했을 때의 BP 상승을 기준 스탯으로 환산해 합산 — 예: "최대대미지 +100% + 크댐 +100%" → 합산 160%급'
+          >"○○%급" ⓘ</span>으로 요약해줍니다.
         </p>
 
         <div class="space-y-2 mb-3">
           <div
             v-for="(stone, sIdx) in awakStones"
             :key="sIdx"
-            class="flex items-center gap-1.5 flex-wrap rounded-md ring-1 ring-slate-200 dark:ring-slate-700 pl-1 pr-2 py-2"
+            class="flex items-center gap-1.5 flex-wrap rounded-md ring-1 ring-stone-200 dark:ring-stone-700 pl-1 pr-2 py-2"
           >
-            <span class="text-xs text-slate-500 dark:text-slate-400 w-5 shrink-0 tabular-nums font-semibold text-right">
+            <span class="text-xs text-stone-500 dark:text-stone-400 w-5 shrink-0 tabular-nums font-semibold text-right">
               {{ sIdx + 1 }}.
             </span>
             <div
@@ -871,7 +870,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               <select
                 :value="awakDropdownKey(opt)"
                 @change="(e) => onAwakDropdownChange(sIdx, oIdx, e.target.value)"
-                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1 py-1 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none w-24"
+                class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none w-24"
               >
                 <option
                   v-for="d in AWAK_DROPDOWN_OPTIONS"
@@ -887,7 +886,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 type="number"
                 step="any"
                 placeholder="값"
-                class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-1.5 py-1 text-xs tabular-nums w-14 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1.5 py-1 text-xs tabular-nums w-14 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
               />
             </div>
             <!-- 행(각성석)별 환산 합 + 행 초기화 — 우측 -->
@@ -902,7 +901,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               <button
                 type="button"
                 @click="resetAwakStoneAt(sIdx)"
-                class="w-5 h-5 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition text-sm leading-none"
+                class="w-5 h-5 inline-flex items-center justify-center rounded text-stone-400 dark:text-stone-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition text-sm leading-none"
                 title="이 행 초기화"
                 aria-label="이 행 초기화"
               >
@@ -913,33 +912,33 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             <!-- 행별 모드 분리 표시 (직접/소환/vs 일반/vs 보스) — w-full 로 wrap 강제 -->
             <div
               v-if="awakResult?.stonesInfo[sIdx]?.activeCount > 0"
-              class="w-full grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-0.5 pl-6 pt-1 mt-0.5 border-t border-slate-100 dark:border-slate-700/50 text-[10px] tabular-nums leading-tight"
+              class="w-full grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-0.5 pl-6 pt-1 mt-0.5 border-t border-stone-100 dark:border-stone-700/50 text-[10px] tabular-nums leading-tight"
             >
               <div class="flex items-baseline gap-1 min-w-0">
-                <span class="text-amber-700 dark:text-amber-300 font-semibold shrink-0">직접</span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.direct) }}</span>
-                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                <span class="text-orange-700 dark:text-orange-300 font-semibold shrink-0">직접</span>
+                <span class="text-stone-700 dark:text-stone-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.direct) }}</span>
+                <span class="text-cyan-600 dark:text-cyan-400 truncate">
                   ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.direct >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.direct.toFixed(2) }}{{ awakResult.refUnit }}
                 </span>
               </div>
               <div class="flex items-baseline gap-1 min-w-0">
-                <span class="text-sky-700 dark:text-sky-300 font-semibold shrink-0">소환</span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.summon) }}</span>
-                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                <span class="text-teal-700 dark:text-teal-300 font-semibold shrink-0">소환</span>
+                <span class="text-stone-700 dark:text-stone-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.summon) }}</span>
+                <span class="text-cyan-600 dark:text-cyan-400 truncate">
                   ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.summon >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.summon.toFixed(2) }}{{ awakResult.refUnit }}
                 </span>
               </div>
               <div class="flex items-baseline gap-1 min-w-0">
                 <span class="text-emerald-700 dark:text-emerald-300 font-semibold shrink-0">vs 일반</span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.normal) }}</span>
-                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                <span class="text-stone-700 dark:text-stone-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.normal) }}</span>
+                <span class="text-cyan-600 dark:text-cyan-400 truncate">
                   ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.normal >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.normal.toFixed(2) }}{{ awakResult.refUnit }}
                 </span>
               </div>
               <div class="flex items-baseline gap-1 min-w-0">
                 <span class="text-rose-700 dark:text-rose-300 font-semibold shrink-0">vs 보스</span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.boss) }}</span>
-                <span class="text-indigo-600 dark:text-indigo-400 truncate">
+                <span class="text-stone-700 dark:text-stone-300 truncate">{{ sign(awakResult.stonesInfo[sIdx].deltaByMode.boss) }}</span>
+                <span class="text-cyan-600 dark:text-cyan-400 truncate">
                   ≈ {{ awakResult.stonesInfo[sIdx].refAmountByMode.boss >= 0 ? '+' : '' }}{{ awakResult.stonesInfo[sIdx].refAmountByMode.boss.toFixed(2) }}{{ awakResult.refUnit }}
                 </span>
               </div>
@@ -948,9 +947,9 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </div>
 
         <!-- 기준 스탯 셀렉터 + 결과 -->
-        <div v-if="awakResult" class="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-800 px-3 py-3 space-y-2">
+        <div v-if="awakResult" class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-800 px-3 py-3 space-y-2">
           <div class="flex items-start gap-2 flex-wrap text-sm">
-            <span class="text-slate-600 dark:text-slate-300 leading-6">
+            <span class="text-stone-600 dark:text-stone-300 leading-6">
               합산 BP
             </span>
             <span
@@ -960,33 +959,33 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                   ? 'text-emerald-600 dark:text-emerald-400'
                   : awakResult.totalDelta < 0
                   ? 'text-rose-600 dark:text-rose-400'
-                  : 'text-slate-500',
+                  : 'text-stone-500',
               ]"
             >
               {{ sign(awakResult.totalDelta) }}
             </span>
-            <span class="text-slate-500 dark:text-slate-400 text-xs tabular-nums leading-6">
+            <span class="text-stone-500 dark:text-stone-400 text-xs tabular-nums leading-6">
               ({{ awakResult.totalDeltaPct >= 0 ? '+' : '' }}{{ awakResult.totalDeltaPct.toFixed(2) }}%)
             </span>
-            <span class="text-[11px] text-slate-400 dark:text-slate-500 leading-6">
+            <span class="text-[11px] text-stone-400 dark:text-stone-500 leading-6">
               · {{ awakResult.activeCount }} 옵션 / {{ awakResult.activeStoneCount }} 각성석
             </span>
 
             <!-- 우측: 모드별 ΔBP + 크댐 환산값 -->
             <div class="ml-auto grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] tabular-nums leading-tight">
               <div class="flex items-baseline gap-1 justify-end">
-                <span class="text-amber-700 dark:text-amber-300 font-semibold">
+                <span class="text-orange-700 dark:text-orange-300 font-semibold">
                   직접 {{ sign(awakResult.totalDeltaByMode.direct) }}
                 </span>
-                <span class="text-indigo-600 dark:text-indigo-400">
+                <span class="text-cyan-600 dark:text-cyan-400">
                   ≈ 크댐 {{ awakResult.refAmountByMode.direct >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.direct.toFixed(2) }}{{ awakResult.refUnit }}급
                 </span>
               </div>
               <div class="flex items-baseline gap-1 justify-end">
-                <span class="text-sky-700 dark:text-sky-300 font-semibold">
+                <span class="text-teal-700 dark:text-teal-300 font-semibold">
                   소환 {{ sign(awakResult.totalDeltaByMode.summon) }}
                 </span>
-                <span class="text-indigo-600 dark:text-indigo-400">
+                <span class="text-cyan-600 dark:text-cyan-400">
                   ≈ 크댐 {{ awakResult.refAmountByMode.summon >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.summon.toFixed(2) }}{{ awakResult.refUnit }}급
                 </span>
               </div>
@@ -994,7 +993,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 <span class="text-emerald-700 dark:text-emerald-300 font-semibold">
                   vs 일반 {{ sign(awakResult.totalDeltaByMode.normal) }}
                 </span>
-                <span class="text-indigo-600 dark:text-indigo-400">
+                <span class="text-cyan-600 dark:text-cyan-400">
                   ≈ 크댐 {{ awakResult.refAmountByMode.normal >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.normal.toFixed(2) }}{{ awakResult.refUnit }}급
                 </span>
               </div>
@@ -1002,7 +1001,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 <span class="text-rose-700 dark:text-rose-300 font-semibold">
                   vs 보스 {{ sign(awakResult.totalDeltaByMode.boss) }}
                 </span>
-                <span class="text-indigo-600 dark:text-indigo-400">
+                <span class="text-cyan-600 dark:text-cyan-400">
                   ≈ 크댐 {{ awakResult.refAmountByMode.boss >= 0 ? '+' : '' }}{{ awakResult.refAmountByMode.boss.toFixed(2) }}{{ awakResult.refUnit }}급
                 </span>
               </div>
@@ -1010,54 +1009,54 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
           </div>
 
           <div class="flex items-center gap-2 flex-wrap text-sm">
-            <span class="text-slate-600 dark:text-slate-300">≈ 크댐</span>
-            <span class="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums text-base">
+            <span class="text-stone-600 dark:text-stone-300">≈ 크댐</span>
+            <span class="font-bold text-cyan-700 dark:text-cyan-300 tabular-nums text-base">
               {{ awakResult.refAmount >= 0 ? '+' : '' }}{{ awakResult.refAmount.toFixed(2) }}{{ awakResult.refUnit }}
             </span>
-            <span class="text-slate-600 dark:text-slate-300 text-sm">급</span>
+            <span class="text-stone-600 dark:text-stone-300 text-sm">급</span>
             <template v-if="awakShowAvg">
-              <span class="text-slate-400 dark:text-slate-500 text-xs">·</span>
-              <span class="text-slate-600 dark:text-slate-300 text-xs">평균</span>
-              <span class="font-bold text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">
+              <span class="text-stone-400 dark:text-stone-500 text-xs">·</span>
+              <span class="text-stone-600 dark:text-stone-300 text-xs">평균</span>
+              <span class="font-bold text-cyan-600 dark:text-cyan-400 tabular-nums text-sm">
                 {{ awakResult.refAmountAvg >= 0 ? '+' : '' }}{{ awakResult.refAmountAvg.toFixed(2) }}{{ awakResult.refUnit }}
               </span>
-              <span class="text-slate-500 dark:text-slate-400 text-xs">
+              <span class="text-stone-500 dark:text-stone-400 text-xs">
                 급 / 각성석 (÷{{ awakResult.activeStoneCount }})
               </span>
             </template>
           </div>
         </div>
-        <p v-else class="text-xs text-slate-400 dark:text-slate-500 italic">
+        <p v-else class="text-xs text-stone-400 dark:text-stone-500 italic">
           옵션 값을 하나 이상 입력하면 합산 BP / "급" 환산이 표시됩니다.
         </p>
 
-        <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic leading-snug">
-          ⓘ % 옵션 정확 계산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
-          각 옵션을 단독 적용했을 때의 ΔBP 를 기준 스탯으로 환산해 합산합니다.
+        <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 leading-snug">
+          ⓘ % 옵션을 정확히 계산하려면 위 <strong>캐릭터 T창 정보 → 추가 세부정보</strong>의 기본값 입력이 필요합니다.
         </p>
       </div>
 
       <!-- (A) 빠른 옵션 시뮬 -->
-      <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+      <div class="border-t border-stone-200 dark:border-stone-700 pt-4">
+        <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">
           🔮 빠른 옵션 시뮬
         </h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
-          부적/장비 한 옵션을 빠르게 입력해서 BP가 얼마 오르는지 확인.
-          <strong>가산 옵션은 (기본값 + 가산) × (1 + 누적%) 메커니즘으로 계산</strong>되므로
-          누적%가 큰 캐릭일수록 같은 가산값이라도 효과가 큽니다.
-          기본값 미입력 시에는 단순 표시값 가산으로 폴백.
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
+          부적/장비 옵션 하나가 전투력을 얼마나 올리는지 바로 확인합니다.
+          <span
+            class="cursor-help underline decoration-dotted"
+            title="가산 옵션은 (기본값 + 가산) × (1 + 누적%) 메커니즘으로 계산 — 누적%가 큰 캐릭일수록 같은 가산값이라도 효과가 큽니다. 기본값 미입력 시 단순 가산으로 추정."
+          >계산 방식 ⓘ</span>
         </p>
         <div class="flex flex-wrap items-center gap-2">
           <select
             v-model="simStat"
-            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
             <option v-for="m in MARGINAL_STEPS" :key="m.key" :value="m.key">
               {{ getStatLabel(stats.type, m.key) }}
             </option>
           </select>
-          <span class="text-slate-500 dark:text-slate-400 font-medium">+</span>
+          <span class="text-stone-500 dark:text-stone-400 font-medium">+</span>
           <input
             v-model="simAmount"
             type="number"
@@ -1071,10 +1070,10 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 ? '관통은 cap(99) 에 도달해 추가 가산이 BP 에 반영되지 않습니다'
                 : `관통은 cap 99 — 최대 +${simRemainingHeadroom} 까지 효과`)
               : '부적/장비의 가산 옵션 (raw 값)'"
-            class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <template v-if="simSupportsPct">
-            <span class="text-slate-500 dark:text-slate-400 font-medium">+</span>
+            <span class="text-stone-500 dark:text-stone-400 font-medium">+</span>
             <input
               v-model="simPct"
               type="number"
@@ -1084,11 +1083,11 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               :title="simBaseValue <= 0
                 ? '% 옵션을 사용하려면 장비 비교 섹션의 기본 스탯을 먼저 입력하세요'
                 : '부적/장비의 % 옵션'"
-              class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums w-24 focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            <span class="text-slate-400 dark:text-slate-500 text-xs">%</span>
+            <span class="text-stone-400 dark:text-stone-500 text-xs">%</span>
           </template>
-          <span class="text-slate-500 dark:text-slate-400 font-medium">→</span>
+          <span class="text-stone-500 dark:text-stone-400 font-medium">→</span>
           <span
             v-if="simResult"
             :class="[
@@ -1097,15 +1096,15 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : simResult.delta < 0
                 ? 'text-rose-600 dark:text-rose-400'
-                : 'text-slate-500',
+                : 'text-stone-500',
             ]"
           >
             BP {{ sign(simResult.delta) }}
-            <span class="text-slate-500 dark:text-slate-400 text-xs ml-1 font-normal">
+            <span class="text-stone-500 dark:text-stone-400 text-xs ml-1 font-normal">
               ({{ simResult.deltaPct >= 0 ? '+' : '' }}{{ simResult.deltaPct.toFixed(2) }}%)
             </span>
           </span>
-          <span v-else class="text-sm text-slate-400 dark:text-slate-500">값을 입력하세요</span>
+          <span v-else class="text-sm text-stone-400 dark:text-stone-500">값을 입력하세요</span>
         </div>
 
         <!-- 누적% 안내 / 기본값 미입력 안내 / 관통 cap 안내 -->
@@ -1123,13 +1122,13 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </p>
         <p
           v-else-if="simStat === '관통'"
-          class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"
+          class="mt-2 text-[11px] text-stone-500 dark:text-stone-400"
         >
           💡 관통은 cap 99 — 최대 <strong>+{{ simRemainingHeadroom }}</strong> 까지 효과가 있습니다.
         </p>
         <p
           v-else-if="simStat === '근마효율' && simResult"
-          class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"
+          class="mt-2 text-[11px] text-stone-500 dark:text-stone-400"
         >
           💡 근마효율 표시값에 <strong>+{{ simResult.displayDelta }}%</strong> 가산 — 직접타격 cross-term (근력 × 근마효율%) 으로 환산됩니다.
         </p>
@@ -1137,14 +1136,13 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
           v-else-if="simSupportsPct && simBaseValue <= 0"
           class="mt-2 text-[11px] text-orange-600 dark:text-orange-400"
         >
-          ⚠ <strong>{{ getStatLabel(stats.type, simStat) }}</strong>의 기본값이 미입력 상태 — 가산은 단순 더하기로 계산됩니다.
-          정확한 메커니즘 적용을 원하면 장비 비교 섹션의
-          <strong>"% 옵션 환산용 기본 스탯"</strong>을 펼쳐서
-          <strong>기본_{{ simStat }}</strong>을(를) 입력하세요.
+          ⚠ <strong>{{ getStatLabel(stats.type, simStat) }}</strong>의 기본값이 미입력 상태 — 가산을 단순 더하기로 추정합니다.
+          정확한 계산을 원하면 위 <strong>캐릭터 T창 정보 → 추가 세부정보</strong>에
+          기본 {{ getStatLabel(stats.type, simStat) }} 값을 입력하세요.
         </p>
         <p
           v-else-if="simSupportsPct && simCumulativePct != null && simResult"
-          class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"
+          class="mt-2 text-[11px] text-stone-500 dark:text-stone-400"
         >
           💡 누적 <strong>+{{ simCumulativePct.toFixed(1) }}%</strong> 자동 반영 →
           표시 {{ getStatLabel(stats.type, simStat) }} 변화: <strong>{{ sign(simResult.displayDelta) }}</strong>

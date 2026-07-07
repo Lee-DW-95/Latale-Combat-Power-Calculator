@@ -231,12 +231,12 @@ function fmtSigned(n) {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 p-5">
+  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
     <!-- ═══════ 헤더 ═══════ -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
       <div>
-        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">🗿 성물 발동 시뮬</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🗿 성물 발동 시뮬</h2>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
           성물은 <strong>성물별 개별 액티브</strong> — 발동한 성물 1종의 (전용석 + 공용석) 옵션만
           <strong>×{{ RELIC_ACTIVE_MULT }}</strong> 증폭 적용. 다른 액티브를 쓰면 기존 버프는 사라집니다 (중첩 불가).
         </p>
@@ -246,7 +246,7 @@ function fmtSigned(n) {
           'text-xs font-bold rounded-full px-3 py-1.5 ring-1',
           anyActive
             ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 ring-emerald-300 dark:ring-emerald-700'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 ring-slate-300 dark:ring-slate-600',
+            : 'bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 ring-stone-300 dark:ring-stone-600',
         ]"
       >
         {{ anyActive ? `발동 중 · ${activeRelicName}` : '발동 없음' }}
@@ -266,14 +266,14 @@ function fmtSigned(n) {
           'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition',
           isActive(def.key)
             ? 'bg-emerald-600 text-white ring-emerald-600 shadow'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-emerald-400',
+            : 'bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-300 ring-stone-300 dark:ring-stone-600 hover:ring-emerald-400',
         ]"
         :title="isActive(def.key) ? `${def.name} 발동 해제` : `${def.name} 발동 (기존 발동 성물은 해제됨)`"
       >
         <span
           :class="[
             'inline-block h-2 w-2 rounded-full',
-            isActive(def.key) ? 'bg-white animate-pulse' : 'bg-slate-400 dark:bg-slate-500',
+            isActive(def.key) ? 'bg-white animate-pulse' : 'bg-stone-400 dark:bg-stone-500',
           ]"
         />
         {{ def.icon }} {{ def.name }}
@@ -282,9 +282,9 @@ function fmtSigned(n) {
 
     <!-- ═══════ BP 요약 ═══════ -->
     <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <div class="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2">
-        <div class="text-[11px] text-slate-500 dark:text-slate-400">발동 전 BP</div>
-        <div class="text-base font-bold tabular-nums text-slate-800 dark:text-slate-100">
+      <div class="rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 bg-stone-50 dark:bg-stone-900/40 px-3 py-2">
+        <div class="text-[11px] text-stone-500 dark:text-stone-400">발동 전 BP</div>
+        <div class="text-base font-bold tabular-nums text-stone-800 dark:text-stone-100">
           {{ fmt(currentResult.offBP) }}
         </div>
       </div>
@@ -293,10 +293,10 @@ function fmtSigned(n) {
           'rounded-lg ring-1 px-3 py-2',
           anyActive
             ? 'ring-emerald-300 dark:ring-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/20'
-            : 'ring-slate-200 dark:ring-slate-700 bg-slate-50 dark:bg-slate-900/40 opacity-60',
+            : 'ring-stone-200 dark:ring-stone-700 bg-stone-50 dark:bg-stone-900/40 opacity-60',
         ]"
       >
-        <div class="text-[11px] text-slate-500 dark:text-slate-400">발동 후 BP {{ anyActive ? '' : '(발동 없음)' }}</div>
+        <div class="text-[11px] text-stone-500 dark:text-stone-400">발동 후 BP {{ anyActive ? '' : '(발동 없음)' }}</div>
         <div class="text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
           {{ fmt(currentResult.onBP) }}
         </div>
@@ -306,15 +306,15 @@ function fmtSigned(n) {
           'rounded-lg ring-1 px-3 py-2',
           anyActive && currentResult.direction === 'up'
             ? 'ring-emerald-300 dark:ring-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/20'
-            : 'ring-slate-200 dark:ring-slate-700 bg-slate-50 dark:bg-slate-900/40',
+            : 'ring-stone-200 dark:ring-stone-700 bg-stone-50 dark:bg-stone-900/40',
           anyActive ? '' : 'opacity-60',
         ]"
       >
-        <div class="text-[11px] text-slate-500 dark:text-slate-400">발동 증가량</div>
+        <div class="text-[11px] text-stone-500 dark:text-stone-400">발동 증가량</div>
         <div
           :class="[
             'text-base font-bold tabular-nums',
-            currentResult.change > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500',
+            currentResult.change > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-stone-500',
           ]"
         >
           {{ fmtSigned(currentResult.change) }}
@@ -328,7 +328,7 @@ function fmtSigned(n) {
       <span
         v-for="c in currentResult.contributions"
         :key="c.stat"
-        class="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/30 ring-1 ring-indigo-200 dark:ring-indigo-800 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300 tabular-nums"
+        class="inline-flex items-center gap-1 rounded-md bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-2 py-0.5 text-[11px] text-cyan-700 dark:text-cyan-300 tabular-nums"
         :title="`단독 BP 기여 ${fmtSigned(c.impact)}`"
       >
         {{ getStatLabel(c.stat) }} {{ fmtSigned(c.diff) }}
@@ -363,11 +363,11 @@ function fmtSigned(n) {
     </div>
 
     <!-- ═══════ 교체 미리보기 바 ═══════ -->
-    <div class="mt-4 rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
+    <div class="mt-4 rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-stone-50/60 dark:bg-stone-900/30 p-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        <div class="text-sm font-semibold text-stone-700 dark:text-stone-200">
           🔁 교체 미리보기
-          <span class="block sm:inline text-[11px] font-normal text-slate-500 dark:text-slate-400">
+          <span class="block sm:inline text-[11px] font-normal text-stone-500 dark:text-stone-400">
             — 인게임 교체 시 기존 돌이 사라지므로, 교체 전에 여기서 강해지는지 확인하세요
           </span>
         </div>
@@ -376,7 +376,7 @@ function fmtSigned(n) {
             <button
               type="button"
               @click="startPreview"
-              class="rounded-md bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-semibold transition"
+              class="rounded-md bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 text-xs font-semibold transition"
             >
               현재 세팅 복사해서 시작
             </button>
@@ -393,7 +393,7 @@ function fmtSigned(n) {
             <button
               type="button"
               @click="stopPreview"
-              class="rounded-md ring-1 ring-slate-300 dark:ring-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium transition"
+              class="rounded-md ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 px-3 py-1.5 text-xs font-medium transition"
             >
               닫기
             </button>
@@ -404,15 +404,15 @@ function fmtSigned(n) {
       <!-- 편집 대상 탭 + 판정 -->
       <template v-if="previewOn && candidateResult">
         <div class="mt-3 flex flex-wrap items-center gap-2">
-          <div class="inline-flex rounded-lg ring-1 ring-slate-300 dark:ring-slate-600 overflow-hidden text-xs font-semibold">
+          <div class="inline-flex rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden text-xs font-semibold">
             <button
               type="button"
               @click="editTarget = 'current'"
               :class="[
                 'px-3 py-1.5 transition',
                 editTarget === 'current'
-                  ? 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300',
+                  ? 'bg-stone-700 text-white dark:bg-stone-200 dark:text-stone-900'
+                  : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300',
               ]"
             >
               현재 세팅
@@ -423,8 +423,8 @@ function fmtSigned(n) {
               :class="[
                 'px-3 py-1.5 transition',
                 editTarget === 'candidate'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300',
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300',
               ]"
             >
               교체안 편집
@@ -440,7 +440,7 @@ function fmtSigned(n) {
                 ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 ring-emerald-300 dark:ring-emerald-700'
                 : swapVerdict.direction === 'down'
                 ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-rose-300 dark:ring-rose-700'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-300 dark:ring-slate-600',
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 ring-stone-300 dark:ring-stone-600',
             ]"
           >
             <template v-if="swapVerdict.direction === 'up'">📈 교체하면 더 강해짐</template>
@@ -448,20 +448,20 @@ function fmtSigned(n) {
             <template v-else>➖ 변화 없음</template>
             {{ fmtSigned(swapVerdict.diff) }} ({{ swapVerdict.pct >= 0 ? '+' : '' }}{{ swapVerdict.pct.toFixed(2) }}%)
           </div>
-          <span v-else-if="previewOn && !anyActive" class="text-[11px] text-slate-400 dark:text-slate-500">
+          <span v-else-if="previewOn && !anyActive" class="text-[11px] text-stone-400 dark:text-stone-500">
             위에서 발동할 성물을 켜면 교체 판정이 표시됩니다
           </span>
         </div>
 
         <!-- 발동 기준 BP 비교 -->
         <div v-if="anyActive" class="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div class="rounded-md ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
-            <div class="text-slate-500 dark:text-slate-400">현재 세팅 · 발동 BP</div>
-            <div class="font-bold tabular-nums text-slate-800 dark:text-slate-100">{{ fmt(currentResult.onBP) }}</div>
+          <div class="rounded-md ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800 px-3 py-2">
+            <div class="text-stone-500 dark:text-stone-400">현재 세팅 · 발동 BP</div>
+            <div class="font-bold tabular-nums text-stone-800 dark:text-stone-100">{{ fmt(currentResult.onBP) }}</div>
           </div>
-          <div class="rounded-md ring-1 ring-indigo-200 dark:ring-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-2">
-            <div class="text-indigo-600 dark:text-indigo-300">교체안 · 발동 BP</div>
-            <div class="font-bold tabular-nums text-indigo-700 dark:text-indigo-300">{{ fmt(candidateResult.onBP) }}</div>
+          <div class="rounded-md ring-1 ring-cyan-200 dark:ring-cyan-800 bg-cyan-50/50 dark:bg-cyan-950/20 px-3 py-2">
+            <div class="text-cyan-600 dark:text-cyan-300">교체안 · 발동 BP</div>
+            <div class="font-bold tabular-nums text-cyan-700 dark:text-cyan-300">{{ fmt(candidateResult.onBP) }}</div>
           </div>
         </div>
       </template>
@@ -469,7 +469,7 @@ function fmtSigned(n) {
 
     <!-- ═══════ 성물 6종 입력 카드 ═══════ -->
     <div class="mt-4 flex items-center justify-between">
-      <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+      <div class="text-sm font-semibold text-stone-700 dark:text-stone-200">
         {{ editTarget === 'candidate' ? '✏️ 교체안 세팅 입력' : '⚙️ 현재 세팅 입력' }}
       </div>
       <button
@@ -490,11 +490,11 @@ function fmtSigned(n) {
           isActive(def.key)
             ? 'ring-emerald-300 dark:ring-emerald-700'
             : editTarget === 'candidate'
-            ? 'ring-indigo-300 dark:ring-indigo-700'
-            : 'ring-slate-200 dark:ring-slate-700',
+            ? 'ring-cyan-300 dark:ring-cyan-700'
+            : 'ring-stone-200 dark:ring-stone-700',
           editTarget === 'candidate'
-            ? 'bg-indigo-50/30 dark:bg-indigo-950/10'
-            : 'bg-slate-50/40 dark:bg-slate-900/20',
+            ? 'bg-cyan-50/30 dark:bg-cyan-950/10'
+            : 'bg-stone-50/40 dark:bg-stone-900/20',
         ]"
       >
         <!-- 카드 헤더 (접기/펴기 + 발동 토글) -->
@@ -505,14 +505,14 @@ function fmtSigned(n) {
             class="flex items-center gap-2 min-w-0 flex-1 text-left"
           >
             <span>{{ def.icon }}</span>
-            <span class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{{ def.name }}</span>
-            <span class="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
+            <span class="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{{ def.name }}</span>
+            <span class="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
               Lv.{{ editing[def.key].level }}
             </span>
             <span class="hidden sm:inline text-[11px] text-emerald-600 dark:text-emerald-400 tabular-nums truncate">
               {{ baseSummary(def, editing) }}%
             </span>
-            <span class="text-slate-400 text-xs shrink-0">{{ openCards.has(def.key) ? '▲' : '▼' }}</span>
+            <span class="text-stone-400 text-xs shrink-0">{{ openCards.has(def.key) ? '▲' : '▼' }}</span>
           </button>
           <!-- 성물 발동 토글 (단일 선택 — 다른 성물 발동 시 이 성물로 교체됨) -->
           <button
@@ -525,7 +525,7 @@ function fmtSigned(n) {
               'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition',
               isActive(def.key)
                 ? 'bg-emerald-600 text-white ring-emerald-600'
-                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-300 dark:ring-slate-600 hover:ring-emerald-400',
+                : 'bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-400 ring-stone-300 dark:ring-stone-600 hover:ring-emerald-400',
             ]"
           >
             {{ isActive(def.key) ? '발동 ON' : 'OFF' }}
@@ -535,25 +535,25 @@ function fmtSigned(n) {
         <!-- 카드 본문 -->
         <div v-if="openCards.has(def.key)" class="px-4 pb-4 space-y-3">
           <!-- 전용석 레벨 + 기본옵션 -->
-          <div class="rounded-lg ring-1 ring-amber-200 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10 p-3">
-            <div class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mb-2">
+          <div class="rounded-lg ring-1 ring-orange-200 dark:ring-orange-800 bg-orange-50/40 dark:bg-orange-950/10 p-3">
+            <div class="text-[11px] font-semibold text-orange-700 dark:text-orange-300 mb-2">
               전용석 (Lv → 기본옵션 자동)
             </div>
             <div class="flex flex-wrap items-center gap-3">
               <label class="flex items-center gap-2">
-                <span class="text-xs text-slate-500 dark:text-slate-400">레벨</span>
+                <span class="text-xs text-stone-500 dark:text-stone-400">레벨</span>
                 <select
                   v-model.number="editing[def.key].level"
-                  class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs tabular-nums"
+                  class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs tabular-nums"
                 >
                   <option v-for="lv in 10" :key="lv" :value="lv">Lv.{{ lv }}</option>
                 </select>
               </label>
-              <div class="text-xs tabular-nums" :class="def.base ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500'">
+              <div class="text-xs tabular-nums" :class="def.base ? 'text-emerald-700 dark:text-emerald-300' : 'text-stone-400 dark:text-stone-500'">
                 {{ baseSummary(def, editing) }}%
                 <template v-if="def.base">
                   → 발동 <strong>+{{ (relicBaseOptionValue(def.key, editing[def.key].level) * RELIC_ACTIVE_MULT).toFixed(1).replace(/\.0$/, '') }}{{ def.base.previewUnit }}</strong>
-                  <span v-if="def.base.previewUnit === ''" class="ml-1 text-[10px] text-slate-400">(기본값 가산 → 누적% 적용)</span>
+                  <span v-if="def.base.previewUnit === ''" class="ml-1 text-[10px] text-stone-400">(기본값 가산 → 누적% 적용)</span>
                 </template>
                 <template v-else>
                   <span class="ml-1 text-[10px]">(BP 미반영)</span>
@@ -563,24 +563,24 @@ function fmtSigned(n) {
 
             <!-- 인챈트옵션 -->
             <div class="mt-2 flex flex-wrap items-center gap-2">
-              <span class="text-xs text-slate-500 dark:text-slate-400">인챈트 · {{ def.enchant.label }}</span>
+              <span class="text-xs text-stone-500 dark:text-stone-400">인챈트 · {{ def.enchant.label }}</span>
               <input
                 v-model.number="editing[def.key].enchantValue"
                 type="number"
                 min="0"
                 :step="def.enchant.step"
                 placeholder="0"
-                class="w-24 rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs tabular-nums"
+                class="w-24 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs tabular-nums"
               />
-              <span class="text-xs text-slate-400">{{ def.enchant.unit }}</span>
+              <span class="text-xs text-stone-400">{{ def.enchant.unit }}</span>
               <span
                 v-if="editing[def.key].enchantValue > 0"
                 class="text-[11px] tabular-nums"
-                :class="def.enchant.map ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'"
+                :class="def.enchant.map ? 'text-emerald-600 dark:text-emerald-400' : 'text-stone-400 dark:text-stone-500'"
               >
                 <template v-if="def.enchant.map">
                   → 발동 +{{ (editing[def.key].enchantValue * RELIC_ACTIVE_MULT).toLocaleString() }}{{ def.enchant.previewUnit ?? def.enchant.unit }}
-                  <span v-if="def.enchant.previewUnit === ''" class="text-[10px] text-slate-400">(기본값 가산)</span>
+                  <span v-if="def.enchant.previewUnit === ''" class="text-[10px] text-stone-400">(기본값 가산)</span>
                 </template>
                 <template v-else>(BP 미반영)</template>
               </span>
@@ -594,13 +594,13 @@ function fmtSigned(n) {
             class="rounded-lg ring-1 ring-sky-200 dark:ring-sky-800 bg-sky-50/40 dark:bg-sky-950/10 p-3"
           >
             <div class="text-[11px] font-semibold text-sky-700 dark:text-sky-300 mb-2">
-              공용석 {{ si + 1 }} <span class="font-normal text-slate-400">(최대 4줄)</span>
+              공용석 {{ si + 1 }} <span class="font-normal text-stone-400">(최대 4줄)</span>
             </div>
             <template v-for="(line, li) in stone.lines" :key="li">
               <div class="grid grid-cols-[1fr_90px] gap-1.5 mb-1.5 last:mb-0">
                 <select
                   v-model="line.option"
-                  class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px]"
+                  class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-[11px]"
                 >
                   <option value="">{{ li + 1 }}줄 없음</option>
                   <option v-for="opt in STONE_OPTION_DEFS" :key="opt.label" :value="opt.label">
@@ -613,16 +613,16 @@ function fmtSigned(n) {
                   min="0"
                   step="any"
                   placeholder="수치"
-                  class="rounded-md border-0 ring-1 ring-slate-300 dark:ring-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1 text-[11px] tabular-nums"
+                  class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-[11px] tabular-nums"
                 />
               </div>
               <!-- 백어택 옵션 선택 시 → 가동률 입력 (전 성물 공용 값, 발동 BP 환산 가중치) -->
               <div
                 v-if="line.option === BACK_ATK_LABEL"
-                class="mb-1.5 rounded-md ring-1 ring-amber-200 dark:ring-amber-800 bg-amber-50/50 dark:bg-amber-950/10 px-2 py-1.5"
+                class="mb-1.5 rounded-md ring-1 ring-orange-200 dark:ring-orange-800 bg-orange-50/50 dark:bg-orange-950/10 px-2 py-1.5"
               >
                 <div class="flex flex-wrap items-center gap-1.5">
-                  <span class="text-[11px] text-amber-700 dark:text-amber-300 font-medium">↳ 백어택 가동률</span>
+                  <span class="text-[11px] text-orange-700 dark:text-orange-300 font-medium">↳ 백어택 가동률</span>
                   <input
                     v-model.number="backAtkUptime"
                     type="number"
@@ -630,11 +630,11 @@ function fmtSigned(n) {
                     max="100"
                     step="any"
                     placeholder="0~100"
-                    class="w-16 rounded-md border-0 ring-1 ring-amber-300 dark:ring-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-0.5 text-[11px] tabular-nums"
+                    class="w-16 rounded-md border-0 ring-1 ring-orange-300 dark:ring-orange-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-0.5 text-[11px] tabular-nums"
                   />
-                  <span class="text-[11px] text-amber-700 dark:text-amber-300">%</span>
+                  <span class="text-[11px] text-orange-700 dark:text-orange-300">%</span>
                 </div>
-                <p class="mt-0.5 text-[10px] leading-snug text-amber-600/80 dark:text-amber-400/70">
+                <p class="mt-0.5 text-[10px] leading-snug text-orange-600/80 dark:text-orange-400/70">
                   백어택 성립 비율 (직타비중 × 백어택 유지율). 발동 BP 환산에만 쓰이며
                   스탯 입력의 백어택 가동률보다 우선 적용 · <strong>0이면 백어택 옵션은 BP 미반영</strong>
                 </p>
@@ -646,16 +646,21 @@ function fmtSigned(n) {
     </div>
 
     <!-- 미반영 옵션 안내 -->
-    <p v-if="anyActive && currentResult.ignored.length" class="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
+    <p v-if="anyActive && currentResult.ignored.length" class="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
       ℹ️ BP 미반영 옵션 (대미지 무관 또는 모델 미지원):
       {{ currentResult.ignored.map((i) => `${i.relic}·${i.label}`).join(', ') }}
     </p>
 
-    <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
-      ※ 성물 발동은 액티브 스킬 지속시간(예: 30초) 동안만 적용되며, 다른 성물 발동 시 기존 버프는 사라집니다.
-      "발동 후 BP"는 선택한 성물 1종이 발동 중인 순간의 스탯 기준 추정치입니다.
-      백어택 옵션은 공용석 입력 아래의 <strong>가동률(%)</strong> 값으로 기댓값 환산되며,
-      발동 계산에서는 스탯 입력의 백어택 활성/가동률 설정보다 우선 적용됩니다.
-    </p>
+    <details class="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
+      <summary class="cursor-pointer select-none hover:text-stone-600 dark:hover:text-stone-300">
+        계산 기준 참고
+      </summary>
+      <p class="mt-1 leading-snug">
+        성물 발동은 액티브 스킬 지속시간(예: 30초) 동안만 적용되며, 다른 성물 발동 시 기존 버프는 사라집니다.
+        "발동 후 BP"는 선택한 성물 1종이 발동 중인 순간의 스탯 기준 추정치입니다.
+        백어택 옵션은 공용석 입력 아래의 <strong>가동률(%)</strong> 값으로 기댓값 환산되며,
+        발동 계산에서는 스탯 입력의 백어택 활성/가동률 설정보다 우선 적용됩니다.
+      </p>
+    </details>
   </section>
 </template>
