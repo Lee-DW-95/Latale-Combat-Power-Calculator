@@ -1,10 +1,11 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG24 — 자료17(고스펙 물리 BP874만, 근마효율 37 최고치) 추가 후 62건 재학습.
- *   4개 함수형 공정비교(P+M 종합 RMSE 합): wholebase 0.755 / mainlin 0.672 / mainlin_sq 0.636★ / mainpow 0.646
- *   → mainlin_sq 채택 (V_BIG23 의 mainlin 에 K0_sq 주스탯² 항 활성화. 마법 RMSE 0.376→0.338%,
- *     물리 0.297% 동률, 세이버 ΔBP 예측 -6753 vs 실측 -6742 로 개선). 물리 max 0.838%.
+ * 현재 채택: V_BIG25 — 자료18(고스펙 물리 BP989만, 좌측창만·총BP-only) 추가 후 63건 재학습.
+ *   4개 함수형 공정비교(P+M 종합 RMSE 합): wholebase 0.763 / mainlin 0.621★ / mainlin_sq 0.721 / mainpow 0.633
+ *   → mainlin 재채택 (물리 0.286%/max 0.851%, 마법 0.335%/max 0.746%, 세이버 ΔBP -6739 vs 실측 -6742).
+ *   V_BIG24 에서 잠시 채택했던 mainlin_sq(K0_sq 활성)는 자료18 추가 후 마법 RMSE 0.414% 로 악화
+ *   → 직전 라운드 우위가 옵티마이저 노이즈였음이 확인되어 K0_sq 다시 0 (Occam).
  *
  * 이전 채택: V_BIG23 — 근마효율 cross-term 을 "근력/마법력 비례 직접타격 가산" 으로 재설계.
  *   게임 메커니즘(사용자 도메인): 근마효율 = "근력/마법력 효율" → 근력/마법력이 높을수록 직접타격이 오른다.
@@ -81,17 +82,17 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 3.715851878377093,   // 주스탯 가중치 (선형 항)
-  K0_sq: -1.8690104318356212e-4, // V_BIG24: 주스탯² 음의 비선형 항 재활성 (mainlin_sq 채택)
-  K1: 3.7865689037248546e+2, // 공격력 가중치
-  K2: 2.804264942153941,   // 고댐 가중치
-  K_mon: 1.099851648796827, // 일몬추+보몬추 가중치
+  K0: 3.2635322330901912,  // 주스탯 가중치 (선형 항)
+  K0_sq: 0,                // V_BIG25: 주스탯² 항 미사용 복귀 (V_BIG24 mainlin_sq 우위가 노이즈로 판명, 구조 보존용 0)
+  K1: 3.3247994379067290e+2, // 공격력 가중치
+  K2: 2.461700638726109,   // 고댐 가중치
+  K_mon: 9.990178978485051e-1, // 일몬추+보몬추 가중치
   D_crit: 269.5,           // 크댐 분모 (V_BIG23 고정 — Dcrit↔base 비식별성 제거, 1% floor)
-  D_dmg: 2.77635496088855e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 2.0065165974977990e+2, // 지배력 분모 (floor 없는 선형)
-  K_cross: 1.7447354160939896, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율/100)
+  D_dmg: 1.6290598178063993e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 2.0026679369675426e+2, // 지배력 분모 (floor 없는 선형)
+  K_cross: 1.5313123519760514, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율/100)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.229795813572692e-45, // 전체 보정 상수
+  base: 2.819264819426055e-45, // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -104,7 +105,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 3.8209509615764570e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG24
+  K1: 3.3549886275202164e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG25
 });
 
 /**
@@ -176,11 +177,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG24 (자료17 포함 62건 동시 재학습, mainlin_sq)
-const SPLIT_U =   1.9386106020645515; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 212.9302103835712;    // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =  -0.04117209656688759; // 고댐 split   (직접 = K2    - w, 소환 = K2    + w) — 음수: 직접이 고댐 가중 소폭 우세
-const SPLIT_X =   0.8600802458549925; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG25 (자료18 포함 63건 동시 재학습, mainlin)
+const SPLIT_U =   1.7018580492221496; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 185.45915691229948;   // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =  -0.07752675520518487; // 고댐 split   (직접 = K2    - w, 소환 = K2    + w) — 음수: 직접이 고댐 가중 소폭 우세
+const SPLIT_X =   0.7227297076530157; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
@@ -246,7 +247,7 @@ function attackBaseFor(stats, mode = 'avg') {
     delta += SPLIT_X;
   }
   // V_BIG10: attackBase 각 항 floor (게임 truncate 일관 적용)
-  // 주스탯² 항(K0_sq): V_BIG24 에서 재활성 (음의 계수 — diminishing returns, refit_v22 mainlin_sq 와 동일 floor 처리)
+  // 주스탯² 항(K0_sq): V_BIG25 에서 미사용(=0) → floor(0)=0 무해. 구조 보존용으로 남김.
   let result = Math.floor(alpha * 주스탯)
              + Math.floor(beta * 공격력)
              + Math.floor(gamma * 고댐)
