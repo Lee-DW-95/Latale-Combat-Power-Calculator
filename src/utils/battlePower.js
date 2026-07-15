@@ -1,7 +1,26 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG26 — 자료19(고스펙 물리 BP840만, 좌측창만·총BP-only) 추가 후 64건 재학습, mainpow 채택.
+ * 현재 채택: V_BIG28 — 모순 데이터(카톡 근마 -1pp 페어) 제외 후 확실한 데이터만으로 재역산, cross 선형 확정.
+ *   카톡 근마 페어는 역산 검증 결과 어떤 표시 스탯 가설(주스탯/근+마/g^p/공격력/크댐/고댐)로도 설명 불가한
+ *   정확히 2.0배 모순(요구 스케일비 1.794 vs 주스탯비 0.898) → 신뢰 불가 데이터로 판정, 학습 제외 (사용자 결정).
+ *   제외 후 재탐색(refit_v23, crit=linear xkatgm=1, 300 restarts)에서 cross 선형이 지수형을 전 지표에서 이김:
+ *     powg(^Pexp): loss 0.02646, P 0.318%/max 0.878%, M 0.393%/max 0.904%
+ *     lin ★:       loss 0.02612, P 0.255%/max 0.983%, M 0.208%/max 0.430%  ← 채택
+ *   → V_BIG26 의 지수(Pexp≈1.2)는 모순 페어를 흡수하느라 휘었던 것. K_cross_exp 파라미터 제거,
+ *     ab_d += floor(K_cross × 주스탯 × 근마효율% / 100) 순수 선형 복귀. 크댐 선형화(V_BIG27)는 유지.
+ *   세이버 ΔBP -6751 vs 실측 -6742 (오차 9). 학습: 카톡 17페어(모순 1건 제외)+박햇님 15+SAMPLE 64건.
+ *
+ * 이전 채택: V_BIG27 — 구조 대탐색(scripts/refit_v23_structure_search.mjs)으로 크댐 배수 선형화.
+ *   6개 구조 축(cross/crit/dmg/dom/mon/pen) 좌표 탐색 결과, 유일한 구조 개선 = 크댐 floor 제거:
+ *     m_crit = 1 + floor(크댐/269.5×100)/100  →  1 + 크댐/119.211 (순수 선형)
+ *   학습 loss 0.0383→0.0259 (-32%), 물리 RMSE 0.292→0.265%/max 0.842→0.785%, 마법 0.341→0.302%,
+ *   카톡 페어 RMSE 0.189→0.094 (반토막), 세이버 ΔBP -6745 vs 실측 -6742.
+ *   판별 실험: floor 유지+D=119 재시작 → loss 0.0415 악화. 즉 "작은 분모"가 아니라 "floor 제거"가 본질.
+ *   기각된 구조: cross=공격력비례/선형(주스탯^1.2 유지), dmg 별도가중/floor%, dom 별도가중/floor%,
+ *   mon 별도가중, pen 자유 — 전부 현행 구조가 승리 (가중치 1.0 수렴 or loss 악화).
+ *
+ * 이전 채택: V_BIG26 — 자료19(고스펙 물리 BP840만, 좌측창만·총BP-only) 추가 후 64건 재학습, mainpow 채택.
  *   4개 함수형 공정비교(P+M 종합 RMSE 합): wholebase 0.714 / mainlin 0.666 / mainlin_sq 0.440 / mainpow 0.633
  *   규칙상 mainlin_sq 가 합 최소였으나 ① 물리 max 0.885→1.307% 악화 ② 고스펙 물리 3건(자료17/18/19)
  *   오차 약 2배 악화 ③ K0_sq 부호 라운드별 요동(-1.9e-4→0→+2.2e-3) → 사용자 결정으로 균형형 mainpow 채택:
@@ -84,18 +103,17 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 2.5719141035328517,  // 주스탯 가중치 (선형 항)
-  K0_sq: 0,                // V_BIG26(mainpow): 주스탯² 항 미사용 (구조 보존용 0)
-  K1: 2.6018959807829776e+2, // 공격력 가중치
-  K2: 1.9212706817860603,  // 고댐 가중치
-  K_mon: 7.5292375402620350e-1, // 일몬추+보몬추 가중치
-  D_crit: 269.5,           // 크댐 분모 (V_BIG23 고정 — Dcrit↔base 비식별성 제거, 1% floor)
-  D_dmg: 1.9492221736258325e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 1.9946684683252687e+2, // 지배력 분모 (floor 없는 선형)
-  K_cross: 6.295445719250746e-1, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율^K_cross_exp/100)
-  K_cross_exp: 1.145475946807748, // V_BIG26(mainpow): 근마효율 거듭제곱 지수 (1이면 기존 mainlin과 동일)
+  K0: 1.9269218378219373,  // 주스탯 가중치 (선형 항)
+  K0_sq: 0,                // 주스탯² 항 미사용 (구조 보존용 0)
+  K1: 1.96544726924835e+2, // 공격력 가중치
+  K2: 1.4550241303930722,  // 고댐 가중치
+  K_mon: 6.433980050039184e-1, // 일몬추+보몬추 가중치
+  D_crit: 133.72982342343633, // 크댐 분모 — V_BIG27~: floor 제거, 순수 선형 1+크댐/D (구조 탐색으로 확정)
+  D_dmg: 1.5762384067641415e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
+  D_dom: 2.0005647422510010e+2, // 지배력 분모 (floor 없는 선형)
+  K_cross: 9.088168498484678e-1, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율%/100)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 4.315028576156123e-45, // 전체 보정 상수
+  base: 2.3135239513658218e-45, // 전체 보정 상수
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -108,7 +126,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.6255212046755446e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG26(mainpow)
+  K1: 1.9832935367886282e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG28
 });
 
 /**
@@ -180,11 +198,11 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG26 (자료19 포함 64건 동시 재학습, mainpow)
-const SPLIT_U =   1.3195973546324828; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 148.72873240962542;   // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.20120531533840375; // 고댐 split   (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.5370014938117683; // 추가댐 split  (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG28 (모순 페어 제외 + cross 선형 확정 후 동시 재학습)
+const SPLIT_U =   1.0030491813532825; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 111.2564512062554;    // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.04376654041329761; // 고댐 split   (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.45838234457609517; // 추가댐 split (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
@@ -196,9 +214,11 @@ function multiplierFor(stats) {
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
   const maxDmg = Number(stats.최대뎀 || 0);
   const minDmg = effectiveMinDmg(stats.최소뎀, stats.최대뎀);
-  // 크댐 boost 1% 단위 floor
+  // V_BIG27: 크댐 배수는 순수 선형 (floor 없음).
+  //   구조 탐색에서 floor 제거만으로 loss -32%·카톡 페어 RMSE 반토막. floor 유지+분모 자유(D≈119→129)는
+  //   오히려 악화 → "1% 계단 양자화" 가설 자체가 틀렸음이 판별됨.
   const critMultiplier =
-    1 + Math.floor(Number(stats.크댐 || 0) / params.D_crit * 100) / 100;
+    1 + Number(stats.크댐 || 0) / params.D_crit;
   // 데미지 boost 1% floor (D_dmg ~1e-37 라 영향 무시 수준)
   const dmgMultiplier =
     1 + Math.floor((minDmg + maxDmg) / params.D_dmg * 100) / 100;
@@ -259,9 +279,9 @@ function attackBaseFor(stats, mode = 'avg') {
   if (mode === 'direct' && 근마효율 > 0) {
     // V_BIG23~: 근마효율 = "근력/마법력 효율" — 근력/마법력이 높을수록 직접타격이 오른다.
     //   직접 전용 가산 보너스, 주스탯(근력/마법력)에 선형 비례. 소환엔 미적용.
-    //   V_BIG26(mainpow): 근마효율에 거듭제곱 지수 K_cross_exp 적용 (refit_v22 mainpow 와 동일 클램프).
-    const pe = Math.max(0.05, Math.min(3, params.K_cross_exp ?? 1));
-    result = result + Math.floor(params.K_cross * 주스탯 * Math.pow(근마효율, pe) / 100);
+    //   V_BIG28: V_BIG26 의 거듭제곱 지수(K_cross_exp≈1.2)는 모순 페어(카톡 근마) 흡수용이었음이
+    //   판별되어 제거 — 모순 페어 제외 재학습에서 순수 선형이 전 지표 우위.
+    result = result + Math.floor(params.K_cross * 주스탯 * 근마효율 / 100);
   }
   return result;
 }
