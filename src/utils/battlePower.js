@@ -1,7 +1,21 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG29 — 자료20 통제 실험(동일 마법캐릭 6캡처)으로 게임 실제 구조 3개를 "정확히" 확정.
+ * 현재 채택: V_BIG30 — 울트라코드 멀티에이전트 역산(8에이전트, 페어 미분 분석)으로 가산부 구조 확정.
+ *   핵심 발견 (scripts/refit_v26_derivative_constrained.mjs, 델타 손실 포함 재학습):
+ *     ① 카톡 근마 "모순" 해소: 실측 Δ가 기울기의 정확히 2.000배 → 근마효율 27→25 (2포인트) 변경이었음.
+ *        Δg=2 재라벨로 페어 재편입. 대신 카톡 깡크_-10 페어가 진짜 이상치(직/소 13.5% 모순)로 판명 → 제외.
+ *     ② cross 는 "표시" 주스탯 기반 확정 — raw(기본) 주스탯 가설은 카톡 근마 교차검증에서 +3.5% 이탈로 기각
+ *        (표시 기반은 -0.08%). Kc×base = 9.97746e-9 (±0.0007%, 자료20 마/물 기울기 교차 확증) 경성 제약.
+ *     ③ 몬추 계수 = 고댐 계수 ÷ 2 (직·소 모두 d/c=0.5 정확) → K_mon = K2/2, 추가댐 split = 고댐 split/2.
+ *     ④ 직/소 분리는 가산이 아니라 "계수 비례": a=K0(1∓u_r), b=K1e(1±v_r), c=K2(1∓w_r) —
+ *        분리비(u_r/v_r/w_r)가 캐릭터·물마 무관 불변 (카톡·박햇님 페어 미분에서 동일값 관측).
+ *     ⑤ 레벨 회귀만으론 미분(페어 Δ)이 안 잡히는 문제를 델타 손실 항으로 해결 —
+ *        고댐 페어 직/소 Δ 실측 -609/-1329 를 -594/-1304 로 재현 (V29 는 완전히 빗나감).
+ *   물리 56건 RMSE 0.257%/max 1.083%, 마법 14건 0.108%/max 0.150%, 세이버 Δ -6732 vs -6742,
+ *   자료20 cross Δ 정확 재현(-123,365), 재편입 카톡 근마 Δ -21,729 vs -21,746.
+ *
+ * 이전 채택: V_BIG29 — 자료20 통제 실험(동일 마법캐릭 6캡처)으로 게임 실제 구조 3개를 "정확히" 확정.
  *   사용자가 근마효율(35/33/31/25)·지배력(-1.0/-2.5)만 조절한 전후 캡처 → 방정식 역산 결과:
  *     ① 지배력: m_dom = 1 + (일몬지+보몬지)/200  (D=200.000, 4개 스트림 × 3페어 오차 <0.007)
  *        = 일반/보스 지배력의 "평균 %" 적용. floor 없음.
@@ -118,16 +132,16 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.9961907003208934,  // 주스탯 가중치 (선형 항)
+  K0: 1.9612657946748457,  // 주스탯 가중치 (선형 항)
   K0_sq: 0,                // 주스탯² 항 미사용 (구조 보존용 0)
-  K1: 2.0145134648881123e+2, // 공격력 가중치
-  K2: 1.5063278121892985,  // 고댐 가중치
-  K_mon: 7.006046610937611e-1, // 일몬추+보몬추 가중치
+  K1: 1.982768714313316e+2, // 공격력 가중치
+  K2: 1.4657417699817548,  // 고댐 가중치
+  K_mon: 7.328708849908774e-1, // 일몬추+보몬추 가중치 — V_BIG30 확정: 정확히 K2/2 (미분 페어 d/c=0.5)
   D_crit: 100,             // 크댐 분모 — V_BIG29 정확 확정: 표시 크댐% 그대로 (1+크댐/100)
   D_dom: 200,              // 지배력 분모 — V_BIG29 정확 확정: 일반/보스 지배력 평균 % (1+(일+보)/200)
-  K_cross: 9.363133078648934e-1, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율%/100)
+  K_cross: 9.232393423239261e-1, // 근마효율 가산 cross 계수 — V_BIG30: Kc×base=9.97746e-9 경성 제약 해
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 1.0660138875029545e-8, // 전체 보정 상수 (dmg 순비례 항의 정규화 포함)
+  base: 1.080703717566752e-8, // 전체 보정 상수 (dmg 순비례 항의 정규화 포함)
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -140,7 +154,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.0328052536429615e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG29
+  K1: 2.0007722606306189e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG30
 });
 
 /**
@@ -212,11 +226,13 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG29 (정확 구조 고정 후 동시 재학습)
-const SPLIT_U =   1.0408500833713372; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 114.85601011467281;   // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.004788984396513097; // 고댐 split  (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.47243499623688756; // 추가댐 split (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG30: 가산 split 폐기, "계수 비례" split 확정 (페어 미분에서 캐릭터 무관 불변 관측)
+//   직접: a=K0×(1-u_r), b=K1e×(1+v_r), c=K2×(1-w_r) / 소환: 부호 반대. 추가댐 계수 = 고댐 계수/2 (정확).
+//   마법 캐릭은 K1e=K1×1.00908 에 비례 적용되므로 공격력 split 이 자동으로 마법 보정을 따라감
+//   (V29 까지의 가산 split 은 이 비례성을 표현하지 못했음 — 박햇님/카톡 페어 미분으로 판별).
+const SPLIT_UR = 0.5228819744625112;  // 주스탯 분리비 u_r
+const SPLIT_VR = 0.5881927875323614;  // 공격력 분리비 v_r
+const SPLIT_WR = 0.374005098444131;   // 고댐 분리비 w_r (추가댐도 동일 비율, 계수만 /2)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
 //   V_BIG29: 크댐(1+크댐/100)·데미지(순비례)·지배력(1+합/200)은 자료20 통제 실험으로 정확 확정 — floor 없음.
@@ -251,7 +267,7 @@ function multiplierFor(stats) {
 }
 
 // attackBase 계산 — mode: 'avg' | 'direct' | 'summon'
-//   세 모드 모두 K0/K1/K2/K_mon 기반. direct/summon 은 (u, v, w, x) 만큼 4-param split 적용.
+//   V_BIG30: direct/summon 은 계수 비례 split (u_r, v_r, w_r) 적용, 추가댐 계수 = 고댐 계수/2.
 //   V_BIG23: direct 모드에 한해 근마효율 가산 보너스 ab_d += floor(K_cross × 주스탯 × 근마효율%/100).
 //     게임 메커니즘 — 근마효율("근력/마법력 효율")은 근력/마법력에 비례해 직접타격만 올린다.
 //     (구 V_BIG21 의 "직접 base 전체 균일곱" 폐기 — 공격력/고댐까지 싸잡아 증폭해 부정확했음.)
@@ -265,21 +281,12 @@ function attackBaseFor(stats, mode = 'avg') {
   const 추가댐 = Number(stats.일몬추 || 0) + Number(stats.보몬추 || 0);
   const 근마효율 = Number(stats.근마효율 || 0);
 
-  let alpha = params.K0;
-  let beta = params.K1;
-  let gamma = params.K2;
-  let delta = params.K_mon;
-  if (mode === 'direct') {
-    alpha -= SPLIT_U;
-    beta += SPLIT_V;
-    gamma -= SPLIT_W;
-    delta -= SPLIT_X;
-  } else if (mode === 'summon') {
-    alpha += SPLIT_U;
-    beta -= SPLIT_V;
-    gamma += SPLIT_W;
-    delta += SPLIT_X;
-  }
+  // V_BIG30: 비례 split — s = -1(직접) / +1(소환) / 0(avg)
+  const s = mode === 'direct' ? -1 : mode === 'summon' ? 1 : 0;
+  const alpha = params.K0 * (1 + s * SPLIT_UR);
+  const beta = params.K1 * (1 - s * SPLIT_VR);
+  const gamma = params.K2 * (1 + s * SPLIT_WR);
+  const delta = gamma / 2; // 추가댐 계수 = 고댐 계수 / 2 (V_BIG30 정확 확정, K_mon=K2/2 는 참조용)
   // V_BIG10: attackBase 각 항 floor (게임 truncate 일관 적용)
   // 주스탯² 항(K0_sq): V_BIG26(mainpow) 에서 미사용(=0) → floor(0)=0 무해. 구조 보존용으로 남김.
   let result = Math.floor(alpha * 주스탯)
