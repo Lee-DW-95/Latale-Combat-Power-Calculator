@@ -1,7 +1,22 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG28 — 모순 데이터(카톡 근마 -1pp 페어) 제외 후 확실한 데이터만으로 재역산, cross 선형 확정.
+ * 현재 채택: V_BIG29 — 자료20 통제 실험(동일 마법캐릭 6캡처)으로 게임 실제 구조 3개를 "정확히" 확정.
+ *   사용자가 근마효율(35/33/31/25)·지배력(-1.0/-2.5)만 조절한 전후 캡처 → 방정식 역산 결과:
+ *     ① 지배력: m_dom = 1 + (일몬지+보몬지)/200  (D=200.000, 4개 스트림 × 3페어 오차 <0.007)
+ *        = 일반/보스 지배력의 "평균 %" 적용. floor 없음.
+ *     ② 크댐: m_crit = 1 + 크댐/100 — 표시 크댐%를 그대로 배수로. (물리/마법 양 패널 cross 기울기
+ *        비율 1.143889 가 이 구조에서 오차 2e-6 으로 정확 성립)
+ *     ③ 데미지: m_dmg = (min_cap+최대뎀) 순비례 — "1+" 없음. min>max 시 cap 규칙 실재 확인
+ *        (cap 미적용이면 판별식이 음수 모순). 기존 D_dmg~1e-37 축퇴는 옵티마이저가 이 비례성을
+ *        스스로 찾아냈던 것.
+ *   기타 정확 검증: BP = floor((직+소)/2) 6/6, cross 완전 선형(마 직접 12,336.5/1%p 상수),
+ *   지배력은 직·소 균일곱(기울기비 = 값비).
+ *   구조 고정 후 잔여 파라미터만 재학습(scripts/refit_v25_exact_structure.mjs, 3000 restarts):
+ *     마법 RMSE 0.208→0.096%/max 0.430→0.237%, 물리 0.264%/max 0.996%, 세이버 ΔBP -6735 vs -6742,
+ *     자료20 cross Δ -123,412 vs 실측 -123,365 · 지배 Δ -73,916 vs -73,937.
+ *
+ * 이전 채택: V_BIG28 — 모순 데이터(카톡 근마 -1pp 페어) 제외 후 확실한 데이터만으로 재역산, cross 선형 확정.
  *   카톡 근마 페어는 역산 검증 결과 어떤 표시 스탯 가설(주스탯/근+마/g^p/공격력/크댐/고댐)로도 설명 불가한
  *   정확히 2.0배 모순(요구 스케일비 1.794 vs 주스탯비 0.898) → 신뢰 불가 데이터로 판정, 학습 제외 (사용자 결정).
  *   제외 후 재탐색(refit_v23, crit=linear xkatgm=1, 300 restarts)에서 cross 선형이 지수형을 전 지표에서 이김:
@@ -103,17 +118,16 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.9269218378219373,  // 주스탯 가중치 (선형 항)
+  K0: 1.9961907003208934,  // 주스탯 가중치 (선형 항)
   K0_sq: 0,                // 주스탯² 항 미사용 (구조 보존용 0)
-  K1: 1.96544726924835e+2, // 공격력 가중치
-  K2: 1.4550241303930722,  // 고댐 가중치
-  K_mon: 6.433980050039184e-1, // 일몬추+보몬추 가중치
-  D_crit: 133.72982342343633, // 크댐 분모 — V_BIG27~: floor 제거, 순수 선형 1+크댐/D (구조 탐색으로 확정)
-  D_dmg: 1.5762384067641415e-37, // (최소뎀+최대뎀) 분모 (1% floor 적용)
-  D_dom: 2.0005647422510010e+2, // 지배력 분모 (floor 없는 선형)
-  K_cross: 9.088168498484678e-1, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율%/100)
+  K1: 2.0145134648881123e+2, // 공격력 가중치
+  K2: 1.5063278121892985,  // 고댐 가중치
+  K_mon: 7.006046610937611e-1, // 일몬추+보몬추 가중치
+  D_crit: 100,             // 크댐 분모 — V_BIG29 정확 확정: 표시 크댐% 그대로 (1+크댐/100)
+  D_dom: 200,              // 지배력 분모 — V_BIG29 정확 확정: 일반/보스 지배력 평균 % (1+(일+보)/200)
+  K_cross: 9.363133078648934e-1, // 근마효율 가산 cross 계수 — ab_d += floor(K_cross×주스탯×근마효율%/100)
   D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 2.3135239513658218e-45, // 전체 보정 상수
+  base: 1.0660138875029545e-8, // 전체 보정 상수 (dmg 순비례 항의 정규화 포함)
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -126,7 +140,7 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 1.9832935367886282e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG28
+  K1: 2.0328052536429615e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG29
 });
 
 /**
@@ -198,33 +212,30 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG28 (모순 페어 제외 + cross 선형 확정 후 동시 재학습)
-const SPLIT_U =   1.0030491813532825; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
-const SPLIT_V = 111.2564512062554;    // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
-const SPLIT_W =   0.04376654041329761; // 고댐 split   (직접 = K2    - w, 소환 = K2    + w)
-const SPLIT_X =   0.45838234457609517; // 추가댐 split (직접 = K_mon - x, 소환 = K_mon + x)
+// SPLIT 파라미터 — V_BIG29 (정확 구조 고정 후 동시 재학습)
+const SPLIT_U =   1.0408500833713372; // 근력 split    (직접 = K0    - u, 소환 = K0    + u)
+const SPLIT_V = 114.85601011467281;   // 공격력 split  (직접 = K1    + v, 소환 = K1    - v)
+const SPLIT_W =   0.004788984396513097; // 고댐 split  (직접 = K2    - w, 소환 = K2    + w)
+const SPLIT_X =   0.47243499623688756; // 추가댐 split (직접 = K_mon - x, 소환 = K_mon + x)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
-//   게임 floor 메커니즘 — V_BIG10: 모든 multiplier 의 boost% 가 정수% 단위 floor.
-//     • 크댐, 데미지, 지배력, 관통 모두 일관 적용
-//     • 데미지 multiplier 는 D_dmg ≈ 1e-37 라 효과 거의 없음 (numerical 안정성 목적)
+//   V_BIG29: 크댐(1+크댐/100)·데미지(순비례)·지배력(1+합/200)은 자료20 통제 실험으로 정확 확정 — floor 없음.
+//   관통만 1% 단위 floor 유지 (기존 페어 근거, 추후 통제 페어로 재검증 예정).
 //   근마효율은 attackBaseFor('direct') 의 cross-term 으로 들어가므로 여기 없음.
 function multiplierFor(stats) {
   if (!stats) return 0;
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
   const maxDmg = Number(stats.최대뎀 || 0);
   const minDmg = effectiveMinDmg(stats.최소뎀, stats.최대뎀);
-  // V_BIG27: 크댐 배수는 순수 선형 (floor 없음).
-  //   구조 탐색에서 floor 제거만으로 loss -32%·카톡 페어 RMSE 반토막. floor 유지+분모 자유(D≈119→129)는
-  //   오히려 악화 → "1% 계단 양자화" 가설 자체가 틀렸음이 판별됨.
+  // V_BIG29 정확 확정 (자료20 통제 실험): 크댐 배수 = 표시 크댐% 그대로 (D_crit=100, floor 없음).
+  //   물리/마법 양 패널 cross 기울기 비율이 이 구조에서 오차 2e-6 으로 정확 성립.
   const critMultiplier =
     1 + Number(stats.크댐 || 0) / params.D_crit;
-  // 데미지 boost 1% floor (D_dmg ~1e-37 라 영향 무시 수준)
-  const dmgMultiplier =
-    1 + Math.floor((minDmg + maxDmg) / params.D_dmg * 100) / 100;
-  // V_BIG17: 지배력 mult 선형 (floor 없음).
-  //   기존 정수% floor 모델은 박햇님 보몬지 ±1pp 가 비대칭(+0.57%/-0.00%)으로 나와 실측(±0.293%) 과 어긋남.
-  //   카톡 보몬지 -2pp(-0.57%) + 박햇님 ±0.293% 가 선형식 D≈195 으로 동시 fit 검증됨.
+  // V_BIG29 정확 확정: 데미지 항은 (min_cap+최대뎀) 순비례 — "1+" 없음, 정규화는 base 가 흡수.
+  //   물리 min>max 역전 시 cap 규칙 실재 확인 (cap 미적용이면 패널 판별식 음수 모순).
+  const dmgMultiplier = minDmg + maxDmg;
+  // V_BIG29 정확 확정: 지배력 = 일반/보스 지배력의 평균 % 적용 (D_dom=200.000, floor 없음).
+  //   자료20 지배력 페어 4개 스트림 × 3페어 전부 D=200 오차 <0.007.
   const dominanceMultiplier =
     1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
   // 관통 boost 1% 단위 floor
