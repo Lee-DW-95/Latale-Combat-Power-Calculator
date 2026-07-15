@@ -1,7 +1,23 @@
 /**
  * 라테일 전투력 계산 모듈
  *
- * 현재 채택: V_BIG30 — 울트라코드 멀티에이전트 역산(8에이전트, 페어 미분 분석)으로 가산부 구조 확정.
+ * 현재 채택: V_BIG31 — 3축 통제실험(자료21 깡주스탯 / 자료22 깡무공·속성 / 자료23 깡크댐) 정확 역산으로
+ *   게임사 계산식 사실상 완전 확정. 물리/마법 패널 "독립 이중 도출"이 전 계수 ≤0.011% 일치.
+ *   검증: 자료21~23 마법 26개 스트림 값 전부 ±1 BP 재현, 마법 27캐릭 RMSE 0.0099%/max 0.029%.
+ *
+ *   확정 구조 (V_BIG30 대비 변경 3건):
+ *     ① 크댐 배수 "모드 분리" — 직접 1+크댐/100, 소환 1+크댐×148/10000 (분모 2500/37≈67.568).
+ *        자료23 12관측 잔차 0 + 박햇님·카톡 크댐 페어 3캐릭 교차 확증. 크댐은 내림된 표시 정수 사용.
+ *     ② 마법 K1 보정(×1.00908) 폐지 — 자료22 정밀역산 b_M/b_P ∈ [0.99994, 1.00013] = 정확히 1.
+ *        기존 1.00908 은 "물리 공격력에 무기공 max 입력" 규칙 오류를 흡수한 인공물.
+ *     ③ 물리 공격력 입력 = 무기공 "표시 범위의 min 값" (max 기각 — max 열은 선형해 없음).
+ *        ⚠ 레거시 SAMPLE 물리 캐릭은 max 만 기록돼 +0.5% 계통 편향 (공식 오차 아님 — 마법은 0.01%).
+ *   부수 확정: 직/소 분리비 재역산 (기존 u_r/v_r/w_r 은 "공유 M" 가정의 인공물이었음),
+ *   카톡 깡크-10 페어 = 무공-10 의 중복 기록(3값 동일)으로 판명, 박햇님 크댐 116/84 수수께끼 해명.
+ *   깔끔 상수 관측: c소/c직 = 1.4800 (소환 크댐 148 재출현), a소/a직 ≈ 1.48², b직/b소 ≈ 5.5.
+ *   재현 스크립트: scripts/refit_v29_jaryo23.mjs + 울트라코드 워크플로 4회 (wf_5363dcf3 외).
+ *
+ * 이전 채택: V_BIG30 — 울트라코드 멀티에이전트 역산(8에이전트, 페어 미분 분석)으로 가산부 구조 확정.
  *   핵심 발견 (scripts/refit_v26_derivative_constrained.mjs, 델타 손실 포함 재학습):
  *     ① 카톡 근마 "모순" 해소: 실측 Δ가 기울기의 정확히 2.000배 → 근마효율 27→25 (2포인트) 변경이었음.
  *        Δg=2 재라벨로 페어 재편입. 대신 카톡 깡크_-10 페어가 진짜 이상치(직/소 13.5% 모순)로 판명 → 제외.
@@ -84,8 +100,10 @@
 //   - 표시 크댐 변화율 ≈ 전투력 변화율 → 곱셈 항 확정
 //   - 관통 98→99: 전투력 +0.81% (case2 페어로 측정)
 //
-// 입력 규칙:
-//   - 무기공격력/속성력은 T창 표시값의 max값 사용
+// 입력 규칙 (V_BIG31 정정):
+//   - 물리 공격력 = 무기공격력 "표시 범위의 min 값" (예: 33,272~33,265 → 33,265)
+//     ⚠ 기존 max 규칙은 오류로 판명 (자료22 통제실험: max 열은 선형해 없음, min 열은 완전 상수)
+//   - 마법 공격력 = 속성력 (단일값 그대로)
 // ============================================================
 
 // V_BIG3 학습 결과 (52건, 페어 비율 제약, RMSE 0.28%)
@@ -132,16 +150,18 @@
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
 export const PHYSICAL_PARAMS = Object.freeze({
-  K0: 1.9612657946748457,  // 주스탯 가중치 (선형 항)
+  // V_BIG31: 통제실험 정확 역산 확정치 (base 게이지 1.078e-8 — 계수×base 곱만이 실측 결정량)
+  K0: 1.4776987,           // 주스탯 가중치 (선형 항)
   K0_sq: 0,                // 주스탯² 항 미사용 (구조 보존용 0)
-  K1: 1.982768714313316e+2, // 공격력 가중치
-  K2: 1.4657417699817548,  // 고댐 가중치
-  K_mon: 7.328708849908774e-1, // 일몬추+보몬추 가중치 — V_BIG30 확정: 정확히 K2/2 (미분 페어 d/c=0.5)
-  D_crit: 100,             // 크댐 분모 — V_BIG29 정확 확정: 표시 크댐% 그대로 (1+크댐/100)
-  D_dom: 200,              // 지배력 분모 — V_BIG29 정확 확정: 일반/보스 지배력 평균 % (1+(일+보)/200)
-  K_cross: 9.232393423239261e-1, // 근마효율 가산 cross 계수 — V_BIG30: Kc×base=9.97746e-9 경성 제약 해
-  D_pen: 25.0,             // 관통 분모 (고정, 1% floor 적용)
-  base: 1.080703717566752e-8, // 전체 보정 상수 (dmg 순비례 항의 정규화 포함)
+  K1: 1.871796e+2,         // 공격력 가중치 (물리 = 무기공 "표시 min", 마법 = 속성력 — 동일 계수)
+  K2: 1.1689487,           // 고댐 가중치
+  K_mon: 5.8447435e-1,     // 일몬추+보몬추 가중치 — 정확히 K2/2 (코드에서는 고댐 계수/2 로 직접 계산)
+  D_crit: 100,             // 직접타격 크댐 분모 — 정확 확정 (1+크댐/100, 크댐은 내림된 표시 정수)
+  K_crit_summon: 0.0148,   // 소환타격 크댐 계수 — V_BIG31 정확 확정: 1+크댐×148/10000 (분모 2500/37)
+  D_dom: 200,              // 지배력 분모 — 정확 확정: 일반/보스 지배력 평균 % (1+(일+보)/200)
+  K_cross: 9.255529e-1,    // 근마효율 가산 cross 계수 — Kc×base = 9.97746e-9 정확 확정의 게이지 해
+  D_pen: 25.0,             // 관통 분모 (1+floor(관통×4)/100 — 97→98 페어 재확증)
+  base: 1.078e-8,          // 전체 보정 상수 (dmg 순비례 항 정규화 포함, 게이지 자유도)
 });
 
 // 마법 직업 파라미터 (V_BIG3 페어 제약, 5건 학습, RMSE 0.13%)
@@ -154,7 +174,9 @@ export const PHYSICAL_PARAMS = Object.freeze({
 //       데이터 추가에 따라 보정 비율은 안정적으로 1.009~1.012 범위에서 수렴.
 export const MAGIC_PARAMS = Object.freeze({
   ...PHYSICAL_PARAMS,
-  K1: 2.0007722606306189e+2, // 마법 속성력 전용 (K1_phys × MAGIC_K1_RATIO 1.00908) — V_BIG30
+  // V_BIG31: 마법 보정(×1.00908) 폐지 — 자료22 정밀역산으로 속성력·무기공이 동일 계수 K1 확정.
+  //   기존 보정은 "물리 공격력에 무기공 max 입력" 규칙 오류(게임은 표시 min 사용)를 흡수한 인공물이었음.
+  K1: 1.871796e+2,
 });
 
 /**
@@ -226,27 +248,28 @@ export function effectiveMinDmg(minDmg, maxDmg) {
  *   조건부 환산(백/근/상)만 직접 BP 에 곱 (직접타격 전용 옵션).
  *   마법 직업: K1_M (147.549) 사용 → β_d/β_s 자동 보정 (params.K1 ± v).
  */
-// SPLIT 파라미터 — V_BIG30: 가산 split 폐기, "계수 비례" split 확정 (페어 미분에서 캐릭터 무관 불변 관측)
-//   직접: a=K0×(1-u_r), b=K1e×(1+v_r), c=K2×(1-w_r) / 소환: 부호 반대. 추가댐 계수 = 고댐 계수/2 (정확).
-//   마법 캐릭은 K1e=K1×1.00908 에 비례 적용되므로 공격력 split 이 자동으로 마법 보정을 따라감
-//   (V29 까지의 가산 split 은 이 비례성을 표현하지 못했음 — 박햇님/카톡 페어 미분으로 판별).
-const SPLIT_UR = 0.5228819744625112;  // 주스탯 분리비 u_r
-const SPLIT_VR = 0.5881927875323614;  // 공격력 분리비 v_r
-const SPLIT_WR = 0.374005098444131;   // 고댐 분리비 w_r (추가댐도 동일 비율, 계수만 /2)
+// SPLIT 파라미터 — V_BIG31: 모드분리 크댐 반영 재역산 (기존 값은 "직/소 공유 M" 가정의 인공물이었음)
+//   직접: a=K0×(1-u_r), b=K1×(1+v_r), c=K2×(1-w_r) / 소환: 부호 반대. 추가댐 계수 = 고댐 계수/2 (정확).
+//   물리/마법 패널 독립 이중 도출이 ≤0.011% 일치 — 계수는 물마 공용.
+//   깔끔 상수 관측: c소/c직 = 1.4800 (소환 크댐 148 재출현), a소/a직 ≈ 1.48², b직/b소 ≈ 5.5.
+const SPLIT_UR = 0.373001;  // 주스탯 분리비 u_r
+const SPLIT_VR = 0.692369;  // 공격력 분리비 v_r
+const SPLIT_WR = 0.193495;  // 고댐 분리비 w_r (추가댐도 동일 비율, 계수만 /2)
 
 // 곱셈 항 M = critMult × dmgMult × dominanceMult × penMult × base
-//   V_BIG29: 크댐(1+크댐/100)·데미지(순비례)·지배력(1+합/200)은 자료20 통제 실험으로 정확 확정 — floor 없음.
-//   관통만 1% 단위 floor 유지 (기존 페어 근거, 추후 통제 페어로 재검증 예정).
+//   V_BIG31: 크댐 배수는 "모드 분리" — 직접 1+크댐/100, 소환 1+크댐×148/10000 (자료23 12관측 잔차 0,
+//   박햇님·카톡 페어 3캐릭 교차 확증). 크댐은 내림된 표시 정수 사용. 나머지 항은 직/소 공통.
 //   근마효율은 attackBaseFor('direct') 의 cross-term 으로 들어가므로 여기 없음.
-function multiplierFor(stats) {
+function multiplierFor(stats, mode = 'direct') {
   if (!stats) return 0;
   const params = stats.type === 'M' ? MAGIC_PARAMS : PHYSICAL_PARAMS;
   const maxDmg = Number(stats.최대뎀 || 0);
   const minDmg = effectiveMinDmg(stats.최소뎀, stats.최대뎀);
-  // V_BIG29 정확 확정 (자료20 통제 실험): 크댐 배수 = 표시 크댐% 그대로 (D_crit=100, floor 없음).
-  //   물리/마법 양 패널 cross 기울기 비율이 이 구조에서 오차 2e-6 으로 정확 성립.
-  const critMultiplier =
-    1 + Number(stats.크댐 || 0) / params.D_crit;
+  // V_BIG31 정확 확정: 직접 크댐 분모 100 / 소환 크댐 계수 148/10000 (분모 2500/37 ≈ 67.568).
+  const 크댐 = Math.floor(Number(stats.크댐 || 0));
+  const critMultiplier = mode === 'summon'
+    ? 1 + 크댐 * params.K_crit_summon
+    : 1 + 크댐 / params.D_crit;
   // V_BIG29 정확 확정: 데미지 항은 (min_cap+최대뎀) 순비례 — "1+" 없음, 정규화는 base 가 흡수.
   //   물리 min>max 역전 시 cap 규칙 실재 확인 (cap 미적용이면 패널 판별식 음수 모순).
   const dmgMultiplier = minDmg + maxDmg;
@@ -318,11 +341,13 @@ export function calculateBattlePower(stats, target = 'boss') {
   const ab_d = attackBaseFor(stats, 'direct');
   const ab_s = attackBaseFor(stats, 'summon');
   if (ab_d <= 0 && ab_s <= 0) return 0;
-  const M = multiplierFor(stats);
+  // V_BIG31: 크댐 모드분리 — 직접/소환 M 이 다름
+  const M_d = multiplierFor(stats, 'direct');
+  const M_s = multiplierFor(stats, 'summon');
   const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
   // V_BIG10: 직타·소타 BP 각각 floor, 평균도 floor (게임 표시 BP 정수)
-  const bp_direct = Math.floor(ab_d * M * cond);
-  const bp_summon = Math.floor(ab_s * M);
+  const bp_direct = Math.floor(ab_d * M_d * cond);
+  const bp_summon = Math.floor(ab_s * M_s);
   return Math.floor((bp_direct + bp_summon) / 2);
 }
 
@@ -333,7 +358,7 @@ export function calculateDirectBP(stats, target = 'boss') {
   if (!stats) return 0;
   const ab = attackBaseFor(stats, 'direct');
   if (ab <= 0) return 0;
-  const M = multiplierFor(stats);
+  const M = multiplierFor(stats, 'direct');
   const cond = target === 'base' ? 1 : expectedConditionalMultiplier(stats, target);
   return Math.floor(ab * M * cond);
 }
@@ -346,7 +371,7 @@ export function calculateSummonBP(stats /* , target */) {
   if (!stats) return 0;
   const ab = attackBaseFor(stats, 'summon');
   if (ab <= 0) return 0;
-  return Math.floor(ab * multiplierFor(stats));
+  return Math.floor(ab * multiplierFor(stats, 'summon'));
 }
 
 /**
