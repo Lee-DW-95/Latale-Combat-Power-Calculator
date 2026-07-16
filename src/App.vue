@@ -9,6 +9,7 @@ import {
 } from './utils/battlePower.js';
 
 import StatInputForm from './components/StatInputForm.vue';
+import CollapsibleSection from './components/CollapsibleSection.vue';
 import BpSummaryBar from './components/BpSummaryBar.vue';
 import EfficiencyPanel from './components/EfficiencyPanel.vue';
 import RelicActivePanel from './components/RelicActivePanel.vue';
@@ -342,30 +343,42 @@ const savedTimeLabel = computed(() => {
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-          <!-- 좌측: 입력 + 비교 + 결과 -->
-          <div class="space-y-5">
-            <StatInputForm v-model="stats" :battle-power="battlePower" />
+          <!-- 좌측: 입력 + 비교 + 결과 — 섹션별 아코디언 (열림 상태 localStorage 유지) -->
+          <div class="space-y-4">
+            <CollapsibleSection id="statInput" title="⚔️ 캐릭터 T창 정보">
+              <StatInputForm v-model="stats" :battle-power="battlePower" />
+            </CollapsibleSection>
 
-            <EfficiencyPanel :stats="stats" v-model:awak-stones="awakStones" />
+            <CollapsibleSection id="efficiency" title="⚡ 효율 분석" :default-open="false">
+              <EfficiencyPanel :stats="stats" v-model:awak-stones="awakStones" />
+            </CollapsibleSection>
 
-            <RelicActivePanel :stats="stats" />
+            <CollapsibleSection id="relicActive" title="🗿 성물 발동 시뮬" :default-open="false">
+              <RelicActivePanel :stats="stats" />
+            </CollapsibleSection>
 
-            <EquipmentCompare
-              :stats="stats"
-              v-model:old-equip="oldEquip"
-              v-model:new-equip="newEquip"
-              @reset="resetEquipment"
-            />
+            <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교">
+              <EquipmentCompare
+                :stats="stats"
+                v-model:old-equip="oldEquip"
+                v-model:new-equip="newEquip"
+                @reset="resetEquipment"
+              />
+            </CollapsibleSection>
 
-            <ResultDisplay :result="result" :type="stats.type" />
+            <CollapsibleSection id="result" title="📊 결과">
+              <ResultDisplay :result="result" :type="stats.type" />
+            </CollapsibleSection>
           </div>
 
           <!-- 우측: 캐릭터 -->
-          <aside class="space-y-5">
-            <CharacterList
-              :current-stats="stats"
-              :current-awak-stones="awakStones"
-            />
+          <aside class="space-y-4">
+            <CollapsibleSection id="characters" title="👥 캐릭터">
+              <CharacterList
+                :current-stats="stats"
+                :current-awak-stones="awakStones"
+              />
+            </CollapsibleSection>
           </aside>
         </div>
       </template>
