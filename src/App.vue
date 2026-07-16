@@ -350,7 +350,11 @@ const savedTimeLabel = computed(() => {
             </CollapsibleSection>
 
             <CollapsibleSection id="efficiency" title="⚡ 효율 분석" :default-open="false">
-              <EfficiencyPanel :stats="stats" v-model:awak-stones="awakStones" />
+              <EfficiencyPanel :stats="stats" mode="efficiency" />
+            </CollapsibleSection>
+
+            <CollapsibleSection id="awakening" title="💎 각성석 종합 환산" :default-open="false">
+              <EfficiencyPanel :stats="stats" mode="awakening" v-model:awak-stones="awakStones" />
             </CollapsibleSection>
 
             <CollapsibleSection id="relicActive" title="🗿 성물 발동 시뮬" :default-open="false">

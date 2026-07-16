@@ -15,7 +15,13 @@ import { makeEmptyAwakStone } from '../utils/awakening.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
+  // 렌더 범위 — 'efficiency': 효율 분석만, 'awakening': 각성석 종합 환산만, 'all': 전부.
+  //   각성석을 별도 아코디언 섹션으로 분리하기 위해 같은 컴포넌트를 모드별로 마운트한다.
+  mode: { type: String, default: 'all' },
 });
+
+const showEff = computed(() => props.mode !== 'awakening');
+const showAwak = computed(() => props.mode !== 'efficiency');
 
 // 각성석 옵션 — 부모(App.vue)와 v-model:awak-stones 양방향 바인딩.
 //   부모가 활성 캐릭터의 awak_stones 와 묶어 자동 저장을 트리거한다.
@@ -283,8 +289,7 @@ watch(awakStones, (val) => {
 // "급" 환산 기준 스탯 — 사용자가 가장 자주 비교하는 크댐을 디폴트
 const awakRefStat = ref('크댐');
 
-// 평균 환산 표시 토글 — 합산값을 활성 각성석 수로 나눠 평균 급 표시
-const awakShowAvg = ref(false);
+// 급 표시는 항상 "개당 평균(합산 ÷ 활성 각성석 수)"을 헤드라인으로, 합산을 병기한다.
 
 // 각성석 드롭다운 축약 라벨 — 캐릭터 type 은 이미 상단 탭에서 결정되므로 (물리)/(마법) 접미사 제거.
 const AWAK_SHORT_LABEL = {
@@ -592,7 +597,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
     <div v-else>
       <!-- (B) 마진 효율 분석 -->
-      <div class="mb-5">
+      <div v-if="showEff" class="mb-5">
         <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-1">
           📊 스탯별 효율 — 지금 뭘 올리는 게 이득일까?
         </h3>
@@ -802,12 +807,14 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </p>
       </div>
 
-      <!-- (D) 각성석 종합 환산 -->
-      <div class="border-t border-stone-200 dark:border-stone-700 pt-4 mb-5">
+      <!-- (D) 각성석 종합 환산 — 별도 섹션 마운트 시 상단 구분선 없이 렌더 -->
+      <div v-if="showAwak" :class="showEff ? 'border-t border-stone-200 dark:border-stone-700 pt-4 mb-5' : 'mb-5'">
         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200">
+          <!-- 별도 섹션 마운트 시 제목은 아코디언 바가 담당 -->
+          <h3 v-if="showEff" class="text-sm font-semibold text-stone-700 dark:text-stone-200">
             💎 각성석 종합 환산
           </h3>
+          <span v-else></span>
           <div class="flex items-center gap-1.5 text-[11px]">
             <button
               type="button"
@@ -824,19 +831,6 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               행 MAX ({{ AWAK_STONE_MAX }})
-            </button>
-            <button
-              type="button"
-              @click="awakShowAvg = !awakShowAvg"
-              :class="[
-                'px-2 py-1 rounded ring-1 transition',
-                awakShowAvg
-                  ? 'bg-cyan-600 text-white ring-cyan-600 hover:bg-cyan-700'
-                  : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
-              ]"
-              title="활성 각성석 수로 나눈 평균 급 표시"
-            >
-              Avg
             </button>
             <button
               type="button"
@@ -1011,22 +1005,18 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             </div>
           </div>
 
+          <!-- 헤드라인 = 개당 평균 급 (합산 ÷ 활성 각성석 수), 합산은 병기 -->
           <div class="flex items-center gap-2 flex-wrap text-sm">
             <span class="text-stone-600 dark:text-stone-300">≈ 크댐</span>
             <span class="font-bold text-cyan-700 dark:text-cyan-300 tabular-nums text-base">
-              {{ awakResult.refAmount >= 0 ? '+' : '' }}{{ awakResult.refAmount.toFixed(2) }}{{ awakResult.refUnit }}
+              {{ awakResult.refAmountAvg >= 0 ? '+' : '' }}{{ awakResult.refAmountAvg.toFixed(2) }}{{ awakResult.refUnit }}
             </span>
-            <span class="text-stone-600 dark:text-stone-300 text-sm">급</span>
-            <template v-if="awakShowAvg">
-              <span class="text-stone-400 dark:text-stone-500 text-xs">·</span>
-              <span class="text-stone-600 dark:text-stone-300 text-xs">평균</span>
-              <span class="font-bold text-cyan-600 dark:text-cyan-400 tabular-nums text-sm">
-                {{ awakResult.refAmountAvg >= 0 ? '+' : '' }}{{ awakResult.refAmountAvg.toFixed(2) }}{{ awakResult.refUnit }}
-              </span>
-              <span class="text-stone-500 dark:text-stone-400 text-xs">
-                급 / 각성석 (÷{{ awakResult.activeStoneCount }})
-              </span>
-            </template>
+            <span class="text-stone-600 dark:text-stone-300 text-sm">급 / 개당</span>
+            <span class="text-stone-400 dark:text-stone-500 text-xs">·</span>
+            <span class="text-stone-500 dark:text-stone-400 text-xs tabular-nums">
+              합산 {{ awakResult.refAmount >= 0 ? '+' : '' }}{{ awakResult.refAmount.toFixed(2) }}{{ awakResult.refUnit }}급
+              ({{ awakResult.activeStoneCount }}개 기준 ÷{{ awakResult.activeStoneCount }})
+            </span>
           </div>
         </div>
         <p v-else class="text-xs text-stone-400 dark:text-stone-500 italic">
@@ -1039,7 +1029,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
       </div>
 
       <!-- (A) 빠른 옵션 시뮬 -->
-      <div class="border-t border-stone-200 dark:border-stone-700 pt-4">
+      <div v-if="showEff" class="border-t border-stone-200 dark:border-stone-700 pt-4">
         <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">
           🔮 빠른 옵션 시뮬
         </h3>
