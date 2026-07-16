@@ -32,6 +32,11 @@ class RegisterResponse(TokenResponse):
     recovery_code: str
 
 
+class RecoverResponse(TokenResponse):
+    # 복구코드는 1회용 — 사용 즉시 새 코드를 재발급해 응답에 포함 (재조회 불가).
+    recovery_code: str
+
+
 # ─────────────────── Character ───────────────────
 
 class CharacterBase(BaseModel):

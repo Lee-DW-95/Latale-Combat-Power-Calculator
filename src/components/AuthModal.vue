@@ -137,9 +137,17 @@ async function submitRecover() {
   }
   loading.value = true;
   try {
-    await recover(nickname.value, recoveryCode.value, newPassword.value);
-    emit('success', { kind: 'recover' });
-    emit('update:modelValue', false);
+    const res = await recover(nickname.value, recoveryCode.value, newPassword.value);
+    // 복구코드는 1회용 — 서버가 새 코드를 재발급해 응답에 포함. 강제 인지 화면으로 표시.
+    if (res?.recovery_code) {
+      issuedRecoveryCode.value = res.recovery_code;
+      finishKind.value = 'recover';
+      step.value = 'show-recovery-code';
+    } else {
+      // 구버전 서버 (재발급 미지원) — 기존 동작 유지.
+      emit('success', { kind: 'recover' });
+      emit('update:modelValue', false);
+    }
   } catch (err) {
     error.value = err.message || '복구 실패';
   } finally {
@@ -157,9 +165,12 @@ async function copyRecoveryCode() {
   }
 }
 
+// show-recovery-code 화면 종료 시 알릴 이벤트 종류 — 회원가입/복구 공용.
+const finishKind = ref('register');
+
 function finishRecoveryCodeStep() {
   if (!acknowledged.value) return;
-  emit('success', { kind: 'register' });
+  emit('success', { kind: finishKind.value });
   emit('update:modelValue', false);
 }
 
@@ -321,7 +332,7 @@ const title = computed(() =>
             />
           </label>
           <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-snug">
-            ⓘ 복구코드는 <strong>1회용</strong>입니다. 사용 후엔 새 복구코드 발급이 필요합니다.
+            ⓘ 복구코드는 <strong>1회용</strong>입니다. 복구 완료 시 새 복구코드가 자동 재발급되어 표시됩니다.
           </p>
           <p v-if="error" class="text-xs text-rose-600 dark:text-rose-400">{{ error }}</p>
           <button
@@ -338,10 +349,12 @@ const title = computed(() =>
           </div>
         </form>
 
-        <!-- ───── 복구코드 표시 (회원가입 직후, 강제 인지) ───── -->
+        <!-- ───── 복구코드 표시 (회원가입/비밀번호 복구 직후, 강제 인지) ───── -->
         <div v-else-if="step === 'show-recovery-code'" class="space-y-3">
           <p class="text-sm text-stone-700 dark:text-stone-300">
-            회원가입이 완료됐습니다. 아래 <strong>복구코드</strong>를 안전한 곳에 저장해 주세요.
+            {{ finishKind === 'recover' ? '비밀번호가 변경됐습니다. 복구코드는 1회용이라 새 코드가 재발급됐어요 — 아래' : '회원가입이 완료됐습니다. 아래' }}
+
+            <strong>복구코드</strong>를 안전한 곳에 저장해 주세요.
           </p>
           <div class="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-300 dark:ring-amber-700 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200 leading-snug">
             ⚠ 이 코드는 <strong>지금 한 번만 표시</strong>됩니다. 잃어버리면 계정 복구가 불가능합니다.

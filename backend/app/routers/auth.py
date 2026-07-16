@@ -60,7 +60,7 @@ def login(
     return schemas.TokenResponse(token=create_access_token(user.id))
 
 
-@router.post("/recover", response_model=schemas.TokenResponse)
+@router.post("/recover", response_model=schemas.RecoverResponse)
 @limiter.limit("5/minute")
 def recover(
     request: Request,  # noqa: ARG001
@@ -74,7 +74,12 @@ def recover(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "복구코드가 올바르지 않습니다.")
 
     user.pw_hash = hash_password(body.new_password)
-    # 복구코드는 1회용 — 사용 후 무효화. 신규 복구코드는 별도 엔드포인트(추후) 또는 재가입.
-    user.recovery_hash = None
+    # 복구코드는 1회용 — 사용 즉시 새 코드로 교체해 응답으로 1회 노출.
+    #   (기존에는 None 으로 소멸시켜 복구 사용 후 복구 수단이 사라지는 공백이 있었음)
+    new_code = generate_recovery_code()
+    user.recovery_hash = hash_password(new_code)
     db.commit()
-    return schemas.TokenResponse(token=create_access_token(user.id))
+    return schemas.RecoverResponse(
+        token=create_access_token(user.id),
+        recovery_code=new_code,
+    )
