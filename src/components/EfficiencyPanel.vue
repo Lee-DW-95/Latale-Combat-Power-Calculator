@@ -574,10 +574,13 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
   <section
     class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
-    <h2
-      class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 cursor-help"
+    <!-- 제목은 아코디언 바가 담당 -->
+    <p
+      class="text-xs text-stone-500 dark:text-stone-400 mb-3"
       title="현재 캐릭터 스탯 기준 자동 계산 — 같은 옵션이라도 본인 스탯과 누적%에 따라 BP 변화량이 다르게 산출됩니다."
-    >⚡ 효율 분석</h2>
+    >
+      현재 캐릭터 스탯 기준 자동 계산 — 같은 옵션이라도 본인 스탯·누적%에 따라 BP 변화량이 다릅니다.
+    </p>
 
     <!-- 빈 상태 -->
     <div

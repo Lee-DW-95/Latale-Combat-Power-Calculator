@@ -24,7 +24,15 @@ const stats = computed({
 });
 
 function setType(type) {
-  emit('update:modelValue', { ...props.modelValue, type });
+  const next = { ...props.modelValue, type };
+  // 물리↔마법 전환 시 공격력 의미가 다름 (무기공 중간값 vs 속성력 단일값).
+  //   → P 로 전환: 무기공 범위가 있으면 중간값 재계산 (물리 값 복원)
+  //   → M 으로 전환: 공격력이 무기공 범위에서 유도된 값이면 비움 (속성력 재입력 유도)
+  const mn = Number(next.무기공표시min || 0);
+  const mx = Number(next.무기공표시max || 0);
+  if (type === 'P' && mn > 0 && mx > 0) next.공격력 = (mn + mx) / 2;
+  else if (type === 'M' && (mn > 0 || mx > 0)) next.공격력 = 0;
+  emit('update:modelValue', next);
 }
 
 function setField(key, raw) {
@@ -88,6 +96,32 @@ const anyConditionalActive = computed(
   () => expectedMultNormal.value > 1 || expectedMultBoss.value > 1
 );
 
+// 조건부 값은 있는데 하나도 활성/가동률이 없는 상태 — 체험 유도 힌트 노출
+const conditionalIdleWithValues = computed(
+  () =>
+    !anyConditionalActive.value &&
+    ['백어택', '근거리', '상태대미지'].some((k) => Number(props.modelValue[k] || 0) > 0)
+);
+
+// ── 실측 전투력 검증 — 게임 표시 전투력을 입력하면 계산값과의 오차를 보여준다 ──
+const measuredBP = computed(() => Number(props.modelValue.실측전투력 || 0));
+const measuredErr = computed(() => {
+  if (!(measuredBP.value > 0) || !(props.battlePower > 0)) return null;
+  return ((props.battlePower - measuredBP.value) / measuredBP.value) * 100;
+});
+const measuredErrLabel = computed(() => {
+  if (measuredErr.value === null) return '';
+  const e = measuredErr.value;
+  return `${e >= 0 ? '+' : ''}${Math.abs(e) < 0.1 ? e.toFixed(3) : e.toFixed(2)}%`;
+});
+const measuredErrClass = computed(() => {
+  if (measuredErr.value === null) return '';
+  const a = Math.abs(measuredErr.value);
+  if (a <= 0.05) return 'text-emerald-600 dark:text-emerald-400';
+  if (a <= 0.5) return 'text-amber-600 dark:text-amber-400';
+  return 'text-rose-600 dark:text-rose-400';
+});
+
 const conditionalBadgeTitle = computed(() =>
   [
     '가동률 가중 환산 — 직접 BP에만 곱셈, 소환은 영향 없음.',
@@ -131,9 +165,29 @@ const BREAKDOWN_CARDS = [
 
 <template>
   <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-    <!-- ── 헤더: 제목 + 계산된 전투력 ── -->
+    <!-- ── 헤더: 계산된 전투력 + 실측 검증 (제목은 아코디언 바가 담당) ── -->
     <header class="flex flex-wrap items-start justify-between gap-3 mb-4">
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">⚔️ 캐릭터 T창 정보</h2>
+      <!-- 실측 전투력 검증 — 게임 T창 표시 전투력을 넣으면 오차를 보여준다 -->
+      <div class="text-left">
+        <label class="block">
+          <span class="block text-xs text-stone-500 dark:text-stone-400 mb-0.5">
+            게임 실측 전투력 <span class="text-stone-400">(선택 · 정확도 검증)</span>
+          </span>
+          <NumInput
+            :model-value="stats.실측전투력"
+            @update:model-value="setField('실측전투력', $event)"
+            placeholder="T창 표시 전투력"
+            title="게임 T창에 표시된 전투력을 입력하면 계산값과의 오차를 보여줍니다."
+            class="w-40 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+          />
+        </label>
+        <div v-if="measuredErr !== null" class="mt-1 text-xs tabular-nums">
+          오차 <span :class="['font-bold', measuredErrClass]">{{ measuredErrLabel }}</span>
+          <span v-if="Math.abs(measuredErr) > 0.3 && stats.type === 'P' && !weaponRangeFilled" class="block text-orange-600 dark:text-orange-400">
+            → 무기공격력 표시범위(min~max)를 입력하면 오차가 크게 줄어듭니다
+          </span>
+        </div>
+      </div>
       <div class="text-right">
         <div class="text-xs text-stone-500 dark:text-stone-400">
           계산된 전투력
@@ -228,7 +282,7 @@ const BREAKDOWN_CARDS = [
               :step="def.step"
               :model-value="stats.무기공표시min"
               @update:model-value="setWeaponRange('무기공표시min', $event)"
-              placeholder="86,931"
+              placeholder="최소값"
               class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
             <span class="text-stone-400 text-sm shrink-0">~</span>
@@ -236,7 +290,7 @@ const BREAKDOWN_CARDS = [
               :step="def.step"
               :model-value="stats.무기공표시max"
               @update:model-value="setWeaponRange('무기공표시max', $event)"
-              placeholder="89,042"
+              placeholder="최대값"
               class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </div>
@@ -316,6 +370,12 @@ const BREAKDOWN_CARDS = [
       <p class="text-xs text-stone-500 dark:text-stone-400 mb-2">
         T창 수치와 <strong>가동률</strong>(직타비중 × 조건충족율, 0~100)을 입력하면 기댓값으로 전투력에 환산됩니다.
         직접 타격에만 적용되고 소환은 영향이 없습니다.
+      </p>
+      <p
+        v-if="conditionalIdleWithValues"
+        class="mb-2 text-xs text-orange-600 dark:text-orange-400"
+      >
+        💡 값이 입력돼 있어요 — 체크박스를 켜고 가동률을 넣으면 전투력에 환산됩니다.
       </p>
       <details class="mb-3 text-xs text-stone-500 dark:text-stone-400">
         <summary class="cursor-pointer select-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300">

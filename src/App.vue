@@ -358,16 +358,15 @@ const savedTimeLabel = computed(() => {
             </CollapsibleSection>
 
             <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교">
-              <EquipmentCompare
-                :stats="stats"
-                v-model:old-equip="oldEquip"
-                v-model:new-equip="newEquip"
-                @reset="resetEquipment"
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection id="result" title="📊 결과">
-              <ResultDisplay :result="result" :type="stats.type" />
+              <div class="space-y-4">
+                <EquipmentCompare
+                  :stats="stats"
+                  v-model:old-equip="oldEquip"
+                  v-model:new-equip="newEquip"
+                  @reset="resetEquipment"
+                />
+                <ResultDisplay :result="result" :type="stats.type" />
+              </div>
             </CollapsibleSection>
           </div>
 

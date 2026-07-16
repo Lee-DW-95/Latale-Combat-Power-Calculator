@@ -93,8 +93,8 @@ function needsFallbackWarning(def) {
 
 <template>
   <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-    <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🛡️ 장비 비교</h2>
+    <!-- 제목은 아코디언 바가 담당 -->
+    <header class="flex flex-wrap items-center justify-end gap-3 mb-1">
       <button
         type="button"
         @click="emit('reset')"

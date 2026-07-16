@@ -235,7 +235,7 @@ function fmtSigned(n) {
     <!-- ═══════ 헤더 ═══════ -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
       <div>
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🗿 성물 발동 시뮬</h2>
+        <!-- 제목은 아코디언 바가 담당 -->
         <p class="text-xs text-stone-500 dark:text-stone-400">
           성물은 <strong>성물별 개별 액티브</strong> — 발동한 성물 1종의 (전용석 + 공용석) 옵션만
           <strong>×{{ RELIC_ACTIVE_MULT }}</strong> 증폭 적용. 다른 액티브를 쓰면 기존 버프는 사라집니다 (중첩 불가).

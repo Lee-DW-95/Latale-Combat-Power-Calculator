@@ -37,7 +37,8 @@ const sortedContribs = computed(() => {
   <section
     class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
-    <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">📊 결과</h2>
+    <!-- 장비 비교 섹션 하위 카드 — 소제목으로 표시 -->
+    <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">📊 비교 결과</h3>
 
     <div v-if="!result" class="flex items-center gap-3 text-sm text-stone-500 dark:text-stone-400 py-2">
       <img src="/assets/latale/char-82.png" alt="" class="w-12 h-12 rounded-full ring-1 ring-cyan-200 dark:ring-stone-600 shrink-0" draggable="false" />
