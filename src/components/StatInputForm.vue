@@ -37,6 +37,33 @@ function setField(key, raw) {
   emit('update:modelValue', { ...props.modelValue, [key]: Number.isFinite(num) ? num : 0 });
 }
 
+// V_BIG32: 물리 공격력 = 무기공 표시범위(min~max)의 중간값 — 게임 실측으로 확정된 입력 규칙.
+// 두 칸 중 하나만 입력되면 그 값을 임시 사용, 둘 다 입력되면 (min+max)/2 를 공격력에 기록.
+function setWeaponRange(key, raw) {
+  const num = raw === '' || raw === null ? 0 : Number(raw);
+  const next = { ...props.modelValue, [key]: Number.isFinite(num) ? num : 0 };
+  const mn = Number(next.무기공표시min || 0);
+  const mx = Number(next.무기공표시max || 0);
+  if (mn > 0 && mx > 0) next.공격력 = (mn + mx) / 2;
+  else if (mn > 0 || mx > 0) next.공격력 = mn || mx;
+  else next.공격력 = 0;
+  emit('update:modelValue', next);
+}
+
+const weaponRangeFilled = computed(
+  () => Number(props.modelValue.무기공표시min || 0) > 0 && Number(props.modelValue.무기공표시max || 0) > 0
+);
+// 범위 미입력인데 공격력만 있는 경우 = 구버전 저장 캐릭터 (max 단일 입력 시절)
+const weaponLegacyValue = computed(
+  () =>
+    props.modelValue.type === 'P' &&
+    !Number(props.modelValue.무기공표시min || 0) &&
+    !Number(props.modelValue.무기공표시max || 0) &&
+    Number(props.modelValue.공격력 || 0) > 0
+      ? Number(props.modelValue.공격력)
+      : 0
+);
+
 // 기본 스탯 입력 진행도 (0~8개 입력 카운트)
 const baseFilledCount = computed(() =>
   BASE_FIELD_DEFS.filter((d) => Number(props.modelValue[d.key] || 0) > 0).length
@@ -191,9 +218,37 @@ const BREAKDOWN_CARDS = [
       >
         <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
           {{ getStatLabel(stats.type, def.key) }}
-          <span v-if="def.unit" class="text-stone-400">({{ def.unit }})</span>
+          <span v-if="def.key === '공격력' && stats.type === 'P'" class="text-stone-400">(표시범위)</span>
+          <span v-else-if="def.unit" class="text-stone-400">({{ def.unit }})</span>
         </span>
+        <!-- 물리 무기공격력: T창 표시범위 두 값 → 중간값 자동 적용 (V_BIG32) -->
+        <template v-if="def.key === '공격력' && stats.type === 'P'">
+          <div class="flex items-center gap-1" :title="def.tooltip">
+            <NumInput
+              :step="def.step"
+              :model-value="stats.무기공표시min"
+              @update:model-value="setWeaponRange('무기공표시min', $event)"
+              placeholder="86,931"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            />
+            <span class="text-stone-400 text-sm shrink-0">~</span>
+            <NumInput
+              :step="def.step"
+              :model-value="stats.무기공표시max"
+              @update:model-value="setWeaponRange('무기공표시max', $event)"
+              placeholder="89,042"
+              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            />
+          </div>
+          <span v-if="weaponRangeFilled" class="block mt-1 text-[11px] text-cyan-700 dark:text-cyan-400 tabular-nums">
+            적용값(중간값): {{ Number(stats.공격력).toLocaleString('ko-KR') }}
+          </span>
+          <span v-else-if="weaponLegacyValue" class="block mt-1 text-[11px] text-orange-600 dark:text-orange-400 tabular-nums">
+            ⚠ 구버전 단일값 {{ weaponLegacyValue.toLocaleString('ko-KR') }} 사용 중 — T창 표시범위 두 값을 입력하면 정확도가 올라갑니다 (max 단일 입력은 +0.5% 안팎 과대계산)
+          </span>
+        </template>
         <NumInput
+          v-else
           :step="def.step"
           :model-value="stats[def.key]"
           @update:model-value="setField(def.key, $event)"
