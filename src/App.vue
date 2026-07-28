@@ -98,6 +98,21 @@ const activeTab = ref('calc');
 //   토큰 기반 로그인(isLoggedIn)을 전제로 하되, 진짜 보호가 필요하면 서버측 검증 필요.
 const PRIVILEGED_NICKNAMES = ['선봉', '백르'];
 
+// 로컬 개발 환경(vite dev / localhost 프리뷰)에서는 로그인 없이 모든 탭을 연다.
+//   로컬은 백엔드(localhost:8000)를 안 띄우면 로그인 자체가 안 돼서 제한 탭을 볼 수 없다.
+//   조건을 좁게 잡아 배포본에는 영향이 없도록 한다:
+//     · import.meta.env.DEV  → vite dev 서버에서만 true (build 결과물은 항상 false)
+//     · hostname 정확 일치   → Vercel 배포본 제외. Tauri 데스크탑은 tauri.localhost 라 제외됨.
+//     · Tauri 는 OS 에 따라 tauri://localhost 로 뜰 수 있어 명시적으로 제외한다.
+const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
+const isTauriApp =
+  typeof window !== 'undefined' &&
+  ('__TAURI__' in window || '__TAURI_INTERNALS__' in window || window.location.protocol === 'tauri:');
+const isLocalDev =
+  !isTauriApp &&
+  (import.meta.env.DEV ||
+    (typeof window !== 'undefined' && LOCAL_HOSTNAMES.includes(window.location.hostname)));
+
 const TABS = [
   { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
   { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수', restricted: true },
@@ -109,9 +124,11 @@ const TABS = [
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
 ];
 
-// 제한 탭 노출 여부 — 로그인 + 특권 닉네임.
+// 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 특권 닉네임.
 const canSeeRestricted = computed(
-  () => isLoggedIn.value && PRIVILEGED_NICKNAMES.includes((authNickname.value || '').trim()),
+  () =>
+    isLocalDev ||
+    (isLoggedIn.value && PRIVILEGED_NICKNAMES.includes((authNickname.value || '').trim())),
 );
 
 // 실제로 그릴 탭 목록.
