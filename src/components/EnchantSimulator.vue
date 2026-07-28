@@ -8,10 +8,14 @@ import {
   SPECIAL_ENCHANT_COSTS,
   SPECIAL_ENCHANT_MAX_SLOTS,
   SPECIAL_ENCHANT_MAX_LEVEL,
+  ENCHANT_BINDINGS,
+  MYTHIC_MIN_PCT,
   categoryKeys,
   partKeys,
   getPart,
   availableEnchantTypes,
+  supportsMythic,
+  enchantMinPct,
   rangeFor,
 } from '../data/enchantData.js';
 import {
@@ -37,6 +41,18 @@ const normalCatKey = ref(catKeysList[0]);
 const normalPartKey = ref(partKeys(catKeysList[0])[0]);
 const normalEnchantType = ref('normal');
 const normalSelectedOption = ref('');
+// 귀속 장비 여부 — 인챈 수치 하한이 달라진다 (귀속 1% / 거래가능 20%).
+//   대부분의 최종 장비가 귀속이라 기본 ON.
+const normalIsBound = ref(true);
+// 신화장비 여부 — 그렌델/벨리알/아마란스 노바 계열에만 존재. 하한 80% (귀속/거래보다 우선).
+const normalIsMythic = ref(false);
+const normalMythicAvailable = computed(() => supportsMythic(normalCatKey.value));
+const normalMinPct = computed(() =>
+  enchantMinPct({
+    bound: normalIsBound.value,
+    mythic: normalMythicAvailable.value && normalIsMythic.value,
+  }),
+);
 // 5슬롯 채운 뒤 Lv2 → Lv풀강 환산값을 슬롯에 표시할지 토글
 const showFullConversion = ref(false);
 const normalSlots = ref([]);
@@ -131,6 +147,14 @@ watch(normalCatKey, (newCat) => {
 // 부위 변경 시: 공통 초기화
 watch(normalPartKey, resetForPartChange);
 
+// 귀속/신화 변경 시: 추첨 하한이 바뀌므로 진행 중인 슬롯·통계만 초기화
+//   (목표 옵션 입력값은 유지 — 같은 목표를 귀속/거래/신화 조건으로 비교하는 용도)
+watch([normalIsBound, normalIsMythic], () => {
+  resetNormal();
+  targetStats.value = null;
+  targetSampleRun.value = null;
+});
+
 async function analyzeTargetSim() {
   if (!canRunTargetSim.value) return;
   isTargetSimRunning.value = true;
@@ -142,6 +166,7 @@ async function analyzeTargetSim() {
       normalEnchantType.value,
       'base',
       1000,
+      normalMinPct.value,
     );
     targetSampleRun.value = simulateUntilTargetMet(
       normalPart.value,
@@ -149,6 +174,7 @@ async function analyzeTargetSim() {
       normalEnchantType.value,
       'base',
       100_000,
+      normalMinPct.value,
     );
   } finally {
     isTargetSimRunning.value = false;
@@ -177,7 +203,13 @@ function runNormalOnce() {
     }
   }
 
-  const r = tryNormalEnchant(normalPart.value, normalSelectedOption.value, normalEnchantType.value);
+  const r = tryNormalEnchant(
+    normalPart.value,
+    normalSelectedOption.value,
+    normalEnchantType.value,
+    'base',
+    normalMinPct.value,
+  );
   normalCounters.value.tries++;
   normalCounters.value.hammerUsed += r.hammerUsed;
   normalCounters.value.elyUsed += r.elyUsed;
@@ -245,6 +277,7 @@ async function analyzeNormal() {
       normalEnchantType.value,
       'base',
       2000,
+      normalMinPct.value,
     );
   } finally {
     normalIsAnalyzing.value = false;
@@ -408,14 +441,17 @@ function gradeBarColor(p) {
   return 'bg-stone-400 dark:bg-stone-500';
 }
 
-// 옵션 범위 텍스트 — Lv2 기본 + 풀강 환산 범위 부가
+// 옵션 범위 텍스트 — Lv2 기본 + 풀강 환산 범위 부가.
+//   하한은 귀속 여부(normalMinPct)에 따라 달라진다.
 function rangeText(opt) {
   const fmtN = (n) => (opt.step && opt.step < 1) ? fmt1(n) : fmt(n);
-  return `+${fmtN(opt.lo)} ~ +${fmtN(opt.hi)}${opt.unit}`;
+  const r = rangeFor(opt, 'base', normalMinPct.value);
+  return `+${fmtN(r.lo)} ~ +${fmtN(r.hi)}${opt.unit}`;
 }
 function fullRangeText(opt) {
   const fmtN = (n) => (opt.step && opt.step < 1) ? fmt1(n) : fmt(n);
-  return `+${fmtN(opt.fullLo)} ~ +${fmtN(opt.fullHi)}${opt.unit}`;
+  const r = rangeFor(opt, 'full', normalMinPct.value);
+  return `+${fmtN(r.lo)} ~ +${fmtN(r.hi)}${opt.unit}`;
 }
 
 // 추첨된 값이 Lv2 hi 대비 몇 % 인지. 게임사 기준 Math.floor 적용.
@@ -583,6 +619,57 @@ function rollPctClass(p) {
               </div>
             </button>
           </div>
+        </div>
+
+        <!-- 인챈 수치 하한 — 귀속 1% / 거래가능 20% / 신화 80% -->
+        <div class="mt-4">
+          <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
+            장비 속성
+            <span class="ml-1 text-xs font-normal tabular-nums text-cyan-700 dark:text-cyan-300">
+              → 인챈 수치 {{ normalMinPct }} ~ 100%
+            </span>
+          </span>
+          <div class="flex gap-2 flex-wrap">
+            <label
+              class="flex flex-1 min-w-[180px] items-center gap-2.5 rounded-md px-3 py-2 ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 cursor-pointer transition"
+            >
+              <input
+                v-model="normalIsBound"
+                type="checkbox"
+                class="h-4 w-4 shrink-0 accent-cyan-600 cursor-pointer"
+              />
+              <span class="text-sm text-stone-700 dark:text-stone-200">귀속 장비</span>
+              <span class="text-xs tabular-nums text-stone-500 dark:text-stone-400">1~100%</span>
+            </label>
+
+            <label
+              v-if="normalMythicAvailable"
+              class="flex flex-1 min-w-[180px] items-center gap-2.5 rounded-md px-3 py-2 ring-1 cursor-pointer transition"
+              :class="normalIsMythic
+                ? 'ring-orange-400 dark:ring-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                : 'ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700'"
+            >
+              <input
+                v-model="normalIsMythic"
+                type="checkbox"
+                class="h-4 w-4 shrink-0 accent-orange-500 cursor-pointer"
+              />
+              <span class="text-sm text-stone-700 dark:text-stone-200">✨ 신화 장비</span>
+              <span class="text-xs tabular-nums text-orange-600 dark:text-orange-400">
+                {{ MYTHIC_MIN_PCT }}~100%
+              </span>
+            </label>
+          </div>
+          <p class="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+            거래가능 장비는 최소 보정치가 올라가 <strong>20~100%</strong> 로 추첨됩니다
+            (귀속은 <strong>1~100%</strong>) — 체크 해제 시 거래가능 기준.
+            <template v-if="normalMythicAvailable">
+              신화 장비는 모든 슬롯이 <strong>{{ MYTHIC_MIN_PCT }}~100%</strong> 로 보정되어 귀속 여부보다 우선 적용됩니다.
+            </template>
+            <template v-else>
+              신화 장비는 그렌델(이카로스의 날개) · 벨리알(리키모 펠케) · 아마란스 노바 계열에만 있습니다.
+            </template>
+          </p>
         </div>
       </section>
 

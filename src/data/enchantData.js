@@ -26,8 +26,12 @@ export const NORMAL_ENCHANT_TYPES = {
   special: { key: 'special', name: '특별 인챈트',   successRate: 1.00, hammerCost: 30, elyCost:           0 },
 };
 
+// 특별 인챈트(100% 성공, 망치 30개)를 쓸 수 있는 최신 카테고리.
+//   리키모 펠케 · 아마란스 노바 — 둘 다 풀강 Lv5 장비군.
+const SPECIAL_ENCHANT_CATEGORIES = ['리키모 펠케', '아마란스 노바'];
+
 export function availableEnchantTypes(catKey) {
-  if (catKey === '리키모 펠케') return ['normal', 'super', 'special'];
+  if (SPECIAL_ENCHANT_CATEGORIES.includes(catKey)) return ['normal', 'super', 'special'];
   return ['normal', 'super'];
 }
 
@@ -39,10 +43,57 @@ export const ENCHANT_STAGES = {
   full: { key: 'full', name: '풀강',       loField: 'fullLo', hiField: 'fullHi' },
 };
 
-// 옵션의 stage 별 [lo, hi] 추출 헬퍼
-export function rangeFor(opt, stage = 'base') {
-  if (stage === 'full') return { lo: opt.fullLo, hi: opt.fullHi, step: opt.step };
-  return { lo: opt.lo, hi: opt.hi, step: opt.step };
+// ============================================================
+// 인챈트 수치 하한 — 귀속 / 거래가능 / 신화장비
+//
+// 인챈 수치는 옵션 최대치(hi) 대비 백분율로 추첨된다 (UI 의 등급% = floor(값/hi×100)).
+// 상한은 항상 100% 지만 하한이 다르다:
+//   귀속 장비     →  1 ~ 100%
+//   거래가능 장비  → 20 ~ 100%   ← 최소 보정치가 올라감
+//   신화 장비     → 80 ~ 100%   ← 귀속/거래보다 우선 (모든 슬롯 적용)
+//
+// 풀강 범위는 노강 범위를 D = fullHi - hi 만큼 평행이동한 것이므로
+// (데이터상 fullLo = lo + D 성립), 하한도 노강 스케일에서 구한 뒤 D 를 더한다.
+// ============================================================
+export const ENCHANT_BINDINGS = {
+  bound:    { key: 'bound',    name: '귀속 장비',    minPct:  1 },
+  tradable: { key: 'tradable', name: '거래가능 장비', minPct: 20 },
+};
+
+export const DEFAULT_BINDING_MIN_PCT = ENCHANT_BINDINGS.bound.minPct;
+
+// 신화장비 — 그렌델(이카로스의 날개) · 벨리알(리키모 펠케) · 아마란스 노바 계열에만 존재.
+export const MYTHIC_MIN_PCT = 80;
+const MYTHIC_CATEGORIES = ['이카로스의 날개', '리키모 펠케', '아마란스 노바'];
+
+export function supportsMythic(catKey) {
+  return MYTHIC_CATEGORIES.includes(catKey);
+}
+
+// 귀속 여부 + 신화 여부 → 실제 적용될 인챈 수치 하한(%).
+//   신화는 80% 하한이라 귀속(1)/거래(20)보다 항상 높다 → max 로 합성.
+export function enchantMinPct({ bound = true, mythic = false } = {}) {
+  const base = (bound ? ENCHANT_BINDINGS.bound : ENCHANT_BINDINGS.tradable).minPct;
+  return mythic ? Math.max(base, MYTHIC_MIN_PCT) : base;
+}
+
+// value 를 lo 기준 step 격자 위로 올림. step 미지정/1 이상이면 정수 올림.
+function ceilToStep(value, lo, step) {
+  if (!step || step >= 1) return Math.ceil(value);
+  const n = Math.max(0, Math.ceil((value - lo) / step - 1e-9));
+  return Math.round((lo + n * step) * 10) / 10;
+}
+
+// 옵션의 stage 별 [lo, hi] 추출 헬퍼.
+//   minPct = 인챈 수치 하한(%) — 귀속 1 / 거래가능 20 / 신화 80.
+export function rangeFor(opt, stage = 'base', minPct = DEFAULT_BINDING_MIN_PCT) {
+  const floorLo = Math.max(opt.lo, ceilToStep(opt.hi * minPct / 100, opt.lo, opt.step));
+  if (stage === 'full') {
+    const D = opt.fullHi - opt.hi; // 풀강 평행이동량
+    const lo = Math.round((floorLo + D) * 10) / 10;
+    return { lo: Math.min(lo, opt.fullHi), hi: opt.fullHi, step: opt.step };
+  }
+  return { lo: Math.min(floorLo, opt.hi), hi: opt.hi, step: opt.step };
 }
 
 // ============================================================

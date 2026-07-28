@@ -6,6 +6,7 @@
  *    - 1회 시도 = 1슬롯 부여 또는 장비 파괴
  *    - 일반 인챈트 50% / 슈퍼 인챈트 60% 성공률
  *    - 성공: 선택 옵션의 [lo, hi] (또는 step 단위) 균등 분포로 값 결정 → 슬롯 1개 추가
+ *      · lo 는 장비 귀속 여부로 달라짐 — 귀속 1% / 거래가능 20% 하한 (minPct, rangeFor 참조)
  *    - 실패: 장비 전체 파괴, 모든 슬롯 사라짐, 새 장비로 재시작
  *    - 매 시도마다 플래티넘 망치 1개 소모
  *
@@ -20,6 +21,7 @@ import {
   SPECIAL_ENCHANT_OPTIONS,
   SPECIAL_ENCHANT_COSTS,
   SPECIAL_ENCHANT_MAX_LEVEL,
+  DEFAULT_BINDING_MIN_PCT,
   rangeFor,
 } from '../data/enchantData.js';
 import { rollInt, rollValue } from './random.js';
@@ -51,7 +53,13 @@ function buildDistributionStats(samples) {
 //   { success: true,  hammerUsed, elyUsed, optionKey, label, unit, value }
 //   { success: false, hammerUsed, elyUsed }
 // ============================================================
-export function tryNormalEnchant(part, optionKey, enchantTypeKey, stage = 'base') {
+export function tryNormalEnchant(
+  part,
+  optionKey,
+  enchantTypeKey,
+  stage = 'base',
+  minPct = DEFAULT_BINDING_MIN_PCT,
+) {
   const type = NORMAL_ENCHANT_TYPES[enchantTypeKey];
   if (!type) throw new Error(`unknown enchant type: ${enchantTypeKey}`);
 
@@ -62,7 +70,7 @@ export function tryNormalEnchant(part, optionKey, enchantTypeKey, stage = 'base'
 
   const opt = part.options.find((o) => o.key === optionKey);
   if (!opt) throw new Error(`unknown option: ${optionKey}`);
-  const r = rangeFor(opt, stage);
+  const r = rangeFor(opt, stage, minPct);
 
   return {
     success: true,
@@ -88,6 +96,7 @@ export function simulateUntilFull(
   enchantTypeKey,
   stage = 'base',
   maxAttempts = ENCHANT_SIM.FULL_MAX_ATTEMPTS,
+  minPct = DEFAULT_BINDING_MIN_PCT,
 ) {
   let tries = 0;
   let hammerUsed = 0;
@@ -102,7 +111,7 @@ export function simulateUntilFull(
     const nextOpt = allOpts.find((o) => !usedKeys.has(o.key));
     if (!nextOpt) break; // 모든 옵션 사용됨 (이론상 slotMax > options.length 일 때만)
 
-    const r = tryNormalEnchant(part, nextOpt.key, enchantTypeKey, stage);
+    const r = tryNormalEnchant(part, nextOpt.key, enchantTypeKey, stage, minPct);
     tries++;
     hammerUsed += r.hammerUsed;
     elyUsed += r.elyUsed;
@@ -133,12 +142,13 @@ export function computeNormalStats(
   enchantTypeKey,
   stage = 'base',
   runs = ENCHANT_SIM.FULL_MC_RUNS,
+  minPct = DEFAULT_BINDING_MIN_PCT,
 ) {
   const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
   let completedCount = 0;
 
   for (let i = 0; i < runs; i++) {
-    const r = simulateUntilFull(part, enchantTypeKey, stage, ENCHANT_SIM.FULL_MC_INNER_CAP);
+    const r = simulateUntilFull(part, enchantTypeKey, stage, ENCHANT_SIM.FULL_MC_INNER_CAP, minPct);
     if (r.completed) {
       completedCount++;
       samples.tries.push(r.tries);
@@ -175,6 +185,7 @@ export function simulateUntilTargetMet(
   enchantTypeKey,
   stage = 'base',
   maxAttempts = ENCHANT_SIM.TARGET_MAX_ATTEMPTS,
+  minPct = DEFAULT_BINDING_MIN_PCT,
 ) {
   let tries = 0;
   let hammerUsed = 0;
@@ -186,7 +197,7 @@ export function simulateUntilTargetMet(
     const slots = [];
 
     for (const target of targets) {
-      const r = tryNormalEnchant(part, target.optionKey, enchantTypeKey, stage);
+      const r = tryNormalEnchant(part, target.optionKey, enchantTypeKey, stage, minPct);
       tries++;
       hammerUsed += r.hammerUsed;
       elyUsed += r.elyUsed;
@@ -232,6 +243,7 @@ export function computeTargetStats(
   enchantTypeKey,
   stage = 'base',
   runs = ENCHANT_SIM.TARGET_MC_RUNS,
+  minPct = DEFAULT_BINDING_MIN_PCT,
 ) {
   const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
   let completedCount = 0;
@@ -243,6 +255,7 @@ export function computeTargetStats(
       enchantTypeKey,
       stage,
       ENCHANT_SIM.TARGET_MC_INNER_CAP,
+      minPct,
     );
     if (r.completed) {
       completedCount++;
