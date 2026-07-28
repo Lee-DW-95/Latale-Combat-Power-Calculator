@@ -5,6 +5,7 @@
  * 1) 일반 장비 인챈트
  *    - 1회 시도 = 1슬롯 부여 또는 장비 파괴
  *    - 일반 인챈트 50% / 슈퍼 인챈트 60% / 특별 인챈트 100% 성공률
+ *      · 부위에 successRates 가 있으면 그 값 우선 (캔서 배찌 = 일반 40% / 슈퍼 50%)
  *      · 신화장비면 종류와 무관하게 100% — 파괴가 일어나지 않는다 (opts.mythic)
  *    - 성공: 선택 옵션의 [lo, hi] (또는 step 단위) 균등 분포로 값 결정 → 슬롯 1개 추가
  *      · lo 는 귀속/신화 여부로 달라짐 — 귀속 1% / 거래가능 20% / 신화 80% (opts.minPct)
@@ -73,7 +74,8 @@ export function tryNormalEnchant(part, optionKey, enchantTypeKey, stage = 'base'
   if (!type) throw new Error(`unknown enchant type: ${enchantTypeKey}`);
 
   // 신화장비는 종류와 무관하게 100% — 파괴 분기 자체가 발생하지 않는다.
-  const rate = effectiveSuccessRate(enchantTypeKey, mythic);
+  // 부위 고유 성공률(part.successRates)이 있으면 그쪽 우선 — 캔서 배찌 일반 40% / 슈퍼 50%.
+  const rate = effectiveSuccessRate(enchantTypeKey, mythic, part);
   const success = rate >= 1 || Math.random() < rate;
   if (!success) {
     return { success: false, hammerUsed: type.hammerCost, elyUsed: type.elyCost };

@@ -58,10 +58,12 @@ const normalSimOpts = computed(() => ({
   minPct: normalMinPct.value,
   mythic: normalMythicOn.value,
 }));
-// 화면 표기용 실제 성공률 (신화면 종류 무관 100%)
+// 화면 표기용 실제 성공률 (신화면 종류 무관 100%, 부위 고유 성공률 우선)
 const normalSuccessRate = computed(() =>
-  effectiveSuccessRate(normalEnchantType.value, normalMythicOn.value),
+  effectiveSuccessRate(normalEnchantType.value, normalMythicOn.value, normalPart.value),
 );
+// 노강/풀강 구분이 없는 부위 (캔서 배찌) — 풀강 환산 UI 를 전부 감춘다.
+const normalSingleStage = computed(() => !!normalPart.value?.singleStage);
 // 신화 + 슈퍼/특별 조합은 성공률이 이미 100% 라 망치만 더 쓰는 낭비
 const normalMythicWastefulType = computed(
   () => normalMythicOn.value && normalEnchantType.value !== 'normal',
@@ -135,6 +137,29 @@ const targetTooMany = computed(() => enabledCount.value > normalSlotMax.value);
 const canRunTargetSim = computed(() =>
   validTargets.value.length > 0 && !targetTooMany.value && !isTargetSimRunning.value
 );
+
+// ============================================================
+// 권장선 프리셋 — 옵션 데이터의 rec(실전 권장 저격선)을 목표값으로 채운다.
+//   캔서 배찌처럼 rec 가 정의된 부위에서만 버튼이 노출된다.
+// ============================================================
+const recommendedOptions = computed(() =>
+  (normalPart.value?.options ?? []).filter((o) => Number.isFinite(o.rec)),
+);
+const hasRecommended = computed(() => recommendedOptions.value.length > 0);
+
+function applyRecommendedTargets() {
+  for (const opt of normalPart.value?.options ?? []) {
+    const t = targetSettings.value[opt.key];
+    if (!t) continue;
+    if (Number.isFinite(opt.rec)) {
+      t.enabled = true;
+      t.minValue = String(opt.rec);
+    } else {
+      t.enabled = false;
+      t.minValue = '';
+    }
+  }
+}
 
 // 카테고리/부위 변경 시 공통 초기화 — 슬롯·로그·통계·선택·목표 리셋
 function resetForPartChange() {
@@ -382,12 +407,17 @@ const lookupResult = ref(null);
 const lookupPart = computed(() => getPart(lookupCatKey.value, lookupPartKey.value));
 const lookupPartList = computed(() => partKeys(lookupCatKey.value));
 const lookupFullLevel = computed(() => lookupPart.value?.fullLevel ?? '?');
+// 단일 단계 부위(캔서 배찌)는 노강/풀강 환산 자체가 없다 — 입력 단계 토글·풀강 패널을 숨긴다.
+const lookupSingleStage = computed(() => !!lookupPart.value?.singleStage);
 
 watch(lookupCatKey, (newCat) => {
   lookupPartKey.value = partKeys(newCat)[0] ?? '';
   resetLookup();
 });
-watch(lookupPartKey, () => resetLookup());
+watch(lookupPartKey, () => {
+  if (lookupSingleStage.value) lookupStage.value = 'base';
+  resetLookup();
+});
 watch(lookupStage, () => { lookupResult.value = null; });
 
 function resetLookup() {
@@ -456,15 +486,22 @@ function gradeBarColor(p) {
 
 // 옵션 범위 텍스트 — Lv2 기본 + 풀강 환산 범위 부가.
 //   하한은 귀속 여부(normalMinPct)에 따라 달라진다.
+// 옵션 단위(step)에 맞춘 값 표기 — step 0.1 옵션(지배력 등)은 소수 1자리.
+function fmtOptVal(opt, v) {
+  return (opt?.step && opt.step < 1) ? fmt1(v) : fmt(v);
+}
 function rangeText(opt) {
-  const fmtN = (n) => (opt.step && opt.step < 1) ? fmt1(n) : fmt(n);
   const r = rangeFor(opt, 'base', normalMinPct.value);
-  return `+${fmtN(r.lo)} ~ +${fmtN(r.hi)}${opt.unit}`;
+  return `+${fmtOptVal(opt, r.lo)} ~ +${fmtOptVal(opt, r.hi)}${opt.unit}`;
 }
 function fullRangeText(opt) {
-  const fmtN = (n) => (opt.step && opt.step < 1) ? fmt1(n) : fmt(n);
   const r = rangeFor(opt, 'full', normalMinPct.value);
-  return `+${fmtN(r.lo)} ~ +${fmtN(r.hi)}${opt.unit}`;
+  return `+${fmtOptVal(opt, r.lo)} ~ +${fmtOptVal(opt, r.hi)}${opt.unit}`;
+}
+// 권장 저격선 표기 — rec 없는 옵션은 빈 문자열.
+function recText(opt) {
+  if (!Number.isFinite(opt?.rec)) return '';
+  return `권장 +${fmtOptVal(opt, opt.rec)}${opt.unit} 이상`;
 }
 
 // 추첨된 값이 Lv2 hi 대비 몇 % 인지. 게임사 기준 Math.floor 적용.
@@ -517,6 +554,9 @@ function rollPctClass(p) {
       <br />
       <strong>장비 인챈트</strong>: 일반(50%) / 슈퍼(60%) 시도 → 성공 시 옵션 1슬롯 부여, 실패 시 장비 파괴.
       한 장비 5슬롯 채우면 풀강.
+      <br />
+      <strong>캔서 배찌</strong>: 같은 파괴형이지만 성공률이 낮다 — 일반(40%) / 슈퍼(50%).
+      노강/풀강 구분 없이 5슬롯이 곧 완성.
       <br />
       <strong>특수장비 인챈트</strong>: 옵션 슬롯 5개, 각 옵션을 Lv.1 → Lv.5 단계 강화. 레벨별 재료/Ely 비용.
       <br />
@@ -628,7 +668,7 @@ function rollPctClass(p) {
             >
               <div>
                 {{ NORMAL_ENCHANT_TYPES[key].name }}
-                ({{ pct(effectiveSuccessRate(key, normalMythicOn)) }})
+                ({{ pct(effectiveSuccessRate(key, normalMythicOn, normalPart)) }})
                 <span v-if="normalMythicOn" class="text-[10px] align-middle opacity-80">✨신화</span>
               </div>
               <div class="text-[11px] mt-0.5 opacity-80 tabular-nums">
@@ -698,16 +738,26 @@ function rollPctClass(p) {
 
       <!-- ② 1회 시뮬 / 풀강 시뮬 — 모든 결과(슬롯·로그·통계) 한 섹션에 -->
       <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-cyan-300 dark:ring-cyan-700 p-5">
-        <h2 class="text-lg font-bold text-cyan-700 dark:text-cyan-300 mb-1">🔨 옵션 굴려보기 / 풀강 비용 분석</h2>
+        <h2 class="text-lg font-bold text-cyan-700 dark:text-cyan-300 mb-1">
+          🔨 옵션 굴려보기 / {{ normalSingleStage ? '완성' : '풀강' }} 비용 분석
+        </h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
-          1개 옵션을 골라 굴려본 뒤 슬롯·로그를 확인하거나, 풀강 1회 자동 시뮬(체험), 풀강 평균 분석(통계)을 실행합니다.
+          1개 옵션을 골라 굴려본 뒤 슬롯·로그를 확인하거나,
+          {{ normalSingleStage ? `${normalSlotMax}슬롯` : '풀강' }} 1회 자동 시뮬(체험),
+          {{ normalSingleStage ? '완성' : '풀강' }} 평균 분석(통계)을 실행합니다.
         </p>
 
         <!-- 옵션 선택 -->
         <div class="mb-3 text-sm font-medium text-stone-700 dark:text-stone-300">
-          옵션 선택 — Lv{{ normalPart?.level ?? '?' }} {{ normalPartKey }}
+          옵션 선택 —
+          <template v-if="!normalSingleStage">Lv{{ normalPart?.level ?? '?' }} </template>{{ normalPartKey }}
           <span class="text-xs ml-1 text-stone-500 dark:text-stone-400">
-            (인챈트는 Lv2에서 진행, 5슬롯 채우면 풀강 = Lv{{ normalPart?.fullLevel ?? '?' }} 환산)
+            <template v-if="normalSingleStage">
+              (노강/풀강 구분 없음 — {{ normalSlotMax }}슬롯을 채우면 완성)
+            </template>
+            <template v-else>
+              (인챈트는 Lv2에서 진행, 5슬롯 채우면 풀강 = Lv{{ normalPart?.fullLevel ?? '?' }} 환산)
+            </template>
           </span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
@@ -733,7 +783,15 @@ function rollPctClass(p) {
             <span class="flex-1 truncate">{{ opt.label }}<span v-if="usedOptionKeys.has(opt.key)" class="text-[10px] ml-1">(부여됨)</span></span>
             <div class="text-right whitespace-nowrap leading-tight">
               <div class="text-xs tabular-nums text-stone-500 dark:text-stone-400">{{ rangeText(opt) }}</div>
-              <div class="text-[10px] tabular-nums text-emerald-600 dark:text-emerald-400 opacity-80">풀강 {{ fullRangeText(opt) }}</div>
+              <div
+                v-if="!normalSingleStage"
+                class="text-[10px] tabular-nums text-emerald-600 dark:text-emerald-400 opacity-80"
+              >풀강 {{ fullRangeText(opt) }}</div>
+              <div
+                v-else-if="recText(opt)"
+                class="text-[10px] tabular-nums text-orange-600 dark:text-orange-400 opacity-90"
+                :title="opt.recNote"
+              >{{ recText(opt) }}</div>
             </div>
           </label>
         </div>
@@ -755,8 +813,8 @@ function rollPctClass(p) {
             :disabled="normalIsFull || !nextAvailableOption"
             class="rounded-lg ring-1 ring-cyan-400 dark:ring-cyan-600 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold transition text-left"
           >
-            <div>⚡ 풀강 1회 자동 (체험)</div>
-            <div class="text-[11px] mt-0.5 opacity-90 font-normal">5슬롯 채울 때까지 다른 옵션 자동 순회</div>
+            <div>⚡ {{ normalSingleStage ? `${normalSlotMax}슬롯` : '풀강' }} 1회 자동 (체험)</div>
+            <div class="text-[11px] mt-0.5 opacity-90 font-normal">{{ normalSlotMax }}슬롯 채울 때까지 다른 옵션 자동 순회</div>
           </button>
           <button
             type="button"
@@ -764,8 +822,8 @@ function rollPctClass(p) {
             :disabled="normalIsAnalyzing"
             class="rounded-lg ring-1 ring-emerald-400 dark:ring-emerald-600 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold transition text-left"
           >
-            <div>{{ normalIsAnalyzing ? '⏳ 분석 중...' : '📊 풀강 평균 분석 (2,000회)' }}</div>
-            <div class="text-[11px] mt-0.5 opacity-90 font-normal">2,000회 시뮬 평균 — 옵션 선택 무관, 5슬롯 채우는 비용</div>
+            <div>{{ normalIsAnalyzing ? '⏳ 분석 중...' : `📊 ${normalSingleStage ? '완성' : '풀강'} 평균 분석 (2,000회)` }}</div>
+            <div class="text-[11px] mt-0.5 opacity-90 font-normal">2,000회 시뮬 평균 — 옵션 선택 무관, {{ normalSlotMax }}슬롯 채우는 비용</div>
           </button>
         </div>
         <div class="flex flex-wrap gap-2 mb-5">
@@ -782,12 +840,13 @@ function rollPctClass(p) {
         <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-4 mb-4">
           <div class="mb-3">
             <h3 class="text-sm font-bold text-stone-700 dark:text-stone-200">
-              🛡️ 현재 장비 — {{ normalSlots.length }}/{{ normalSlotMax }} 슬롯
+              🛡️ 현재 {{ normalSingleStage ? normalPartKey : '장비' }} — {{ normalSlots.length }}/{{ normalSlotMax }} 슬롯
             </h3>
           </div>
 
           <!-- 풀강 환산 토글: 1슬롯이라도 채워졌으면 노출 (5/5 아니어도 OK) -->
-          <div v-if="normalSlots.length > 0" class="mb-3 flex items-center gap-2 flex-wrap">
+          <!--   단일 단계 부위(캔서 배찌)는 환산 대상이 없어 숨김 -->
+          <div v-if="normalSlots.length > 0 && !normalSingleStage" class="mb-3 flex items-center gap-2 flex-wrap">
             <button
               type="button"
               @click="showFullConversion = !showFullConversion"
@@ -827,7 +886,7 @@ function rollPctClass(p) {
             <!-- Lv2 패널 (항상) -->
             <div class="rounded-lg bg-white dark:bg-stone-800 ring-1 ring-amber-300 dark:ring-amber-700 p-4">
               <h4 class="text-sm font-bold text-amber-700 dark:text-amber-300 mb-3">
-                Lv{{ normalPart?.level }} {{ normalPartKey }}
+                <template v-if="!normalSingleStage">Lv{{ normalPart?.level }} </template>{{ normalPartKey }}
                 <span v-if="!normalIsFull" class="text-[11px] font-normal text-stone-500 dark:text-stone-400 ml-1">
                   ({{ normalSlots.length }}/{{ normalSlotMax }} 슬롯)
                 </span>
@@ -836,7 +895,7 @@ function rollPctClass(p) {
                 <div v-for="(s, i) in normalSlots" :key="i">
                   <div class="flex items-center justify-between text-sm tabular-nums mb-1">
                     <span class="text-stone-700 dark:text-stone-200 truncate">
-                      Lv{{ normalPart?.level }} {{ s.label }} +{{ fmt(s.value) }}{{ s.unit }}
+                      <template v-if="!normalSingleStage">Lv{{ normalPart?.level }} </template>{{ s.label }} +{{ fmt(s.value) }}{{ s.unit }}
                     </span>
                     <span :class="['text-xs font-bold whitespace-nowrap', rollPctClass(rollPct(s.optionKey, s.value))]">
                       {{ rollPct(s.optionKey, s.value) }}%
@@ -931,10 +990,10 @@ function rollPctClass(p) {
           class="rounded-lg bg-emerald-50/40 dark:bg-emerald-950/15 ring-1 ring-emerald-300 dark:ring-emerald-700 p-4"
         >
           <h3 class="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">
-            📊 풀강 도달 통계 — {{ normalCurType.name }} ({{ pct(normalSuccessRate) }}<template v-if="normalMythicOn">, 신화</template>)
+            📊 {{ normalSingleStage ? '완성' : '풀강' }} 도달 통계 — {{ normalCurType.name }} ({{ pct(normalSuccessRate) }}<template v-if="normalMythicOn">, 신화</template>)
           </h3>
           <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
-            {{ normalPartKey }} 1개를 5슬롯 풀강까지 채우는 데 걸리는 시도/망치/Ely/파괴 장비 분포 ({{ fmt(normalStats.runs) }}회 시뮬).
+            {{ normalPartKey }} 1개를 {{ normalSlotMax }}슬롯{{ normalSingleStage ? '' : ' 풀강' }}까지 채우는 데 걸리는 시도/망치/Ely/파괴 분포 ({{ fmt(normalStats.runs) }}회 시뮬).
           </p>
 
           <div class="overflow-x-auto">
@@ -1006,6 +1065,11 @@ function rollPctClass(p) {
               />
               <span class="text-sm text-stone-700 dark:text-stone-200 truncate">{{ opt.label }}</span>
               <span class="text-xs tabular-nums text-stone-500 dark:text-stone-400 whitespace-nowrap">{{ rangeText(opt) }}</span>
+              <span
+                v-if="recText(opt)"
+                :title="opt.recNote"
+                class="text-[10px] tabular-nums whitespace-nowrap rounded px-1.5 py-0.5 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 ring-1 ring-orange-200 dark:ring-orange-800"
+              >{{ recText(opt) }}</span>
             </label>
             <div class="flex items-center gap-1 whitespace-nowrap">
               <span class="text-xs text-stone-500 dark:text-stone-400">최소</span>
@@ -1039,6 +1103,14 @@ function rollPctClass(p) {
             {{ isTargetSimRunning ? '⏳ 시뮬 중...' : '🎯 목표 시뮬 (1,000회)' }}
           </button>
           <button
+            v-if="hasRecommended"
+            type="button"
+            @click="applyRecommendedTargets"
+            class="rounded-lg ring-1 ring-orange-300 dark:ring-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/30 px-5 py-2.5 text-sm font-semibold transition"
+          >
+            ⭐ 권장 저격선으로 채우기
+          </button>
+          <button
             type="button"
             @click="resetTargetSim"
             class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-stone-50 dark:hover:bg-stone-700 px-5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-200 transition"
@@ -1046,6 +1118,13 @@ function rollPctClass(p) {
             초기화
           </button>
         </div>
+        <p v-if="hasRecommended" class="mt-2 text-xs text-stone-500 dark:text-stone-400">
+          ⭐ 권장 저격선 —
+          <template v-for="(opt, i) in recommendedOptions" :key="opt.key">
+            <template v-if="i > 0"> · </template>
+            <span class="text-orange-600 dark:text-orange-400">{{ opt.label }} {{ opt.recNote }}</span>
+          </template>
+        </p>
 
         <!-- 결과 -->
         <div v-if="targetStats" class="mt-5 space-y-4">
@@ -1123,9 +1202,14 @@ function rollPctClass(p) {
               class="tabular-nums text-emerald-700 dark:text-emerald-300"
             >
               ▶ 슬롯 {{ i + 1 }}: {{ s.label }}
-              Lv2 +{{ fmt(s.value) }}{{ s.unit }}
-              <span class="text-stone-400">→</span>
-              <span class="font-bold">{{ fullStageLabel }} +{{ fmt(fullConverted(s.optionKey, s.value)) }}{{ s.unit }}</span>
+              <template v-if="normalSingleStage">
+                <span class="font-bold">+{{ fmt(s.value) }}{{ s.unit }}</span>
+              </template>
+              <template v-else>
+                Lv2 +{{ fmt(s.value) }}{{ s.unit }}
+                <span class="text-stone-400">→</span>
+                <span class="font-bold">{{ fullStageLabel }} +{{ fmt(fullConverted(s.optionKey, s.value)) }}{{ s.unit }}</span>
+              </template>
               <span
                 v-if="rollPct(s.optionKey, s.value) != null"
                 :class="rollPctClass(rollPct(s.optionKey, s.value))"
@@ -1306,8 +1390,14 @@ function rollPctClass(p) {
       <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-1">🔍 인챈트 수치 조회</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
-          게임에서 얻은 옵션 값을 입력하면 노강(Lv2) ↔ 풀강(Lv{{ lookupFullLevel }}) 양쪽 환산값과 등급%를 보여줍니다.
-          입력 단계를 노강/풀강 중 골라서 역환산 가능.
+          <template v-if="lookupSingleStage">
+            게임에서 얻은 옵션 값을 입력하면 최대치 대비 등급%를 보여줍니다.
+            ({{ lookupPartKey }}는 노강/풀강 구분이 없어 환산이 필요 없습니다.)
+          </template>
+          <template v-else>
+            게임에서 얻은 옵션 값을 입력하면 노강(Lv2) ↔ 풀강(Lv{{ lookupFullLevel }}) 양쪽 환산값과 등급%를 보여줍니다.
+            입력 단계를 노강/풀강 중 골라서 역환산 가능.
+          </template>
         </p>
 
         <!-- 카테고리 -->
@@ -1352,8 +1442,8 @@ function rollPctClass(p) {
           </div>
         </div>
 
-        <!-- 입력 단계 토글 -->
-        <div class="mb-4">
+        <!-- 입력 단계 토글 — 단일 단계 부위(캔서 배찌)는 숨김 -->
+        <div v-if="!lookupSingleStage" class="mb-4">
           <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">입력 단계 (어느 단계의 값인지)</span>
           <div class="flex gap-2">
             <button
@@ -1428,17 +1518,17 @@ function rollPctClass(p) {
       </section>
 
       <!-- 결과: 두 패널 -->
-      <div v-if="lookupResult" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Lv2 패널 -->
+      <div v-if="lookupResult" :class="lookupSingleStage ? '' : 'grid grid-cols-1 md:grid-cols-2 gap-4'">
+        <!-- Lv2 패널 (단일 단계 부위는 이 패널 하나만) -->
         <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700 p-5">
           <h3 class="text-base font-bold text-amber-700 dark:text-amber-300 mb-3">
-            Lv{{ lookupResult.base.level }} {{ lookupResult.partName }}
+            <template v-if="!lookupSingleStage">Lv{{ lookupResult.base.level }} </template>{{ lookupResult.partName }}
           </h3>
           <div class="space-y-3">
             <div v-for="(r, i) in lookupResult.base.rows" :key="i">
               <div class="flex items-center justify-between text-sm tabular-nums mb-1">
                 <span class="text-stone-700 dark:text-stone-200 truncate">
-                  Lv{{ lookupResult.base.level }} {{ r.label }} +{{ fmt(r.value) }}{{ r.unit }}
+                  <template v-if="!lookupSingleStage">Lv{{ lookupResult.base.level }} </template>{{ r.label }} +{{ fmt(r.value) }}{{ r.unit }}
                 </span>
                 <span :class="['text-xs font-bold whitespace-nowrap', rollPctClass(r.grade)]">
                   {{ r.grade }}%
@@ -1454,8 +1544,11 @@ function rollPctClass(p) {
           </div>
         </section>
 
-        <!-- Lv풀강 패널 -->
-        <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5">
+        <!-- Lv풀강 패널 — 단일 단계 부위(캔서 배찌)는 환산 대상이 없어 숨김 -->
+        <section
+          v-if="!lookupSingleStage"
+          class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
+        >
           <h3 class="text-base font-bold text-emerald-700 dark:text-emerald-300 mb-3">
             [풀강] ★★★ Lv{{ lookupResult.full.level }} {{ lookupResult.partName }}
           </h3>

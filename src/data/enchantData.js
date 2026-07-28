@@ -8,9 +8,12 @@
  *   - step 생략 시 정수 균등, 0.1 등 소수면 step 단위 균등
  *
  * 부위 객체:
- *   { name, level, fullLevel, slotCount, options }
+ *   { name, level, fullLevel, slotCount, options, [singleStage], [successRates] }
  *   - level     = 노강 인챈트 레벨 (모든 부위 Lv2)
  *   - fullLevel = 풀강 도달 인챈트 레벨 (Lv4 또는 Lv5, 사이트 데이터 기준)
+ *   - singleStage = 노강/풀강 구분이 없는 부위 (캔서 배찌). fullLo/fullHi = lo/hi 로 두고
+ *                   UI 에서 풀강 환산 표시를 숨긴다.
+ *   - successRates = 부위 고유 성공률 { normal, super }. 없으면 NORMAL_ENCHANT_TYPES 기본값.
  *
  * 카테고리별 풀강 레벨:
  *   노르니르의 눈물 / 플레로마 / 에메랄디아  → Lv4
@@ -19,6 +22,8 @@
 
 // ============================================================
 // 인챈트 종류
+//   successRate 는 기본값 — 부위에 successRates 가 있으면 그쪽이 우선한다
+//   (예: 캔서 배찌 일반 40% / 슈퍼 50%).
 // ============================================================
 export const NORMAL_ENCHANT_TYPES = {
   normal:  { key: 'normal',  name: '일반 인챈트',   successRate: 0.50, hammerCost: 1,  elyCost:  50_000_000 },
@@ -74,8 +79,11 @@ export function supportsMythic(catKey) {
 
 // 실제 적용 성공률 — 신화장비면 인챈트 종류를 무시하고 항상 100%.
 //   비용(망치·Ely)은 선택한 인챈트 종류 그대로라, 신화에서는 가장 싼 일반 인챈트가 유리하다.
-export function effectiveSuccessRate(enchantTypeKey, mythic = false) {
+//   part.successRates 가 있으면 그 부위 고유 성공률을 쓴다 (캔서 배찌 = 일반 40% / 슈퍼 50%).
+export function effectiveSuccessRate(enchantTypeKey, mythic = false, part = null) {
   if (mythic) return 1;
+  const own = part?.successRates?.[enchantTypeKey];
+  if (Number.isFinite(own)) return own;
   return NORMAL_ENCHANT_TYPES[enchantTypeKey]?.successRate ?? 0;
 }
 
@@ -327,6 +335,50 @@ export const NORMAL_ENCHANT_CATEGORIES = {
           { key: 'all',     label: '올스탯 +',            unit: '',  lo: 1,   hi: 15001, fullLo: 5401, fullHi: 20401 },
           { key: 'main',    label: '근력/마법력 +',       unit: '',  lo: 1,   hi: 20001, fullLo: 7501, fullHi: 27501 },
           { key: 'back',    label: '백어택 대미지 %',     unit: '%', lo: 1,   hi: 101,   fullLo: 25,   fullHi: 125 },
+        ],
+      },
+    },
+  },
+
+  // ============================================================
+  // 캔서 배찌 — 노강/풀강 구분이 없는 단일 단계 부위.
+  //   · 파괴형: 실패하면 배찌가 파괴되고 슬롯이 전부 사라진다 (일반 장비와 동일).
+  //   · 성공률만 다르다 — 일반 40% / 슈퍼 50%.
+  //   · 망치·Ely 비용은 일반 장비 인챈트와 동일하다고 가정 (미검증 — 실측 시 successRates
+  //     처럼 부위 단위 override 를 추가하면 된다).
+  //   · rec = 실전 권장선(저격 목표치), recNote = 그 근거. 목표 옵션 시뮬 프리셋에 쓰인다.
+  // ============================================================
+  '캔서 배찌': {
+    name: '캔서 배찌',
+    parts: {
+      '캔서 배찌': {
+        name: '캔서 배찌', level: 1, fullLevel: 1, slotCount: 5, singleStage: true,
+        successRates: { normal: 0.40, super: 0.50 },
+        options: [
+          {
+            key: 'maxd', label: '물리/마법 최대 대미지 %', unit: '%',
+            lo: 1, hi: 80, fullLo: 1, fullHi: 80,
+            rec: 40, recNote: '40~50% 이상 — 딜 기여도가 가장 커 높은 수치 저격 필수',
+          },
+          {
+            key: 'mind', label: '물리/마법 최소 대미지 %', unit: '%',
+            lo: 1, hi: 80, fullLo: 1, fullHi: 80,
+          },
+          {
+            key: 'main', label: '근력/마법력 +', unit: '',
+            lo: 1, hi: 25000, fullLo: 1, fullHi: 25000,
+            rec: 7000, recNote: '7,000~10,000 내외 — 앞선 대미지·지배력이 상급이면 타협 가능',
+          },
+          {
+            key: 'wpn', label: '무기공격력/속성력 +', unit: '',
+            lo: 1, hi: 180, fullLo: 1, fullHi: 180,
+            rec: 70, recNote: '70~100 이상 — 직타 스킬 비중이 높다면 150 이상',
+          },
+          {
+            key: 'dom_b', label: '보스 몬스터 지배력 %', unit: '%',
+            lo: 0.1, hi: 4.0, fullLo: 0.1, fullHi: 4.0, step: 0.1,
+            rec: 3.0, recNote: '3.0~3.5% 이상',
+          },
         ],
       },
     },
