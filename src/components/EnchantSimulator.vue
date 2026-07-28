@@ -16,6 +16,7 @@ import {
   availableEnchantTypes,
   supportsMythic,
   enchantMinPct,
+  effectiveSuccessRate,
   rangeFor,
 } from '../data/enchantData.js';
 import {
@@ -44,14 +45,26 @@ const normalSelectedOption = ref('');
 // 귀속 장비 여부 — 인챈 수치 하한이 달라진다 (귀속 1% / 거래가능 20%).
 //   대부분의 최종 장비가 귀속이라 기본 ON.
 const normalIsBound = ref(true);
-// 신화장비 여부 — 그렌델/벨리알/아마란스 노바 계열에만 존재. 하한 80% (귀속/거래보다 우선).
+// 신화장비 여부 — 그렌델/벨리알/아마란스 노바 계열에만 존재.
+//   ① 하한 80% (귀속/거래보다 우선)  ② 성공률 100% 고정 = 파괴 없음
 const normalIsMythic = ref(false);
 const normalMythicAvailable = computed(() => supportsMythic(normalCatKey.value));
+const normalMythicOn = computed(() => normalMythicAvailable.value && normalIsMythic.value);
 const normalMinPct = computed(() =>
-  enchantMinPct({
-    bound: normalIsBound.value,
-    mythic: normalMythicAvailable.value && normalIsMythic.value,
-  }),
+  enchantMinPct({ bound: normalIsBound.value, mythic: normalMythicOn.value }),
+);
+// 시뮬 공통 옵션 — 하한 + 신화 여부
+const normalSimOpts = computed(() => ({
+  minPct: normalMinPct.value,
+  mythic: normalMythicOn.value,
+}));
+// 화면 표기용 실제 성공률 (신화면 종류 무관 100%)
+const normalSuccessRate = computed(() =>
+  effectiveSuccessRate(normalEnchantType.value, normalMythicOn.value),
+);
+// 신화 + 슈퍼/특별 조합은 성공률이 이미 100% 라 망치만 더 쓰는 낭비
+const normalMythicWastefulType = computed(
+  () => normalMythicOn.value && normalEnchantType.value !== 'normal',
 );
 // 5슬롯 채운 뒤 Lv2 → Lv풀강 환산값을 슬롯에 표시할지 토글
 const showFullConversion = ref(false);
@@ -166,7 +179,7 @@ async function analyzeTargetSim() {
       normalEnchantType.value,
       'base',
       1000,
-      normalMinPct.value,
+      normalSimOpts.value,
     );
     targetSampleRun.value = simulateUntilTargetMet(
       normalPart.value,
@@ -174,7 +187,7 @@ async function analyzeTargetSim() {
       normalEnchantType.value,
       'base',
       100_000,
-      normalMinPct.value,
+      normalSimOpts.value,
     );
   } finally {
     isTargetSimRunning.value = false;
@@ -208,7 +221,7 @@ function runNormalOnce() {
     normalSelectedOption.value,
     normalEnchantType.value,
     'base',
-    normalMinPct.value,
+    normalSimOpts.value,
   );
   normalCounters.value.tries++;
   normalCounters.value.hammerUsed += r.hammerUsed;
@@ -277,7 +290,7 @@ async function analyzeNormal() {
       normalEnchantType.value,
       'base',
       2000,
-      normalMinPct.value,
+      normalSimOpts.value,
     );
   } finally {
     normalIsAnalyzing.value = false;
@@ -613,12 +626,20 @@ function rollPctClass(p) {
                   : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
-              <div>{{ NORMAL_ENCHANT_TYPES[key].name }} ({{ pct(NORMAL_ENCHANT_TYPES[key].successRate) }})</div>
+              <div>
+                {{ NORMAL_ENCHANT_TYPES[key].name }}
+                ({{ pct(effectiveSuccessRate(key, normalMythicOn)) }})
+                <span v-if="normalMythicOn" class="text-[10px] align-middle opacity-80">✨신화</span>
+              </div>
               <div class="text-[11px] mt-0.5 opacity-80 tabular-nums">
                 망치 {{ NORMAL_ENCHANT_TYPES[key].hammerCost }} · Ely {{ fmt(NORMAL_ENCHANT_TYPES[key].elyCost) }}
               </div>
             </button>
           </div>
+          <p v-if="normalMythicWastefulType" class="mt-1.5 text-xs text-orange-600 dark:text-orange-400">
+            ⚠ 신화장비는 이미 100% 성공이라 종류를 올려도 이득이 없습니다 —
+            망치 1개짜리 <strong>일반 인챈트</strong>가 가장 저렴합니다.
+          </p>
         </div>
 
         <!-- 인챈 수치 하한 — 귀속 1% / 거래가능 20% / 신화 80% -->
@@ -656,7 +677,7 @@ function rollPctClass(p) {
               />
               <span class="text-sm text-stone-700 dark:text-stone-200">✨ 신화 장비</span>
               <span class="text-xs tabular-nums text-orange-600 dark:text-orange-400">
-                {{ MYTHIC_MIN_PCT }}~100%
+                {{ MYTHIC_MIN_PCT }}~100% · 파괴 없음
               </span>
             </label>
           </div>
@@ -664,7 +685,9 @@ function rollPctClass(p) {
             거래가능 장비는 최소 보정치가 올라가 <strong>20~100%</strong> 로 추첨됩니다
             (귀속은 <strong>1~100%</strong>) — 체크 해제 시 거래가능 기준.
             <template v-if="normalMythicAvailable">
-              신화 장비는 모든 슬롯이 <strong>{{ MYTHIC_MIN_PCT }}~100%</strong> 로 보정되어 귀속 여부보다 우선 적용됩니다.
+              신화 장비는 모든 슬롯이 <strong>{{ MYTHIC_MIN_PCT }}~100%</strong> 로 보정되고
+              인챈트 종류와 무관하게 <strong>성공률 100%</strong> 라 장비가 파괴되지 않습니다
+              (귀속 여부보다 우선 적용).
             </template>
             <template v-else>
               신화 장비는 그렌델(이카로스의 날개) · 벨리알(리키모 펠케) · 아마란스 노바 계열에만 있습니다.
@@ -908,7 +931,7 @@ function rollPctClass(p) {
           class="rounded-lg bg-emerald-50/40 dark:bg-emerald-950/15 ring-1 ring-emerald-300 dark:ring-emerald-700 p-4"
         >
           <h3 class="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">
-            📊 풀강 도달 통계 — {{ normalCurType.name }} ({{ pct(normalCurType.successRate) }})
+            📊 풀강 도달 통계 — {{ normalCurType.name }} ({{ pct(normalSuccessRate) }}<template v-if="normalMythicOn">, 신화</template>)
           </h3>
           <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
             {{ normalPartKey }} 1개를 5슬롯 풀강까지 채우는 데 걸리는 시도/망치/Ely/파괴 장비 분포 ({{ fmt(normalStats.runs) }}회 시뮬).
@@ -1027,7 +1050,7 @@ function rollPctClass(p) {
         <!-- 결과 -->
         <div v-if="targetStats" class="mt-5 space-y-4">
           <div class="text-sm text-stone-700 dark:text-stone-200">
-            <strong>{{ normalCurType.name }}</strong> ({{ pct(normalCurType.successRate) }}) 으로
+            <strong>{{ normalCurType.name }}</strong> ({{ pct(normalSuccessRate) }}<template v-if="normalMythicOn">, 신화</template>) 으로
             <strong>{{ normalPartKey }}</strong> 1개를 만들 때 — 목표 만족까지:
             <ul class="mt-1.5 ml-4 list-disc text-xs text-cyan-600 dark:text-cyan-400 space-y-0.5">
               <li v-for="t in validTargets" :key="t.optionKey">

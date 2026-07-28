@@ -63,11 +63,20 @@ export const ENCHANT_BINDINGS = {
 export const DEFAULT_BINDING_MIN_PCT = ENCHANT_BINDINGS.bound.minPct;
 
 // 신화장비 — 그렌델(이카로스의 날개) · 벨리알(리키모 펠케) · 아마란스 노바 계열에만 존재.
+//   ① 인챈 수치 하한 80%
+//   ② 인챈트 종류와 무관하게 성공률 100% — 장비 파괴가 없다.
 export const MYTHIC_MIN_PCT = 80;
 const MYTHIC_CATEGORIES = ['이카로스의 날개', '리키모 펠케', '아마란스 노바'];
 
 export function supportsMythic(catKey) {
   return MYTHIC_CATEGORIES.includes(catKey);
+}
+
+// 실제 적용 성공률 — 신화장비면 인챈트 종류를 무시하고 항상 100%.
+//   비용(망치·Ely)은 선택한 인챈트 종류 그대로라, 신화에서는 가장 싼 일반 인챈트가 유리하다.
+export function effectiveSuccessRate(enchantTypeKey, mythic = false) {
+  if (mythic) return 1;
+  return NORMAL_ENCHANT_TYPES[enchantTypeKey]?.successRate ?? 0;
 }
 
 // 귀속 여부 + 신화 여부 → 실제 적용될 인챈 수치 하한(%).
