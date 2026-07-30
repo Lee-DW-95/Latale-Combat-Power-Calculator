@@ -22,6 +22,7 @@ import EnchantSimulator from './components/EnchantSimulator.vue';
 // import DamagePredict from './components/DamagePredict.vue'; // 대미지 예측 탭 — DB 작업 보류로 일시 숨김
 // import RelicSimulator from './components/RelicSimulator.vue'; // 기존 성물 환산기 (전용석/공용석 합산) — 보존, 추후 부활용
 import AwakeningSimulator from './components/AwakeningSimulator.vue';
+import ItemAwakeningSimulator from './components/ItemAwakeningSimulator.vue';
 import RelicGachaSimulator from './components/RelicGachaSimulator.vue';
 import AdventureView from './components/AdventureView.vue';
 import AuthModal from './components/AuthModal.vue';
@@ -121,6 +122,7 @@ const TABS = [
   // { id: 'relic', label: '🌟 성물 환산', desc: '성물 레벨 + 전용석/공용석 합산' }, // 기존 환산기 — 임시 비활성
   { id: 'relicGacha', label: '🌟 성물 시뮬', desc: '신성의 돌 / 전용석 뽑기 시뮬', restricted: true },
   { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기', restricted: true },
+  { id: 'itemAwakening', label: '💠 아이템 각성 시뮬', desc: '장비/파츠 종류별 각성 옵션 뽑기', restricted: true },
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
 ];
 
@@ -437,7 +439,12 @@ const savedTimeLabel = computed(() => {
         <AwakeningSimulator />
       </template>
 
-      <!-- ───── 탭 7: 어드벤처 ───── -->
+      <!-- ───── 탭 7: 아이템 각성 시뮬 ───── -->
+      <template v-else-if="activeTab === 'itemAwakening'">
+        <ItemAwakeningSimulator />
+      </template>
+
+      <!-- ───── 탭 8: 어드벤처 ───── -->
       <template v-else-if="activeTab === 'adventure'">
         <AdventureView />
       </template>
