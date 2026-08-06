@@ -5,7 +5,48 @@ import {
   BUFF_KIND_STYLE,
   ADVENTURE_MAPS,
   ADVENTURE_SOURCE_URL,
+  ADVENTURE_BOARDS,
+  LUCKY_CARD_MAX,
+  PORTAL_MIN_OPTIONS,
 } from '../data/adventureData.js';
+
+// ──── 보기 방식 · 필터 ────
+const viewMode = ref('list');        // 'list' 간략 표기 | 'map' 지도 이미지
+const warpMin = ref(20);             // 이 칸수 이상 이동하는 워프만 표시
+const ladderMin = ref(5);            // 이 칸수 이상 이동하는 사다리만 표시
+const showAll = ref(false);          // false = 앞쪽 12칸만, true = 전부
+
+// 이전 맵 마지막 칸에서 행운카드(+1~+12)를 써서 닿을 수 있는 건 다음 맵 앞쪽 12칸뿐이다.
+// 그래서 이 범위 제한은 행운카드뿐 아니라 워프·사다리 위치에도 똑같이 적용된다 —
+// 13번 칸에 있는 워프는 애초에 밟을 방법이 없으니 볼 이유도 없다.
+const squareLimit = computed(() => (showAll.value ? Infinity : LUCKY_CARD_MAX));
+
+function moveLabel(n) {
+  return n < 0 ? `−${Math.abs(n)}` : `+${n}`;
+}
+
+const boardRows = computed(() =>
+  Object.entries(ADVENTURE_BOARDS).map(([stage, b]) => {
+    const inRange = (sq) => sq <= squareLimit.value;
+    const cards = b.q.filter(inRange);
+    const warps = b.portals.filter(
+      (m) => inRange(m[0]) && Math.abs(m[1]) >= warpMin.value,
+    );
+    const ladders = b.bridges.filter(
+      (m) => inRange(m[0]) && Math.abs(m[1]) >= ladderMin.value,
+    );
+    return {
+      stage: Number(stage),
+      squares: b.squares,
+      cards,
+      warps,
+      ladders,
+      hasAny: cards.length > 0 || warps.length > 0 || ladders.length > 0,
+    };
+  }),
+);
+
+const hitCount = computed(() => boardRows.value.filter((r) => r.hasAny).length);
 
 // ──── 라이트박스(이미지 확대) 상태 ────
 const lightboxIndex = ref(-1); // -1 = 닫힘
@@ -81,11 +122,197 @@ function jumpToStage() {
         🗺️ 라테일 어드벤처 지도
       </h2>
       <p class="mt-1 text-sm text-cyan-700/90 dark:text-cyan-300/90 leading-relaxed">
-        어드벤처는 스테이지를 진행하며 칸을 밟아 나가는 콘텐츠입니다.
-        <strong>5단계 단위(30·35·40…)로 진입에 성공하면 특별한 버프</strong>를 획득합니다.
-        아래에서 단계별 보상과 전체 지도(2~56)를 확인하세요.
+        인게임에서는 <strong>다음 맵의 칸 정보를 미리 볼 수 없습니다.</strong>
+        행운카드 <strong>+1~+12</strong>로 다음 맵의 <code class="px-1 rounded bg-cyan-100 dark:bg-cyan-900/50">?</code> 칸을
+        정확히 밟으려면 그 맵 앞쪽 12칸에 뭐가 있는지 알아야 하죠. 그걸 여기서 확인하세요.
       </p>
     </div>
+
+    <!-- ───── 보기 방식 · 필터 ───── -->
+    <section
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 px-4 sm:px-5 py-3.5"
+    >
+      <div class="flex flex-col lg:flex-row lg:items-end gap-4">
+        <!-- 보기 방식 -->
+        <div>
+          <p class="text-[11px] font-semibold text-stone-400 dark:text-stone-500 mb-1.5">보기</p>
+          <div class="inline-flex rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden">
+            <button
+              v-for="opt in [{ v: 'list', t: '간략 표기' }, { v: 'map', t: '지도 이미지' }]"
+              :key="opt.v"
+              type="button"
+              @click="viewMode = opt.v"
+              :class="[
+                'px-3.5 py-1.5 text-sm font-semibold transition',
+                viewMode === opt.v
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50',
+              ]"
+            >
+              {{ opt.t }}
+            </button>
+          </div>
+        </div>
+
+        <template v-if="viewMode === 'list'">
+          <!-- 표시 범위 — 행운카드·워프·사다리 위치 모두에 적용 -->
+          <div>
+            <p class="text-[11px] font-semibold text-stone-400 dark:text-stone-500 mb-1.5">
+              표시 범위 <span class="font-normal">(행운카드·워프·사다리 공통)</span>
+            </p>
+            <div class="inline-flex rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden">
+              <button
+                v-for="opt in [{ v: false, t: `앞쪽 1~${LUCKY_CARD_MAX}칸` }, { v: true, t: '전체' }]"
+                :key="String(opt.v)"
+                type="button"
+                @click="showAll = opt.v"
+                :class="[
+                  'px-3.5 py-1.5 text-sm font-semibold transition',
+                  showAll === opt.v
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50',
+                ]"
+              >
+                {{ opt.t }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 워프 최소 이동칸수 -->
+          <div>
+            <p class="text-[11px] font-semibold text-stone-400 dark:text-stone-500 mb-1.5">
+              워프 최소 이동칸수
+            </p>
+            <div class="inline-flex rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden">
+              <button
+                v-for="n in PORTAL_MIN_OPTIONS"
+                :key="n"
+                type="button"
+                @click="warpMin = n"
+                :class="[
+                  'px-3 py-1.5 text-sm font-semibold tabular-nums transition',
+                  warpMin === n
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50',
+                ]"
+              >
+                {{ n }}칸+
+              </button>
+            </div>
+          </div>
+
+          <!-- 사다리 최소 이동칸수 -->
+          <div>
+            <p class="text-[11px] font-semibold text-stone-400 dark:text-stone-500 mb-1.5">
+              사다리 최소 이동칸수
+            </p>
+            <div class="inline-flex rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden">
+              <button
+                v-for="n in PORTAL_MIN_OPTIONS"
+                :key="n"
+                type="button"
+                @click="ladderMin = n"
+                :class="[
+                  'px-3 py-1.5 text-sm font-semibold tabular-nums transition',
+                  ladderMin === n
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50',
+                ]"
+              >
+                {{ n }}칸+
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <p v-if="viewMode === 'list'" class="mt-3 text-[11px] text-stone-400 dark:text-stone-500 leading-relaxed">
+        표기 예 <code class="px-1 rounded bg-stone-100 dark:bg-stone-700/60">1. ? 4, 8 · 워프 10 +7</code>
+        — 4·8번째 칸에 행운카드, 10번째 칸에 7칸 이동하는 워프.
+        <span class="text-stone-300 dark:text-stone-600">|</span>
+        사다리는 밧줄·장대를 포함합니다.
+        <span class="text-stone-300 dark:text-stone-600">|</span>
+        조건에 걸린 지도 <strong class="text-stone-500 dark:text-stone-400">{{ hitCount }}</strong> / 56
+      </p>
+    </section>
+
+    <!-- ───── 간략 표기 ───── -->
+    <section
+      v-if="viewMode === 'list'"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
+    >
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[11px] uppercase tracking-wide text-stone-400 dark:text-stone-500 bg-stone-50 dark:bg-stone-800">
+              <th class="px-4 py-2 font-semibold w-16">지도</th>
+              <th class="px-3 py-2 font-semibold w-16 text-right">총칸</th>
+              <th class="px-3 py-2 font-semibold">? 행운카드</th>
+              <th class="px-3 py-2 font-semibold">워프</th>
+              <th class="px-3 py-2 font-semibold">사다리</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone-100 dark:divide-stone-700/70">
+            <tr
+              v-for="row in boardRows"
+              :key="row.stage"
+              :class="[
+                'transition',
+                row.hasAny
+                  ? 'hover:bg-stone-50 dark:hover:bg-stone-700/40'
+                  : 'opacity-40',
+              ]"
+            >
+              <td class="px-4 py-2">
+                <span class="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-xs font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+                  {{ row.stage }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-right tabular-nums text-[11px] text-stone-400 dark:text-stone-500">
+                {{ row.squares }}
+              </td>
+              <td class="px-3 py-2">
+                <span v-if="!row.cards.length" class="text-stone-300 dark:text-stone-600">—</span>
+                <span
+                  v-for="s in row.cards"
+                  :key="s"
+                  class="inline-block mr-1 mb-0.5 px-1.5 py-0.5 rounded text-xs font-bold tabular-nums bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+                >{{ s }}</span>
+              </td>
+              <td class="px-3 py-2">
+                <span v-if="!row.warps.length" class="text-stone-300 dark:text-stone-600">—</span>
+                <span
+                  v-for="p in row.warps"
+                  :key="p[0]"
+                  class="inline-block mr-1.5 mb-0.5 text-xs tabular-nums"
+                >
+                  <strong class="text-stone-700 dark:text-stone-200">{{ p[0] }}</strong>
+                  <span class="ml-0.5 px-1 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 font-semibold">{{ moveLabel(p[1]) }}</span>
+                </span>
+              </td>
+              <td class="px-3 py-2">
+                <span v-if="!row.ladders.length" class="text-stone-300 dark:text-stone-600">—</span>
+                <span
+                  v-for="b in row.ladders"
+                  :key="b[0]"
+                  class="inline-block mr-1.5 mb-0.5 text-xs tabular-nums"
+                >
+                  <strong class="text-stone-700 dark:text-stone-200">{{ b[0] }}</strong>
+                  <span
+                    :class="[
+                      'ml-0.5 px-1 py-0.5 rounded font-semibold',
+                      b[1] < 0
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+                    ]"
+                  >{{ moveLabel(b[1]) }}</span>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- ───── 버프 테이블 ───── -->
     <section
@@ -142,6 +369,7 @@ function jumpToStage() {
 
     <!-- ───── 지도 갤러리 ───── -->
     <section
+      v-if="viewMode === 'map'"
       class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
     >
       <div class="px-4 sm:px-5 py-3 border-b border-stone-100 dark:border-stone-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
