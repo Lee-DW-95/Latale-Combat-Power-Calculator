@@ -25,6 +25,7 @@ import AwakeningSimulator from './components/AwakeningSimulator.vue';
 import ItemAwakeningSimulator from './components/ItemAwakeningSimulator.vue';
 import RelicGachaSimulator from './components/RelicGachaSimulator.vue';
 import AdventureView from './components/AdventureView.vue';
+import AdventureQuickView from './components/AdventureQuickView.vue';
 import AuthModal from './components/AuthModal.vue';
 import MigrationModal from './components/MigrationModal.vue';
 import { useAuth } from './composables/useAuth.js';
@@ -124,6 +125,8 @@ const TABS = [
   { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기', restricted: true },
   { id: 'itemAwakening', label: '💠 아이템 각성 시뮬', desc: '장비/파츠 종류별 각성 옵션 뽑기', restricted: true },
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
+  // 게임을 켜둔 채 옆에 띄워 쓰는 용도라 로그인 조건 없이 항상 노출한다.
+  { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
 ];
 
 // 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 특권 닉네임.
@@ -447,6 +450,11 @@ const savedTimeLabel = computed(() => {
       <!-- ───── 탭 8: 어드벤처 ───── -->
       <template v-else-if="activeTab === 'adventure'">
         <AdventureView />
+      </template>
+
+      <!-- ───── 탭 9: 어드벤처 빠른보기 ───── -->
+      <template v-else-if="activeTab === 'adventureQuick'">
+        <AdventureQuickView />
       </template>
 
       <footer class="pt-4 text-center text-xs text-stone-400 dark:text-stone-500">
