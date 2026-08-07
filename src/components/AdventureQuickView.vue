@@ -46,6 +46,37 @@ function stickyOffset() {
 const showImages = ref(false);
 const jump = ref('');
 
+// 표시할 종류 — 행운카드만 보고 싶을 때가 있어서 개별로 끌 수 있게 한다.
+const KIND_KEY = 'latale.adventure.quickKinds';
+const show = ref(loadKinds());
+
+function loadKinds() {
+  const base = { card: true, warp: true, ladder: true };
+  try {
+    return { ...base, ...JSON.parse(localStorage.getItem(KIND_KEY) ?? '{}') };
+  } catch (e) {
+    return base;
+  }
+}
+
+watch(
+  show,
+  (v) => {
+    try {
+      localStorage.setItem(KIND_KEY, JSON.stringify(v));
+    } catch (e) {
+      // 저장 실패는 무시 — 화면 동작에는 지장 없다
+    }
+  },
+  { deep: true },
+);
+
+const KINDS = [
+  { key: 'card', label: '행운카드', dot: 'bg-amber-400' },
+  { key: 'warp', label: '워프', dot: 'bg-sky-500' },
+  { key: 'ladder', label: '사다리', dot: 'bg-emerald-500' },
+];
+
 // 카드 번호에는 '+' 를 붙이지만 이동 칸수에는 안 붙인다.
 // 둘 다 '+' 면 "+6 → +10칸" 처럼 읽혀서 뭐가 카드고 뭐가 거리인지 헷갈린다.
 function distLabel(n) {
@@ -55,12 +86,13 @@ function distLabel(n) {
 const rows = computed(() =>
   STAGES.map((stage) => {
     const b = ADVENTURE_BOARDS[stage];
+    // 꺼 둔 종류는 아예 없는 것처럼 다뤄서 눈금 띠·상세 줄에서 한 번에 빠지게 한다
     const cells = SLOTS.map((sq) => ({
       sq,
       valid: sq <= b.squares,
-      isCard: b.q.includes(sq),
-      warp: b.portals.find((p) => p[0] === sq) ?? null,
-      ladder: b.bridges.find((p) => p[0] === sq) ?? null,
+      isCard: show.value.card && b.q.includes(sq),
+      warp: (show.value.warp && b.portals.find((p) => p[0] === sq)) || null,
+      ladder: (show.value.ladder && b.bridges.find((p) => p[0] === sq)) || null,
     }));
     return {
       stage,
@@ -149,11 +181,11 @@ onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer);
 });
 
-// 이미지를 켜고 끄면 높이가 확 바뀌어 보던 자리를 잃는다. 보정해 준다.
-watch(showImages, () => {
+// 이미지나 표시 종류를 켜고 끄면 줄 높이가 바뀌어 보던 자리를 잃는다. 보정해 준다.
+watch([showImages, show], () => {
   const st = topStage();
   requestAnimationFrame(() => scrollToStage(st));
-});
+}, { deep: true });
 </script>
 
 <template>
@@ -191,20 +223,30 @@ watch(showImages, () => {
           지도 이미지
         </label>
 
-        <!-- 범례 -->
-        <div class="ml-auto flex items-center gap-2.5 text-[10px] font-bold">
-          <span class="flex items-center gap-1">
-            <i class="w-3 h-3 rounded-sm bg-amber-400 not-italic"></i>
-            <span class="text-stone-500 dark:text-stone-400">행운카드</span>
-          </span>
-          <span class="flex items-center gap-1">
-            <i class="w-3 h-3 rounded-sm bg-sky-500 not-italic"></i>
-            <span class="text-stone-500 dark:text-stone-400">워프</span>
-          </span>
-          <span class="flex items-center gap-1">
-            <i class="w-3 h-3 rounded-sm bg-emerald-500 not-italic"></i>
-            <span class="text-stone-500 dark:text-stone-400">사다리</span>
-          </span>
+        <!-- 표시 종류 토글 — 범례가 곧 스위치다 -->
+        <div class="ml-auto flex items-center gap-1.5">
+          <button
+            v-for="k in KINDS"
+            :key="k.key"
+            type="button"
+            @click="show[k.key] = !show[k.key]"
+            :aria-pressed="show[k.key]"
+            :title="`${k.label} ${show[k.key] ? '숨기기' : '보기'}`"
+            :class="[
+              'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold ring-1 transition',
+              show[k.key]
+                ? 'bg-white dark:bg-stone-800 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300'
+                : 'bg-transparent ring-stone-200 dark:ring-stone-700 text-stone-300 dark:text-stone-600 line-through',
+            ]"
+          >
+            <i
+              :class="[
+                'w-3 h-3 rounded-sm not-italic transition',
+                show[k.key] ? k.dot : 'bg-stone-200 dark:bg-stone-700',
+              ]"
+            ></i>
+            {{ k.label }}
+          </button>
         </div>
       </div>
     </div>
