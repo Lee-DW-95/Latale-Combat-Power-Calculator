@@ -15,8 +15,7 @@ import {
   sumGroups,
   maxPossibleSum,
   isVitalOption,
-  baseName,
-  isPercentName,
+  vitalLabel,
 } from '../utils/itemAwakeningSim.js';
 import { ITEM_AWAKENING_SIM } from '../utils/simConstants.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
@@ -213,7 +212,7 @@ const LINE_CLASS = {
 const vitalNamesInSet = computed(() => {
   const seen = new Set();
   for (const row of activeSet.value.rows) {
-    if (isVitalOption(row)) seen.add(baseName(row.name) + (isPercentName(row.name) ? '%' : ''));
+    if (isVitalOption(row)) seen.add(vitalLabel(row));
   }
   return [...seen];
 });
@@ -249,8 +248,8 @@ function cardStyle(roll) {
       안에서 같은 등급·같은 옵션은 중복되지 않는다.
       <br />
       <strong>강조</strong>:
-      <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (각성석에서도
-      유효옵으로 표기되던 주력 옵션 — 이 세트 기준:
+      <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (챙길 값어치가
+      있는 주력 옵션 — 이 세트 기준:
       <template v-if="vitalNamesInSet.length">{{ vitalNamesInSet.join(', ') }}</template>
       <template v-else>없음</template>),
       <span class="text-orange-600 dark:text-orange-300 font-semibold">주황</span> = 3등급 주력

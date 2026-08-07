@@ -190,13 +190,16 @@ const MAJOR_OPTIONS_PCT = new Set([
 ]);
 
 /**
- * 유효옵 — 각성석 시뮬(awakeningData.js GLOW_BASES)에서 강조하던 항목과 같은 축.
- * 등급/수치와 무관하게 "이 옵션 자체가 값어치 있는가"만 본다.
+ * 유효옵 — 등급/수치와 무관하게 "이 옵션 자체가 값어치 있는가"만 보는 축.
+ * 출발점은 각성석 시뮬(awakeningData.js GLOW_BASES)이지만 아이템 각성에만 있는
+ * 옵션이 있어 그대로 옮기지는 않았다.
  *
  * ⚠ 각성석의 '일반/보스 몬스터 지배력' 은 여기 대응물이 없다. 아이템 각성의
  * '일반/보스 몬스터 추가 대미지' 는 이름만 비슷할 뿐 지배력만큼 값어치가 없어
  * 유효옵으로 치지 않는다.
  * 아이템 전용 '최소/최대 대미지' 는 최소·최대대미지와 같은 계열로 본다.
+ * 방어구/파츠 계열은 딜 %옵션이 아예 없어서 스킬 레벨·대미지 감소%·최대 HP%
+ * 를 그 자리의 유효옵으로 함께 본다.
  */
 const VITAL_ANY_UNIT = new Set(['무기 공격력/속성력']);
 
@@ -208,13 +211,34 @@ const VITAL_PCT_ONLY = new Set([
   '물리/마법 크리티컬 대미지',
   '근력/마법력',
   '올스탯',
+  '대미지 감소',
+  '최대 HP',
 ]);
+
+/**
+ * 스킬 레벨 옵션인지.
+ * 이 데이터에서는 S등급 ↔ 스킬 옵션이 정확히 1:1 이다 (206행, 반례 0).
+ * 스킬명이 계속 늘어나는 자유 문자열이라 이름 매칭보다 등급 판정이 안전하다.
+ */
+export function isSkillOption(row) {
+  return String(row.tier) === 'S';
+}
 
 /** 이 줄이 유효옵인지 — grade(대박/S) 와 독립적인 축이다. */
 export function isVitalOption(row) {
+  if (isSkillOption(row)) return true;
   const base = baseName(row.name);
   if (VITAL_ANY_UNIT.has(base)) return true;
   return isPercentName(row.name) && VITAL_PCT_ONLY.has(base);
+}
+
+/**
+ * 범례에 쓸 유효옵 라벨.
+ * 스킬은 한 세트에 37~64종이 들어 있어 그대로 나열하면 범례가 터진다 — 한 항목으로 묶는다.
+ */
+export function vitalLabel(row) {
+  if (isSkillOption(row)) return '스킬 레벨';
+  return baseName(row.name) + (isPercentName(row.name) ? '%' : '');
 }
 
 /** 3등급 주력 딜 옵션이면서 값이 범위 상위 20% 구간이면 "대박". */
