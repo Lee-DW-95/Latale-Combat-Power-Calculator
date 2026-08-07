@@ -4,6 +4,7 @@ import {
   ADVENTURE_BOARDS,
   ADVENTURE_MAPS,
   LUCKY_CARD_MAX,
+  PORTAL_MIN_OPTIONS,
 } from '../data/adventureData.js';
 
 // ============================================================
@@ -46,14 +47,31 @@ function stickyOffset() {
 const showImages = ref(false);
 const jump = ref('');
 
-// 표시할 종류 — 행운카드만 보고 싶을 때가 있어서 개별로 끌 수 있게 한다.
-const KIND_KEY = 'latale.adventure.quickKinds';
-const show = ref(loadKinds());
+// 표시 설정 — 행운카드만 보고 싶거나, 짧은 워프는 밟을 가치가 없어서 빼고 싶을 때가 있다.
+//   card   : true/false
+//   warp   : OFF(-1) | ALL(0) | 5·10·15·20 — 이 칸수 이상 이동하는 것만
+//   ladder : 같음
+const OFF = -1;
+const ALL = 0;
+const RANGE_OPTIONS = [
+  { v: OFF, t: '끄기' },
+  { v: ALL, t: '전체' },
+  ...PORTAL_MIN_OPTIONS.map((n) => ({ v: n, t: `${n}칸+` })),
+];
 
-function loadKinds() {
-  const base = { card: true, warp: true, ladder: true };
+const VIEW_KEY = 'latale.adventure.quickView';
+const show = ref(loadView());
+
+function loadView() {
+  // 기본값은 기존 어드벤처 탭과 맞춘다 — 두 화면이 서로 다른 답을 주면 헷갈린다
+  const base = { card: true, warp: 20, ladder: 5 };
   try {
-    return { ...base, ...JSON.parse(localStorage.getItem(KIND_KEY) ?? '{}') };
+    const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
+    return {
+      card: typeof saved.card === 'boolean' ? saved.card : base.card,
+      warp: typeof saved.warp === 'number' ? saved.warp : base.warp,
+      ladder: typeof saved.ladder === 'number' ? saved.ladder : base.ladder,
+    };
   } catch (e) {
     return base;
   }
@@ -63,7 +81,7 @@ watch(
   show,
   (v) => {
     try {
-      localStorage.setItem(KIND_KEY, JSON.stringify(v));
+      localStorage.setItem(VIEW_KEY, JSON.stringify(v));
     } catch (e) {
       // 저장 실패는 무시 — 화면 동작에는 지장 없다
     }
@@ -71,37 +89,38 @@ watch(
   { deep: true },
 );
 
-const KINDS = [
-  { key: 'card', label: '행운카드', dot: 'bg-amber-400' },
-  { key: 'warp', label: '워프', dot: 'bg-sky-500' },
-  { key: 'ladder', label: '사다리', dot: 'bg-emerald-500' },
-];
+/** 이 이동칸수를 표시할지. mode 가 OFF 면 전부 숨기고, 그 외엔 |칸수| >= mode 만 남긴다. */
+function passes(mode, n) {
+  return mode !== OFF && Math.abs(n) >= mode;
+}
 
-// 카드 번호에는 '+' 를 붙이지만 이동 칸수에는 안 붙인다.
-// 둘 다 '+' 면 "+6 → +10칸" 처럼 읽혀서 뭐가 카드고 뭐가 거리인지 헷갈린다.
-function distLabel(n) {
-  return n < 0 ? `−${Math.abs(n)}칸` : `${n}칸`;
+/**
+ * 칸 안에 붙는 보조 라벨. 게임하면서 "5번 → 워프 12칸 (17번 칸)" 같은 문장을 읽는 건
+ * 부담이 크다. 그래서 도착 칸 번호는 버리고 **몇 칸 이동하는지**만 칸 안으로 넣었다.
+ * 앞의 화살표가 방향이라 색과 함께 보면 문장을 안 읽어도 된다.
+ */
+function hopLabel(n) {
+  return n < 0 ? `◂${Math.abs(n)}` : `▸${n}`;
 }
 
 const rows = computed(() =>
   STAGES.map((stage) => {
     const b = ADVENTURE_BOARDS[stage];
-    // 꺼 둔 종류는 아예 없는 것처럼 다뤄서 눈금 띠·상세 줄에서 한 번에 빠지게 한다
-    const cells = SLOTS.map((sq) => ({
-      sq,
-      valid: sq <= b.squares,
-      isCard: show.value.card && b.q.includes(sq),
-      warp: (show.value.warp && b.portals.find((p) => p[0] === sq)) || null,
-      ladder: (show.value.ladder && b.bridges.find((p) => p[0] === sq)) || null,
-    }));
+    const cells = SLOTS.map((sq) => {
+      const warp = b.portals.find((p) => p[0] === sq) ?? null;
+      const ladder = b.bridges.find((p) => p[0] === sq) ?? null;
+      return {
+        sq,
+        valid: sq <= b.squares,
+        isCard: show.value.card && b.q.includes(sq),
+        warp: warp && passes(show.value.warp, warp[1]) ? warp : null,
+        ladder: ladder && passes(show.value.ladder, ladder[1]) ? ladder : null,
+      };
+    });
     return {
       stage,
       squares: b.squares,
       cells,
-      cards: cells.filter((c) => c.isCard),
-      warps: cells.filter((c) => c.warp),
-      ladders: cells.filter((c) => c.ladder),
-      empty: !cells.some((c) => c.isCard || c.warp || c.ladder),
       src: ADVENTURE_MAPS.find((m) => m.stage === stage)?.src ?? '',
     };
   }),
@@ -223,18 +242,17 @@ watch([showImages, show], () => {
           지도 이미지
         </label>
 
-        <!-- 표시 종류 토글 — 범례가 곧 스위치다 -->
-        <div class="ml-auto flex items-center gap-1.5">
+        <!-- 표시 설정 — 범례가 곧 스위치다 -->
+        <div class="ml-auto flex flex-wrap items-center gap-1.5">
+          <!-- 행운카드는 켜고 끄는 것뿐 (이동 개념이 없다) -->
           <button
-            v-for="k in KINDS"
-            :key="k.key"
             type="button"
-            @click="show[k.key] = !show[k.key]"
-            :aria-pressed="show[k.key]"
-            :title="`${k.label} ${show[k.key] ? '숨기기' : '보기'}`"
+            @click="show.card = !show.card"
+            :aria-pressed="show.card"
+            :title="`행운카드 ${show.card ? '숨기기' : '보기'}`"
             :class="[
               'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold ring-1 transition',
-              show[k.key]
+              show.card
                 ? 'bg-white dark:bg-stone-800 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300'
                 : 'bg-transparent ring-stone-200 dark:ring-stone-700 text-stone-300 dark:text-stone-600 line-through',
             ]"
@@ -242,11 +260,42 @@ watch([showImages, show], () => {
             <i
               :class="[
                 'w-3 h-3 rounded-sm not-italic transition',
-                show[k.key] ? k.dot : 'bg-stone-200 dark:bg-stone-700',
+                show.card ? 'bg-amber-400' : 'bg-stone-200 dark:bg-stone-700',
+              ]"
+            ></i>
+            행운카드
+          </button>
+
+          <!-- 워프·사다리는 '몇 칸 이상 이동하는 것만' 이 실제로 쓰는 기준이다 -->
+          <label
+            v-for="k in [
+              { key: 'warp', label: '워프', dot: 'bg-sky-500' },
+              { key: 'ladder', label: '사다리', dot: 'bg-emerald-500' },
+            ]"
+            :key="k.key"
+            :class="[
+              'flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-[11px] font-bold ring-1 cursor-pointer transition',
+              show[k.key] !== -1
+                ? 'bg-white dark:bg-stone-800 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300'
+                : 'bg-transparent ring-stone-200 dark:ring-stone-700 text-stone-300 dark:text-stone-600',
+            ]"
+          >
+            <i
+              :class="[
+                'w-3 h-3 rounded-sm not-italic transition',
+                show[k.key] !== -1 ? k.dot : 'bg-stone-200 dark:bg-stone-700',
               ]"
             ></i>
             {{ k.label }}
-          </button>
+            <select
+              v-model.number="show[k.key]"
+              class="bg-transparent text-[11px] font-bold tabular-nums cursor-pointer focus:outline-none text-stone-600 dark:text-stone-300"
+            >
+              <option v-for="o in RANGE_OPTIONS" :key="o.v" :value="o.v" class="text-stone-800">
+                {{ o.t }}
+              </option>
+            </select>
+          </label>
         </div>
       </div>
     </div>
@@ -295,35 +344,15 @@ watch([showImages, show], () => {
                   c.isCard || c.warp || c.ladder ? 'font-black' : 'font-semibold',
                 ]"
               >{{ c.sq }}</span>
-              <span class="block text-[9px] opacity-80">
-                {{ c.isCard ? '?' : c.warp ? '워프' : c.ladder ? '사다리' : '·' }}
+              <!-- 워프·사다리는 이동 칸수를 여기에 붙여 아래 설명 줄을 없앴다 -->
+              <span class="block text-[9px] font-bold tabular-nums opacity-90">
+                {{ c.isCard ? '?'
+                  : c.warp ? hopLabel(c.warp[1])
+                  : c.ladder ? hopLabel(c.ladder[1])
+                  : '·' }}
               </span>
             </div>
           </div>
-        </div>
-
-        <!-- 워프 · 사다리 이동칸수 — 띠만으로는 알 수 없는 정보 -->
-        <div
-          v-if="row.warps.length || row.ladders.length"
-          class="mt-1.5 pl-[4.25rem] flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold tabular-nums"
-        >
-          <span
-            v-for="c in row.warps"
-            :key="`w${c.sq}`"
-            class="text-sky-600 dark:text-sky-400"
-          >
-            {{ c.sq }}번 → 워프 {{ distLabel(c.warp[1]) }} ({{ c.warp[2] }}번 칸)
-          </span>
-          <span
-            v-for="c in row.ladders"
-            :key="`l${c.sq}`"
-            :class="c.ladder[1] < 0
-              ? 'text-rose-600 dark:text-rose-400'
-              : 'text-emerald-600 dark:text-emerald-400'"
-          >
-            {{ c.sq }}번 → 사다리 {{ distLabel(c.ladder[1]) }} ({{ c.ladder[2] }}번 칸)
-            <template v-if="c.ladder[1] < 0">· 후퇴 주의</template>
-          </span>
         </div>
 
         <img
@@ -337,9 +366,10 @@ watch([showImages, show], () => {
     </div>
 
     <p class="mt-3 text-[11px] text-stone-400 dark:text-stone-500 leading-relaxed">
-      숫자는 그 맵의 <strong>몇 번째 칸</strong>인지입니다. 이전 맵 마지막 칸에서 출발하면
+      큰 숫자는 그 맵의 <strong>몇 번째 칸</strong>인지입니다. 이전 맵 마지막 칸에서 출발하면
       그 숫자가 곧 <strong>눌러야 할 행운카드 번호</strong>가 됩니다.
-      보던 위치는 저장돼서 다시 열면 그 자리로 돌아옵니다.
+      작은 숫자는 워프·사다리가 <strong>몇 칸 이동</strong>하는지고,
+      <strong>◂</strong> 는 후퇴입니다. 보던 위치와 표시 설정은 저장됩니다.
     </p>
   </div>
 </template>
