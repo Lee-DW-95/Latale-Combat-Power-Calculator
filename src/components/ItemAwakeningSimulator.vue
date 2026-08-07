@@ -15,6 +15,8 @@ import {
   sumGroups,
   maxPossibleSum,
   isVitalOption,
+  baseName,
+  isPercentName,
 } from '../utils/itemAwakeningSim.js';
 import { ITEM_AWAKENING_SIM } from '../utils/simConstants.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
@@ -206,6 +208,16 @@ const LINE_CLASS = {
   's-strong': 'text-fuchsia-600 dark:text-fuchsia-300 font-bold',
 };
 
+// 범례에 쓸 유효옵 목록 — 세트마다 있는 옵션이 달라서 고정 문구로 두면 거짓말이 된다.
+// (예: 올스탯% 는 액세서리 세트에만 있고 무기/정령석에는 아예 없다)
+const vitalNamesInSet = computed(() => {
+  const seen = new Set();
+  for (const row of activeSet.value.rows) {
+    if (isVitalOption(row)) seen.add(baseName(row.name) + (isPercentName(row.name) ? '%' : ''));
+  }
+  return [...seen];
+});
+
 // 유효옵(vital)은 grade 와 직교하는 축이다 — grade 가 이미 색을 쓰고 있으므로
 // 색을 덮어쓰지 않고 ◆ 마커로만 표시하고, 무등급 줄만 살짝 밝게 올린다.
 function lineClass(line) {
@@ -238,8 +250,9 @@ function cardStyle(roll) {
       <br />
       <strong>강조</strong>:
       <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (각성석에서도
-      유효옵으로 표기되던 항목 — 최소/최대대미지%, 크리티컬 대미지%, 무기 공격력/속성력, 올스탯%,
-      일반/보스 몬스터 추가 대미지%),
+      유효옵으로 표기되던 주력 옵션 — 이 세트 기준:
+      <template v-if="vitalNamesInSet.length">{{ vitalNamesInSet.join(', ') }}</template>
+      <template v-else>없음</template>),
       <span class="text-orange-600 dark:text-orange-300 font-semibold">주황</span> = 3등급 주력
       딜옵션이 범위 상위 20% 구간,
       <span class="text-cyan-700 dark:text-cyan-300 font-semibold">청록</span> = S등급 스킬 옵션 ·
