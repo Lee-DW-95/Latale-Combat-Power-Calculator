@@ -14,6 +14,7 @@ import {
   sampleGeometricTries,
   sumGroups,
   maxPossibleSum,
+  isVitalOption,
 } from '../utils/itemAwakeningSim.js';
 import { ITEM_AWAKENING_SIM } from '../utils/simConstants.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
@@ -205,6 +206,13 @@ const LINE_CLASS = {
   's-strong': 'text-fuchsia-600 dark:text-fuchsia-300 font-bold',
 };
 
+// 유효옵(vital)은 grade 와 직교하는 축이다 — grade 가 이미 색을 쓰고 있으므로
+// 색을 덮어쓰지 않고 ◆ 마커로만 표시하고, 무등급 줄만 살짝 밝게 올린다.
+function lineClass(line) {
+  if (line.vital && !line.grade) return 'text-stone-800 dark:text-stone-100 font-medium';
+  return LINE_CLASS[line.grade];
+}
+
 function cardStyle(roll) {
   if (roll.hasS) {
     return 'ring-2 ring-fuchsia-400 dark:ring-fuchsia-500 bg-fuchsia-50/60 dark:bg-fuchsia-950/20';
@@ -229,6 +237,9 @@ function cardStyle(roll) {
       안에서 같은 등급·같은 옵션은 중복되지 않는다.
       <br />
       <strong>강조</strong>:
+      <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (각성석에서도
+      유효옵으로 표기되던 항목 — 최소/최대대미지%, 크리티컬 대미지%, 무기 공격력/속성력, 올스탯%,
+      일반/보스 몬스터 추가 대미지%),
       <span class="text-orange-600 dark:text-orange-300 font-semibold">주황</span> = 3등급 주력
       딜옵션이 범위 상위 20% 구간,
       <span class="text-cyan-700 dark:text-cyan-300 font-semibold">청록</span> = S등급 스킬 옵션 ·
@@ -320,7 +331,7 @@ function cardStyle(roll) {
             class="flex-1 min-w-[15rem] rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-900 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200"
           >
             <option v-for="(row, ri) in activeSet.rows" :key="ri" :value="ri">
-              {{ rowLabel(row) }}
+              {{ isVitalOption(row) ? '◆ ' : '' }}{{ rowLabel(row) }}
             </option>
           </select>
           <select
@@ -471,9 +482,15 @@ function cardStyle(roll) {
                 <div
                   v-for="(line, i) in analysis.card.lines"
                   :key="i"
-                  :class="['text-sm leading-relaxed', LINE_CLASS[line.grade]]"
+                  :class="['text-sm leading-relaxed', lineClass(line)]"
                 >
                   <span v-if="isTargetLine(line)" class="text-cyan-600 dark:text-cyan-400">★</span>
+                  <span
+                    v-if="line.vital"
+                    class="text-amber-500 dark:text-amber-400"
+                    title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
+                    >◆</span
+                  >
                   {{ line.text }}
                 </div>
               </div>
@@ -554,8 +571,14 @@ function cardStyle(roll) {
             <div
               v-for="(line, i) in roll.lines"
               :key="i"
-              :class="['text-sm leading-relaxed', LINE_CLASS[line.grade]]"
+              :class="['text-sm leading-relaxed', lineClass(line)]"
             >
+              <span
+                v-if="line.vital"
+                class="text-amber-500 dark:text-amber-400"
+                title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
+                >◆</span
+              >
               {{ line.text }}
             </div>
           </div>
@@ -593,7 +616,17 @@ function cardStyle(roll) {
                 class="border-b border-stone-100 dark:border-stone-700/50"
               >
                 <td class="py-1.5 pr-3 text-stone-500 dark:text-stone-400">{{ row.tier }}</td>
-                <td class="py-1.5 pr-3 text-stone-700 dark:text-stone-200">{{ row.name }}</td>
+                <td
+                  :class="[
+                    'py-1.5 pr-3',
+                    isVitalOption(row)
+                      ? 'text-stone-800 dark:text-stone-100 font-medium'
+                      : 'text-stone-700 dark:text-stone-200',
+                  ]"
+                >
+                  <span v-if="isVitalOption(row)" class="text-amber-500 dark:text-amber-400">◆</span>
+                  {{ row.name }}
+                </td>
                 <td class="py-1.5 pr-3 text-right tabular-nums text-stone-600 dark:text-stone-300">
                   {{ fmtOptionValue(row.min) }} ~ {{ fmtOptionValue(row.max) }}
                 </td>

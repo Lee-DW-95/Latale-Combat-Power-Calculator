@@ -189,6 +189,34 @@ const MAJOR_OPTIONS_PCT = new Set([
   '대미지 감소',
 ]);
 
+/**
+ * 유효옵 — 각성석 시뮬(awakeningData.js GLOW_BASES)에서 강조하던 항목과 같은 축.
+ * 등급/수치와 무관하게 "이 옵션 자체가 값어치 있는가"만 본다.
+ * 각성석 쪽 이름과 아이템 각성 쪽 이름이 달라 리터럴로 다시 적는다.
+ *   - 각성석 '일반/보스 몬스터 지배력' ↔ 아이템 '일반/보스 몬스터 추가 대미지'
+ *   - 아이템 전용 '최소/최대 대미지' 는 최소·최대대미지와 같은 계열로 본다
+ */
+const VITAL_ANY_UNIT = new Set(['무기 공격력/속성력']);
+
+/** 퍼센트 형태일 때만 유효옵으로 인정 (플랫은 수치가 작아 의미가 옅다) */
+const VITAL_PCT_ONLY = new Set([
+  '물리/마법 최소대미지',
+  '물리/마법 최대대미지',
+  '최소/최대 대미지',
+  '물리/마법 크리티컬 대미지',
+  '근력/마법력',
+  '올스탯',
+  '일반 몬스터 추가 대미지',
+  '보스 몬스터 추가 대미지',
+]);
+
+/** 이 줄이 유효옵인지 — grade(대박/S) 와 독립적인 축이다. */
+export function isVitalOption(row) {
+  const base = baseName(row.name);
+  if (VITAL_ANY_UNIT.has(base)) return true;
+  return isPercentName(row.name) && VITAL_PCT_ONLY.has(base);
+}
+
 /** 3등급 주력 딜 옵션이면서 값이 범위 상위 20% 구간이면 "대박". */
 export function isMajorGood(row, val) {
   if (String(row.tier) !== '3') return false;
@@ -227,6 +255,7 @@ function makeLine(row, rowIndex, val) {
     value: val,
     text: `[${row.tier}] ${formatOption(row.name, val)}`,
     grade: gradeOf(row, val),
+    vital: isVitalOption(row),
     isS: String(row.tier) === 'S',
   };
 }
