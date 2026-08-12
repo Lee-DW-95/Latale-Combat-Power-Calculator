@@ -103,16 +103,45 @@ function hopLabel(n) {
   return n < 0 ? `◂${Math.abs(n)}` : `▸${n}`;
 }
 
+/** 마우스를 올렸을 때만 읽는 전체 문장. 칸 안에는 안 들어가는 도착 칸 번호를 여기 담는다. */
+function cellTitle(c) {
+  if (!c.valid) return '이 맵에 없는 칸';
+  const head = `${c.sq}번 칸 — 행운카드 +${c.sq}`;
+  if (c.isCard) return `${head} · ? 행운카드`;
+  if (c.chain) {
+    const kind = c.chain.kind === 'warp' ? '워프' : '사다리';
+    return `${head} · ${kind} ${Math.abs(c.chain.m[1])}칸 → ${c.chain.m[2]}번 칸의 ? 행운카드`;
+  }
+  if (c.warp) return `${head} · 워프 ${Math.abs(c.warp[1])}칸 → ${c.warp[2]}번 칸`;
+  if (c.ladder) return `${head} · 사다리 ${Math.abs(c.ladder[1])}칸 → ${c.ladder[2]}번 칸`;
+  return head;
+}
+
 const rows = computed(() =>
   STAGES.map((stage) => {
     const b = ADVENTURE_BOARDS[stage];
     const cells = SLOTS.map((sq) => {
       const warp = b.portals.find((p) => p[0] === sq) ?? null;
       const ladder = b.bridges.find((p) => p[0] === sq) ?? null;
+      const isCard = show.value.card && b.q.includes(sq);
+
+      // 워프·사다리를 타고 **도착한 칸**에 카드가 있으면, 눌러야 할 카드 번호는 '여기'다.
+      // 앞쪽 12칸 밖으로 나가는 이동이라 지금까지는 화면에 드러나지 않았다.
+      //
+      // 이건 워프·사다리 칸수 필터를 타지 않는다. 필터는 "몇 칸이나 벌 수 있나"로 거르는
+      // 건데, 이 칸을 밟는 이유는 이동량이 아니라 카드이기 때문이다. 그래서 색도 워프색이
+      // 아니라 카드색(amber)으로 칠하고, 워프냐 사다리냐는 테두리 색으로만 남긴다.
+      const chain = !isCard && show.value.card
+        ? (warp && b.q.includes(warp[2]) ? { m: warp, kind: 'warp' }
+          : ladder && b.q.includes(ladder[2]) ? { m: ladder, kind: 'ladder' }
+            : null)
+        : null;
+
       return {
         sq,
         valid: sq <= b.squares,
-        isCard: show.value.card && b.q.includes(sq),
+        isCard,
+        chain,
         warp: warp && passes(show.value.warp, warp[1]) ? warp : null,
         ladder: ladder && passes(show.value.ladder, ladder[1]) ? ladder : null,
       };
@@ -324,29 +353,35 @@ watch([showImages, show], () => {
             <div
               v-for="c in row.cells"
               :key="c.sq"
-              :title="c.valid ? `${c.sq}번 칸 — 행운카드 +${c.sq}` : '이 맵에 없는 칸'"
+              :title="cellTitle(c)"
               :class="[
                 'rounded-md py-1 text-center leading-tight',
                 !c.valid
                   ? 'bg-stone-50 dark:bg-stone-700/30 text-stone-300 dark:text-stone-600'
                   : c.isCard
                     ? 'bg-amber-400 text-amber-950 ring-1 ring-amber-500/50'
-                    : c.warp
-                      ? 'bg-sky-500 text-white'
-                      : c.ladder
-                        ? (c.ladder[1] < 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white')
-                        : 'bg-stone-100 dark:bg-stone-700/60 text-stone-400 dark:text-stone-500',
+                    : c.chain
+                      ? (c.chain.kind === 'warp'
+                        ? 'bg-amber-400 text-amber-950 ring-2 ring-sky-500'
+                        : 'bg-amber-400 text-amber-950 ring-2 ring-emerald-500')
+                      : c.warp
+                        ? 'bg-sky-500 text-white'
+                        : c.ladder
+                          ? (c.ladder[1] < 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white')
+                          : 'bg-stone-100 dark:bg-stone-700/60 text-stone-400 dark:text-stone-500',
               ]"
             >
               <span
                 :class="[
                   'block text-sm tabular-nums',
-                  c.isCard || c.warp || c.ladder ? 'font-black' : 'font-semibold',
+                  c.isCard || c.chain || c.warp || c.ladder ? 'font-black' : 'font-semibold',
                 ]"
               >{{ c.sq }}</span>
-              <!-- 워프·사다리는 이동 칸수를 여기에 붙여 아래 설명 줄을 없앴다 -->
+              <!-- 워프·사다리는 이동 칸수를 여기에 붙여 아래 설명 줄을 없앴다.
+                   뒤에 ? 가 붙으면 그 이동 끝에 행운카드가 있다는 뜻이다. -->
               <span class="block text-[9px] font-bold tabular-nums opacity-90">
                 {{ c.isCard ? '?'
+                  : c.chain ? hopLabel(c.chain.m[1]) + '?'
                   : c.warp ? hopLabel(c.warp[1])
                   : c.ladder ? hopLabel(c.ladder[1])
                   : '·' }}
@@ -369,7 +404,16 @@ watch([showImages, show], () => {
       큰 숫자는 그 맵의 <strong>몇 번째 칸</strong>인지입니다. 이전 맵 마지막 칸에서 출발하면
       그 숫자가 곧 <strong>눌러야 할 행운카드 번호</strong>가 됩니다.
       작은 숫자는 워프·사다리가 <strong>몇 칸 이동</strong>하는지고,
-      <strong>◂</strong> 는 후퇴입니다. 보던 위치와 표시 설정은 저장됩니다.
+      <strong>◂</strong> 는 후퇴입니다.
+      <span class="text-stone-300 dark:text-stone-600">|</span>
+      <strong class="text-amber-600 dark:text-amber-400">노란 칸</strong>은 행운카드를 먹는 칸입니다.
+      <code class="px-1 rounded bg-stone-100 dark:bg-stone-700/60">▸10?</code> 처럼
+      뒤에 <strong>?</strong> 가 붙으면 그 칸의 워프·사다리를 타고 <strong>도착한 자리</strong>에
+      카드가 있다는 뜻이라, 12칸 밖이라도 결국 카드를 먹습니다
+      (테두리 색이 <span class="text-sky-500">워프</span> ·
+      <span class="text-emerald-500">사다리</span>). 이 칸은 칸수 필터와 무관하게 항상 표시됩니다.
+      <span class="text-stone-300 dark:text-stone-600">|</span>
+      보던 위치와 표시 설정은 저장됩니다.
     </p>
   </div>
 </template>
