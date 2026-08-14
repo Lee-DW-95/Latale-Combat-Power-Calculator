@@ -159,31 +159,46 @@ function optionsOf(rune) {
 }
 
 function buildOptionIndex() {
-  const map = new Map();
+  // 1) 개별 효과 → 그 효과를 가진 룬 목록
+  const byEffect = new Map();
   for (const rune of RUNES) {
     for (const text of optionsOf(rune)) {
-      if (!map.has(text)) map.set(text, []);
-      map.get(text).push(rune.id);
+      if (!byEffect.has(text)) byEffect.set(text, []);
+      byEffect.get(text).push(rune.id);
     }
   }
-  return [...map.entries()]
-    .map(([text, runeIds]) => {
+
+  // 2) 담당 룬 집합이 완전히 같은 효과들은 "목표" 로서 구별되지 않으므로 하나로 합친다.
+  //    예) 통찰의 "물리/마법 관통력 +10%" 와 "쿨타임 1초 감소" 는 둘 다 통찰로만 얻는다
+  //        → 어느 쪽을 골라도 필요한 룬도, 확률도, 결과도 완전히 동일하다.
+  //    현재 데이터 기준 4쌍(통찰 / 악몽&죽음 / 야성&지배 / 서약)이 합쳐져 28종 → 24종.
+  //    반면 크댐(파멸|파멸&폭주) 과 크확(파멸&폭주) 은 담당 룬이 달라 그대로 분리된다.
+  const byCarrierSet = new Map();
+  for (const [text, runeIds] of byEffect) {
+    const key = runeIds.join('-');
+    if (!byCarrierSet.has(key)) byCarrierSet.set(key, { key, runeIds, effects: [] });
+    byCarrierSet.get(key).effects.push(text);
+  }
+
+  return [...byCarrierSet.values()]
+    .map(({ key, runeIds, effects }) => {
       const carriers = runeIds.map((id) => {
         const r = RUNES[id];
-        const effects = optionsOf(r);
+        const all = optionsOf(r);
         return Object.freeze({
           id,
           name: r.name,
           score: r.score,
           desc: r.desc,
-          effects: Object.freeze(effects),
-          // 선택한 옵션 말고 이 룬이 덤으로 주는 나머지 효과
-          extras: Object.freeze(effects.filter((e) => e !== text)),
+          effects: Object.freeze(all),
+          // 이 목표가 지정한 효과 말고, 이 룬이 덤으로 같이 주는 나머지 효과
+          extras: Object.freeze(all.filter((e) => !effects.includes(e))),
         });
       });
       return {
-        key: text,
-        text,
+        key,
+        text: effects.join(', '),
+        effects: Object.freeze(effects),
         runeIds: Object.freeze(runeIds),
         carriers: Object.freeze(carriers),
         // 어느 룬으로 얻든 다른 옵션이 같이 딸려오는가

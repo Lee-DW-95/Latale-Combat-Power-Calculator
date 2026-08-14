@@ -19,7 +19,14 @@ import {
   rollRuneWord,
   maxAchievableTotal,
 } from '../src/utils/runeWordSim.js';
-import { MAX_TOTAL, RUNE_OPTION_BY_KEY } from '../src/data/runeWordData.js';
+import { MAX_TOTAL, RUNE_OPTIONS } from '../src/data/runeWordData.js';
+
+// 옵션 key 는 "담당 룬 집합" 기준이므로, 효과 문구로 찾아 쓴다
+function optKey(effectText) {
+  const o = RUNE_OPTIONS.find((x) => x.effects.includes(effectText));
+  if (!o) throw new Error(`옵션을 찾을 수 없음: ${effectText}`);
+  return o.key;
+}
 
 const N = 30;
 const K = 8;
@@ -51,11 +58,11 @@ const MC_RUNS = 2_000_000;
 const 파멸 = 10, 통찰 = 19, 헌신파괴 = 25, 악몽죽음 = 28, 파멸폭주 = 29;
 
 // 옵션 키
-const OPT_CRIT_DMG = '크리티컬 대미지 +50%';   // 파멸, 파멸 & 폭주
-const OPT_CRIT_RATE = '크리티컬 확률 +1%';      // 파멸 & 폭주
-const OPT_PEN = '물리/마법 관통력 +10%';        // 통찰
-const OPT_ATK_PCT = '공격력/속성력 +5%';        // 격노, 열광 & 격노
-const OPT_MAX_DMG = '최대 대미지 +50%';         // 파괴, 헌신 & 파괴
+const OPT_CRIT_DMG = optKey('크리티컬 대미지 +50%');   // 파멸, 파멸 & 폭주
+const OPT_CRIT_RATE = optKey('크리티컬 확률 +1%');      // 파멸 & 폭주
+const OPT_PEN = optKey('물리/마법 관통력 +10%');        // 통찰 (쿨감과 병합됨)
+const OPT_ATK_PCT = optKey('공격력/속성력 +5%');        // 격노, 열광 & 격노
+const OPT_MAX_DMG = optKey('최대 대미지 +50%');         // 파괴, 헌신 & 파괴
 
 const RUNE_CASES = [
   {
@@ -202,16 +209,33 @@ allOk = runSection('옵션으로 선택 (OR 그룹 — 겹침 포함)', OPTION_C
 
 // ── 옵션 인덱스 정합성 ──
 console.log('\n── 옵션 인덱스 ' + '─'.repeat(48));
+
+// 담당 룬 집합이 같은 효과들은 하나로 병합돼야 한다 (목표로서 구별 불가하므로)
+const dupSets = new Map();
+for (const o of RUNE_OPTIONS) {
+  const k = o.runeIds.join(',');
+  dupSets.set(k, (dupSets.get(k) ?? 0) + 1);
+}
+const noDup = [...dupSets.values()].every((n) => n === 1);
+if (!noDup) allOk = false;
+console.log(`옵션 ${RUNE_OPTIONS.length}종 · 담당 룬 집합 중복 없음 → ${noDup ? 'OK' : 'FAIL'}`);
+
 const idxChecks = [
-  [OPT_CRIT_DMG, [파멸, 파멸폭주]],
-  [OPT_CRIT_RATE, [파멸폭주]],
-  [OPT_PEN, [통찰]],
+  ['크리티컬 대미지 +50%', [파멸, 파멸폭주], 1],
+  ['크리티컬 확률 +1%', [파멸폭주], 1],
+  ['물리/마법 관통력 +10%', [통찰], 2], // 쿨감과 병합 → 효과 2개
+  ['보스 몬스터 대미지 +10000', [악몽죽음], 2], // 보몬지배력과 병합
 ];
-for (const [key, expect] of idxChecks) {
-  const actual = [...(RUNE_OPTION_BY_KEY[key]?.runeIds ?? [])];
-  const same = actual.length === expect.length && actual.every((v, i) => v === expect[i]);
-  if (!same) allOk = false;
-  console.log(`${key.padEnd(28)} → [${actual}] ${same ? 'OK' : `FAIL (기대 [${expect}])`}`);
+for (const [effect, expectRunes, expectEffects] of idxChecks) {
+  const o = RUNE_OPTIONS.find((x) => x.effects.includes(effect));
+  const runes = [...(o?.runeIds ?? [])];
+  const sameRunes = runes.length === expectRunes.length && runes.every((v, i) => v === expectRunes[i]);
+  const sameEffects = (o?.effects.length ?? 0) === expectEffects;
+  if (!sameRunes || !sameEffects) allOk = false;
+  console.log(
+    `${effect.padEnd(24)} → 룬 [${runes}] 효과 ${o?.effects.length}개 ` +
+      `${sameRunes && sameEffects ? 'OK' : `FAIL (기대 룬 [${expectRunes}] 효과 ${expectEffects}개)`}`
+  );
 }
 
 // ── 최대 달성 총점 ──

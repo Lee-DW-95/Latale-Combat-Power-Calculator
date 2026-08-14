@@ -860,7 +860,7 @@ function gradeRange(g) {
                       <span v-if="ei > 0" class="text-stone-400 dark:text-stone-500">, </span>
                       <span
                         :class="
-                          eff === rowOption(row).text
+                          rowOption(row).effects.includes(eff)
                             ? 'text-cyan-600 dark:text-cyan-400 font-semibold'
                             : 'text-amber-600 dark:text-amber-400'
                         "
