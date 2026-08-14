@@ -193,6 +193,11 @@ const tSelectedCount = computed(() =>
   tSelectMode.value === 'option' ? tOptionKeys.value.length : tRuneIds.value.length
 );
 
+// 행에 선택된 옵션 객체 (없으면 null)
+function rowOption(row) {
+  return row?.key ? RUNE_OPTION_BY_KEY[row.key] ?? null : null;
+}
+
 // 모드별 목표 행 배열 / 최대 행 수
 const targetRows = computed(() => (tSelectMode.value === 'option' ? tOptionRows.value : tRuneRows.value));
 const maxTargetRows = computed(() => (tSelectMode.value === 'option' ? MAX_OPTION_TARGETS : RUNE_SLOTS));
@@ -317,7 +322,10 @@ const targetSummary = computed(() => {
         return {
           id: key,
           main: o.text,
-          sub: o.runeIds.map((id) => RUNES[id].name).join(' 또는 '),
+          // 어떤 룬으로 충족되는지 + 그 룬이 같이 주는 옵션까지 그대로 적는다
+          sub: o.carriers
+            .map((c) => (c.extras.length ? `${c.name} (${c.extras.join(', ')} 동반)` : c.name))
+            .join(' 또는 '),
           tail: `${o.maxScore}점`,
         };
       }),
@@ -491,6 +499,13 @@ function toOptionRow(r) {
     shownScore: optionKingView.value ? scoreAsKing(r) : r.score,
   };
 }
+
+// 선택한 옵션 중 "다른 옵션이 같이 딸려오는" 게 하나라도 있으면 범례를 낸다
+const anyRowHasExtras = computed(
+  () =>
+    tSelectMode.value === 'option' &&
+    tOptionRows.value.some((r) => rowOption(r)?.hasExtras)
+);
 
 const optionGroups = computed(() => [
   { key: 'single', label: '단일 룬', rows: RUNES.filter((r) => r.id < FIRST_COMBO_ID).map(toOptionRow) },
@@ -807,25 +822,55 @@ function gradeRange(g) {
             class="grid grid-cols-[1fr_auto] gap-2 items-start"
           >
             <!-- 옵션 모드 -->
-            <select
-              v-if="tSelectMode === 'option'"
-              v-model="row.key"
-              @change="onTargetChanged"
-              class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-            >
-              <option value="">— 선택 안 함 —</option>
-              <optgroup v-for="g in RUNE_OPTION_GROUPS" :key="g.key" :label="g.label">
-                <option
-                  v-for="o in g.options"
-                  :key="o.key"
-                  :value="o.key"
-                  :disabled="isUsedInOtherRow(o.key, i)"
+            <div v-if="tSelectMode === 'option'">
+              <select
+                v-model="row.key"
+                @change="onTargetChanged"
+                class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              >
+                <option value="">— 선택 안 함 —</option>
+                <optgroup v-for="g in RUNE_OPTION_GROUPS" :key="g.key" :label="g.label">
+                  <option
+                    v-for="o in g.options"
+                    :key="o.key"
+                    :value="o.key"
+                    :disabled="isUsedInOtherRow(o.key, i)"
+                  >
+                    {{ o.text }} — {{ o.runeIds.map((id) => RUNES[id].name).join(' 또는 ') }}
+                    ({{ o.runeIds.length > 1 && o.maxScore > 0 ? '최대 ' : '' }}{{ o.maxScore }}점){{ isUsedInOtherRow(o.key, i) ? ' · 선택됨' : '' }}
+                  </option>
+                </optgroup>
+              </select>
+
+              <!--
+                옵션은 룬에 묶여서 온다. 예) 크리티컬 확률 +1% 은 파멸 & 폭주 로만 얻을 수 있고,
+                그 룬은 크리티컬 대미지 +50% 도 같이 준다. 어떤 룬으로 충족되며 무엇이 딸려오는지 그대로 보여준다.
+              -->
+              <div v-if="rowOption(row)" class="mt-1.5 space-y-0.5">
+                <div
+                  v-for="c in rowOption(row).carriers"
+                  :key="c.id"
+                  class="text-[11px] leading-snug flex gap-1.5"
                 >
-                  {{ o.text }} — {{ o.runeIds.map((id) => RUNES[id].name).join(' 또는 ') }}
-                  ({{ o.runeIds.length > 1 && o.maxScore > 0 ? '최대 ' : '' }}{{ o.maxScore }}점){{ isUsedInOtherRow(o.key, i) ? ' · 선택됨' : '' }}
-                </option>
-              </optgroup>
-            </select>
+                  <span class="text-stone-300 dark:text-stone-600 shrink-0">└</span>
+                  <span class="min-w-0">
+                    <strong class="text-stone-600 dark:text-stone-300">{{ c.name }}</strong>
+                    <span class="text-stone-400 dark:text-stone-500"> · </span>
+                    <template v-for="(eff, ei) in c.effects" :key="ei">
+                      <span v-if="ei > 0" class="text-stone-400 dark:text-stone-500">, </span>
+                      <span
+                        :class="
+                          eff === rowOption(row).text
+                            ? 'text-cyan-600 dark:text-cyan-400 font-semibold'
+                            : 'text-amber-600 dark:text-amber-400'
+                        "
+                      >{{ eff }}</span>
+                    </template>
+                    <span class="tabular-nums text-stone-400 dark:text-stone-500"> ({{ c.score }}점)</span>
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <!-- 룬 모드 -->
             <select
@@ -857,6 +902,11 @@ function gradeRange(g) {
               ✕
             </button>
           </div>
+
+          <p v-if="anyRowHasExtras" class="text-[11px] text-stone-400 dark:text-stone-500 pl-4">
+            <span class="text-cyan-600 dark:text-cyan-400 font-semibold">청록</span> = 지정한 옵션 ·
+            <span class="text-amber-600 dark:text-amber-400 font-semibold">주황</span> = 그 룬이 같이 주는 옵션
+          </p>
         </div>
 
         <!-- 조건 -->

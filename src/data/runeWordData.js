@@ -147,23 +147,51 @@ export const RUNES_BY_SCORE = Object.freeze(
 // desc 를 ", " 로 분해하면 개별 옵션이 그대로 떨어진다.
 //   "올스탯 +1500, 올스탯 +5%" → ["올스탯 +1500", "올스탯 +5%"]
 // 현재 데이터 기준 28종, 그 중 14종이 2개 룬에 걸쳐 있다.
+//
+// ⚠ 분해하면 "한 룬이 두 옵션을 묶어서 준다" 는 사실이 사라진다.
+//   예) 크리티컬 확률 +1% 은 단독으로 존재하지 않고 파멸 & 폭주 를 통해서만 오는데,
+//       그 룬을 얻으면 크리티컬 대미지 +50% 도 자동으로 같이 딸려온다.
+//   → carriers 에 룬별 "전체 효과 목록" 을 남겨서 UI 가 이걸 보여줄 수 있게 한다.
+//   (확률 계산은 애초에 룬 단위라 영향 없음 — 표시용 정보다)
 // ============================================================
+function optionsOf(rune) {
+  return rune.desc.split(', ');
+}
+
 function buildOptionIndex() {
   const map = new Map();
   for (const rune of RUNES) {
-    for (const text of rune.desc.split(', ')) {
+    for (const text of optionsOf(rune)) {
       if (!map.has(text)) map.set(text, []);
       map.get(text).push(rune.id);
     }
   }
   return [...map.entries()]
-    .map(([text, runeIds]) => ({
-      key: text,
-      text,
-      runeIds: Object.freeze(runeIds),
-      // 이 옵션을 가진 룬 중 최고 점수 — 목록 정렬 및 전투/기타 판정에 쓴다
-      maxScore: Math.max(...runeIds.map((id) => RUNES[id].score)),
-    }))
+    .map(([text, runeIds]) => {
+      const carriers = runeIds.map((id) => {
+        const r = RUNES[id];
+        const effects = optionsOf(r);
+        return Object.freeze({
+          id,
+          name: r.name,
+          score: r.score,
+          desc: r.desc,
+          effects: Object.freeze(effects),
+          // 선택한 옵션 말고 이 룬이 덤으로 주는 나머지 효과
+          extras: Object.freeze(effects.filter((e) => e !== text)),
+        });
+      });
+      return {
+        key: text,
+        text,
+        runeIds: Object.freeze(runeIds),
+        carriers: Object.freeze(carriers),
+        // 어느 룬으로 얻든 다른 옵션이 같이 딸려오는가
+        hasExtras: carriers.some((c) => c.extras.length > 0),
+        // 이 옵션을 가진 룬 중 최고 점수 — 목록 정렬 및 전투/기타 판정에 쓴다
+        maxScore: Math.max(...runeIds.map((id) => RUNES[id].score)),
+      };
+    })
     .map((o) => Object.freeze({ ...o, isCombat: o.maxScore > 0 }))
     .sort((a, b) => b.maxScore - a.maxScore || a.runeIds[0] - b.runeIds[0]);
 }
