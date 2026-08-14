@@ -180,75 +180,218 @@ export function computeNormalStats(
 }
 
 // ============================================================
-// 일반 장비 인챈트 — 목표 옵션 모두 만족까지 1회 시뮬
+// 일반 장비 인챈트 — 목표 옵션 모두 만족까지
 //
 // 모델 (가정):
 //   - targets = [{ optionKey, minValue }, ...] 1~slotMax 개
 //   - 한 장비에 사용자 입력 순서대로 옵션 1개씩 시도
-//   - 시도 실패 → 장비 파괴 → 새 장비 처음부터 (망치 1개 소모, slot 모두 사라짐)
+//   - 시도 실패 → 장비 파괴 → 새 장비 처음부터 (망치 소모, slot 모두 사라짐)
 //   - 시도 성공 but 추첨 값 < minValue → 그 슬롯이 미달이라 장비 포기 (망치는 이미 소모됨)
 //   - 모든 target 슬롯이 minValue 이상이면 성공 종료
 //
 // 추첨 값 미달 시 장비 포기는 "리롤 시스템 없음" 가정. 실제 게임 메커니즘이
 // 다르면 (예: 같은 슬롯 재인챈트 가능) 추후 모델 변경 필요.
+//
+// ── 산출 방식 ─────────────────────────────────────────────
+// 장비 1개(= 한 사이클)의 성공 확률 q 는 닫힌 수식으로 정확히 구할 수 있다.
+//
+//   a_i = 성공률 × P(값 ≥ minValue_i)      … 슬롯 i 통과 확률
+//   R_i = Π_{j<i} a_j                        … 슬롯 i 까지 도달할 확률
+//   q   = Π a_i                              … 장비 1개가 끝까지 통과할 확률
+//
+// 여기서 총 시도 횟수의 기대값이 정확히 (Σ R_i) / q 로 떨어진다.
+// 예전 구현은 "10만 시도 상한 안에 끝난 표본만" 평균에 넣어서, q 가 작으면
+// 운 좋게 일찍 끝난 표본만 남는 생존편향으로 평균을 수십 배 과소보고했다.
+// (아마란스 무기 5슬롯 90% 목표: 실제 약 200만 회인데 4.9만 회로 표시)
 // ============================================================
+
+/** 한 슬롯의 추첨 값이 minValue 이상일 확률 — 균등 격자의 꼬리확률 (정확값) */
+export function valuePassProb(part, target, stage = 'base', minPct = DEFAULT_BINDING_MIN_PCT) {
+  const opt = (part.options || []).find((o) => o.key === target.optionKey);
+  if (!opt) return 0;
+  const r = rangeFor(opt, stage, minPct);
+  const step = r.step && r.step > 0 ? r.step : 1;
+  const n = Math.floor((r.hi - r.lo) / step + 1e-9) + 1;
+  if (n <= 0) return 0;
+  const need = Number(target.minValue);
+  if (!Number.isFinite(need) || need <= r.lo) return 1;
+  if (need > r.hi + 1e-9) return 0;
+  const jMin = Math.ceil((need - r.lo) / step - 1e-9);
+  return Math.max(0, n - jMin) / n;
+}
+
+/**
+ * 목표 프로세스의 해석적 파라미터.
+ *   q          — 장비 1개가 모든 목표를 통과할 확률
+ *   expTries   — 장비 1개당 평균 시도 횟수 (Σ R_i)
+ *   muFail/sdFail — 실패한 장비 1개의 시도 횟수 평균/표준편차
+ *   pDestroyFail  — 실패한 장비가 "파괴"로 끝났을 확률 (나머지는 값 미달 포기)
+ */
+export function analyzeTargetProcess(part, targets, enchantTypeKey, stage = 'base', opts) {
+  const type = NORMAL_ENCHANT_TYPES[enchantTypeKey];
+  if (!type) throw new Error(`unknown enchant type: ${enchantTypeKey}`);
+  const { minPct, mythic } = normalizeOpts(opts);
+  const rate = effectiveSuccessRate(enchantTypeKey, mythic, part);
+
+  const T = targets.length;
+  const a = targets.map((t) => rate * valuePassProb(part, t, stage, minPct));
+
+  const R = [];
+  let acc = 1;
+  for (let i = 0; i < T; i++) {
+    R.push(acc);
+    acc *= a[i];
+  }
+  const q = acc;
+  const expTries = R.reduce((s, r) => s + r, 0);
+  const reachSum = expTries; // Σ R_i — 파괴 기대값 계산에도 그대로 쓰인다
+
+  // 실패 사이클 조건부 분포
+  const failPmf = [];
+  for (let i = 0; i < T; i++) failPmf.push(R[i] * (1 - a[i]));
+  const failTotal = 1 - q;
+  let muFail = 0;
+  let m2Fail = 0;
+  if (failTotal > 0) {
+    for (let i = 0; i < T; i++) {
+      const p = failPmf[i] / failTotal;
+      muFail += (i + 1) * p;
+      m2Fail += (i + 1) * (i + 1) * p;
+    }
+  }
+  const sdFail = Math.sqrt(Math.max(0, m2Fail - muFail * muFail));
+  const pDestroyFail = failTotal > 0 ? ((1 - rate) * reachSum) / failTotal : 0;
+
+  return {
+    rate,
+    a,
+    R,
+    q,
+    T,
+    expTries,
+    expDestroyed: (1 - rate) * reachSum,
+    muFail,
+    sdFail,
+    pDestroyFail,
+    failPmf,
+    failTotal,
+    hammerCost: type.hammerCost,
+    elyCost: type.elyCost,
+    minPct,
+  };
+}
+
+// 첫 성공 전까지의 "실패한 장비 수" — 기하분포 역 CDF (0, 1, 2, ... )
+function sampleFailedCycles(q) {
+  if (!(q > 0)) return Infinity;
+  if (q >= 1) return 0;
+  const u = 1 - Math.random(); // (0, 1]
+  return Math.max(0, Math.ceil(Math.log(u) / Math.log(1 - q)) - 1);
+}
+
+function gauss() {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// 실패 사이클 하나를 추첨 → { tries, destroyed }
+function sampleFailCycle(A) {
+  let r = Math.random() * A.failTotal;
+  let slot = A.T;
+  for (let i = 0; i < A.T; i++) {
+    r -= A.failPmf[i];
+    if (r <= 1e-15) {
+      slot = i + 1;
+      break;
+    }
+  }
+  // 그 슬롯에서 멈춘 이유가 "파괴"였을 확률
+  const aI = A.a[slot - 1];
+  const pDestroy = 1 - aI > 0 ? (1 - A.rate) / (1 - aI) : 0;
+  return { tries: slot, destroyed: Math.random() < pDestroy ? 1 : 0 };
+}
+
+// 실패 사이클이 이 개수를 넘으면 개별 추첨 대신 정규근사로 합산 (분포는 사실상 동일)
+const EXACT_CYCLE_LIMIT = 300;
+
+// 첫 성공까지의 누적 소모를 1회 추첨 — 실패 사이클을 하나씩 굴리지 않는다
+function sampleTotals(A) {
+  const m = sampleFailedCycles(A.q);
+  let tries = A.T;
+  let destroyed = 0;
+  if (!Number.isFinite(m)) return { tries: Infinity, destroyed: Infinity };
+  if (m <= EXACT_CYCLE_LIMIT) {
+    for (let j = 0; j < m; j++) {
+      const c = sampleFailCycle(A);
+      tries += c.tries;
+      destroyed += c.destroyed;
+    }
+  } else {
+    tries += Math.max(m, Math.round(m * A.muFail + Math.sqrt(m) * A.sdFail * gauss()));
+    const pd = A.pDestroyFail;
+    destroyed = Math.max(
+      0,
+      Math.min(m, Math.round(m * pd + Math.sqrt(m * pd * (1 - pd)) * gauss())),
+    );
+  }
+  return { tries, destroyed };
+}
+
+// 목표치 이상으로 잘라낸 균등 분포에서 값 추첨
+function rollValueAtLeast(range, minValue) {
+  const step = range.step && range.step > 0 ? range.step : 1;
+  const lo = Math.max(range.lo, Math.ceil((minValue - range.lo) / step - 1e-9) * step + range.lo);
+  return rollValue(Math.min(lo, range.hi), range.hi, range.step);
+}
+
+/**
+ * 1번 실행 — 목표를 만족한 장비 1개와 거기까지의 누적 소모.
+ * 성공 장비는 조건부 분포에서 직접 조립하므로 q 가 아무리 작아도 즉시 반환된다.
+ * maxAttempts 인자는 후방 호환용으로 남겨두지만 사용하지 않는다.
+ */
 export function simulateUntilTargetMet(
   part,
   targets,
   enchantTypeKey,
   stage = 'base',
-  maxAttempts = ENCHANT_SIM.TARGET_MAX_ATTEMPTS,
+  maxAttempts, // eslint-disable-line no-unused-vars
   opts,
 ) {
-  let tries = 0;
-  let hammerUsed = 0;
-  let elyUsed = 0;
-  let destroyed = 0;
-
-  while (tries < maxAttempts) {
-    let abandoned = false;
-    const slots = [];
-
-    for (const target of targets) {
-      const r = tryNormalEnchant(part, target.optionKey, enchantTypeKey, stage, opts);
-      tries++;
-      hammerUsed += r.hammerUsed;
-      elyUsed += r.elyUsed;
-
-      if (!r.success) {
-        destroyed++;
-        abandoned = true;
-        break;
-      }
-      if (r.value < target.minValue) {
-        // 값 미달 → 장비 포기 (망치/엘리는 소모, 다음 새 장비)
-        abandoned = true;
-        break;
-      }
-      slots.push({
-        optionKey: r.optionKey,
-        label: r.label,
-        unit: r.unit,
-        value: r.value,
-      });
-    }
-
-    if (!abandoned) {
-      return {
-        completed: true,
-        tries,
-        hammerUsed,
-        elyUsed,
-        destroyed,
-        finalSlots: slots,
-      };
-    }
+  if (!targets || targets.length === 0) {
+    return { completed: false, tries: 0, hammerUsed: 0, elyUsed: 0, destroyed: 0, finalSlots: [] };
   }
-  return { completed: false, tries, hammerUsed, elyUsed, destroyed };
+  const A = analyzeTargetProcess(part, targets, enchantTypeKey, stage, opts);
+  if (!(A.q > 0)) {
+    return { completed: false, tries: 0, hammerUsed: 0, elyUsed: 0, destroyed: 0, finalSlots: [] };
+  }
+
+  const { tries, destroyed } = sampleTotals(A);
+  const finalSlots = targets.map((t) => {
+    const opt = part.options.find((o) => o.key === t.optionKey);
+    const r = rangeFor(opt, stage, A.minPct);
+    return {
+      optionKey: t.optionKey,
+      label: opt.label,
+      unit: opt.unit,
+      value: rollValueAtLeast(r, Number(t.minValue)),
+    };
+  });
+
+  return {
+    completed: true,
+    tries,
+    hammerUsed: tries * A.hammerCost,
+    elyUsed: tries * A.elyCost,
+    destroyed,
+    finalSlots,
+  };
 }
 
 // ============================================================
-// 일반 장비 인챈트 — 목표 도달 통계 (Monte Carlo)
+// 일반 장비 인챈트 — 목표 도달 통계
+//   평균은 해석적 정확값, 분위수는 누적 소모를 직접 추첨한 표본에서 산출.
+//   (실패 사이클을 하나씩 굴리지 않으므로 q ~ 1e-13 이어도 즉시 끝난다)
 // ============================================================
 export function computeTargetStats(
   part,
@@ -258,32 +401,45 @@ export function computeTargetStats(
   runs = ENCHANT_SIM.TARGET_MC_RUNS,
   opts,
 ) {
-  const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
-  let completedCount = 0;
-
-  for (let i = 0; i < runs; i++) {
-    const r = simulateUntilTargetMet(
-      part,
-      targets,
-      enchantTypeKey,
-      stage,
-      ENCHANT_SIM.TARGET_MC_INNER_CAP,
-      opts,
-    );
-    if (r.completed) {
-      completedCount++;
-      samples.tries.push(r.tries);
-      samples.hammer.push(r.hammerUsed);
-      samples.ely.push(r.elyUsed);
-      samples.destroyed.push(r.destroyed);
-    }
+  if (!targets || targets.length === 0) return null;
+  const A = analyzeTargetProcess(part, targets, enchantTypeKey, stage, opts);
+  if (!(A.q > 0)) {
+    return {
+      feasible: false,
+      cycleSuccessRate: 0,
+      runs: 0,
+      mean: { tries: Infinity, hammer: Infinity, ely: Infinity, destroyed: Infinity },
+      p50: { tries: Infinity, hammer: Infinity, ely: Infinity, destroyed: Infinity },
+      p90: { tries: Infinity, hammer: Infinity, ely: Infinity, destroyed: Infinity },
+      p99: { tries: Infinity, hammer: Infinity, ely: Infinity, destroyed: Infinity },
+    };
   }
 
-  if (completedCount === 0) return null;
+  const samples = { tries: [], hammer: [], ely: [], destroyed: [] };
+  for (let i = 0; i < runs; i++) {
+    const s = sampleTotals(A);
+    samples.tries.push(s.tries);
+    samples.hammer.push(s.tries * A.hammerCost);
+    samples.ely.push(s.tries * A.elyCost);
+    samples.destroyed.push(s.destroyed);
+  }
+
+  const dist = buildDistributionStats(samples);
+  // 평균은 표본이 아니라 닫힌 수식의 정확값으로 대체 — E[시도] = (Σ R_i) / q
+  const meanTries = A.expTries / A.q;
+  dist.mean = {
+    tries: meanTries,
+    hammer: meanTries * A.hammerCost,
+    ely: meanTries * A.elyCost,
+    destroyed: A.expDestroyed / A.q,
+  };
+
   return {
-    completedRate: completedCount / runs,
-    runs: completedCount,
-    ...buildDistributionStats(samples),
+    feasible: true,
+    cycleSuccessRate: A.q,
+    meanCycles: 1 / A.q,
+    runs,
+    ...dist,
   };
 }
 

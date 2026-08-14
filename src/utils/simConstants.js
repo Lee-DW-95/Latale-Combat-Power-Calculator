@@ -14,11 +14,10 @@ export const ENCHANT_SIM = Object.freeze({
   // 풀강 평균 분석 (computeNormalStats) Monte Carlo 횟수 + 내부 안전 상한
   FULL_MC_RUNS: 2000,
   FULL_MC_INNER_CAP: 50_000,
-  // 목표 옵션 시뮬 maxAttempts
-  TARGET_MAX_ATTEMPTS: 200_000,
-  // 목표 옵션 통계 (computeTargetStats) Monte Carlo 횟수 + 내부 안전 상한
-  TARGET_MC_RUNS: 1000,
-  TARGET_MC_INNER_CAP: 100_000,
+  // 목표 옵션 통계 (computeTargetStats) 표본 수.
+  //   평균은 해석적 정확값이고 표본은 분위수 산출에만 쓰인다. 실패 사이클을 하나씩
+  //   굴리지 않으므로(기하분포 역CDF + 정규근사) 표본을 넉넉히 잡아도 즉시 끝난다.
+  TARGET_MC_RUNS: 20_000,
   // UI 풀강까지 자동 클릭 시 안전 상한 (무한루프 방지)
   AUTO_RUN_SAFETY_CAP: 5000,
 });
@@ -26,14 +25,12 @@ export const ENCHANT_SIM = Object.freeze({
 // ============================================================
 // 메모리얼 시뮬
 // ============================================================
+//   통계·성공카드는 해석적으로 계산하므로 아래 값들은 상시 경로에 쓰이지 않는다.
+//   - SAMPLE_MAX_TRIES: 해석 모델 가정을 벗어난 구조에서만 쓰는 폴백 상한
+//   - ESTIMATE_PHASE1:  MC 교차검증(estimateSingleCardSuccessRate) 기본 표본 수
 export const MEMORIAL_SIM = Object.freeze({
-  // 1번 실행 캡처 안전 상한 (simulateUntilSingleCardReaches)
   SAMPLE_MAX_TRIES: 100_000,
-  // 단일 카드 성공률 추정 1차/2차 표본
   ESTIMATE_PHASE1: 200_000,
-  ESTIMATE_PHASE2: 1_000_000,
-  // 1차에서 success 가 이 수치 미만이면 2차 확장
-  ESTIMATE_PHASE2_THRESHOLD: 30,
 });
 
 // ============================================================

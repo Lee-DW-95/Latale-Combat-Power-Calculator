@@ -26,7 +26,7 @@ import {
   simulateUntilTargetMet,
   levelUpSpecial,
 } from '../utils/enchantSim.js';
-import { fmt, fmt1, pct } from '../utils/format.js';
+import { fmt, fmt1, pct, pctSmart } from '../utils/format.js';
 import { ENCHANT_SIM } from '../utils/simConstants.js';
 
 // ============================================================
@@ -203,7 +203,7 @@ async function analyzeTargetSim() {
       validTargets.value,
       normalEnchantType.value,
       'base',
-      1000,
+      undefined,
       normalSimOpts.value,
     );
     targetSampleRun.value = simulateUntilTargetMet(
@@ -211,7 +211,7 @@ async function analyzeTargetSim() {
       validTargets.value,
       normalEnchantType.value,
       'base',
-      100_000,
+      undefined,
       normalSimOpts.value,
     );
   } finally {
@@ -1100,7 +1100,7 @@ function rollPctClass(p) {
             :disabled="!canRunTargetSim"
             class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
           >
-            {{ isTargetSimRunning ? '⏳ 시뮬 중...' : '🎯 목표 시뮬 (1,000회)' }}
+            {{ isTargetSimRunning ? '⏳ 시뮬 중...' : '🎯 목표 시뮬' }}
           </button>
           <button
             v-if="hasRecommended"
@@ -1183,7 +1183,9 @@ function rollPctClass(p) {
           </div>
 
           <p class="text-xs text-stone-500 dark:text-stone-400">
-            성공률 {{ pct(targetStats.completedRate) }} · 1,000회 시뮬 중 {{ fmt(targetStats.runs) }}회 완료. 평균 시도수 ≠ 평균 망치 (값 미달로 장비 포기 시 시도는 카운트되지만 추가 망치는 다음 장비에서).
+            장비 1개가 모든 목표를 통과할 확률 {{ pctSmart(targetStats.cycleSuccessRate) }}
+            → 평균 <strong>{{ fmt(Math.round(targetStats.meanCycles)) }}개</strong>째 장비에서 성공.
+            평균값은 해석적 정확값이고, P50/P90/P99 는 {{ fmt(targetStats.runs) }}회 표본 기준입니다.
           </p>
         </div>
 

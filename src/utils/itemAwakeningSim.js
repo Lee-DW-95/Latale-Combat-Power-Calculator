@@ -514,25 +514,277 @@ export function checkTargets(rows, targets) {
 }
 
 // ============================================================
-// 확률 추정 — 줄 구성만 MC, 값 조건은 구성마다 정확히 계산
+// 확률 계산 — 줄 구성을 전수 열거, 값 조건은 구성마다 정확히 계산
 //
-//   p = E_구성[ P(값 조건 전부 만족 | 구성) ]
+//   p = Σ_구성 P(구성) × P(값 조건 전부 만족 | 구성)
 //
 // 값은 줄이 확정된 뒤 독립 추첨이므로, 구성이 주어지면 조건부 확률을 닫힌 수식으로
 // 계산할 수 있다 (지정 목표 = 균등분포 꼬리확률, 합계 목표 = 위 포함배제 공식).
-// 값 조건까지 MC 로 판정하는 것보다 분산이 훨씬 작다 (Rao-Blackwell 화).
+//
+// 구성 쪽도 전수 열거가 가능하다. 한 카드는 2~4줄뿐이고, 목표와 무관한 줄은
+// "어떤 키를 얼마나 소모했는가"만 뒤 추첨에 영향을 주므로 같은 무게끼리 묶으면
+// 분기 수가 수십 개로 떨어진다.
+//
+//   줄 i 추첨 = 아직 안 쓴 키(등급+옵션명) 중 weight 비례  (중복키는 재추첨 = 조건부)
+//   ⇒ P(순서열) = Π ( w_선택 / (W − 이미 쓴 키들의 weight 합) )
+//
+// 예전에는 이 구성 확률을 MC 로 추정했는데, 98옵션 세트에 목표를 3~4개 걸면
+// 구성 확률이 ~5e-7 이라 200만 표본에서 0~1회만 관측됐다. 그러면 p=0 → "달성 불가"
+// 로 표시되거나 평균 회차가 실행마다 몇 배씩 튀었다. 전수 열거는 그 흔들림이 없다.
 //
 // 겹치는 목표는 checkTargets 가 막으므로 목표별 조건부 확률은 서로 독립 → 단순 곱.
 // ============================================================
 
+/** 줄 수 분포 — pickLineCount 와 동일한 분포를 확률로 표현 */
+function lineCountDist() {
+  return [
+    { k: 2, p: 1 - THIRD_LINE_CHANCE },
+    { k: 3, p: THIRD_LINE_CHANCE * (1 - FOURTH_LINE_CHANCE) },
+    { k: 4, p: THIRD_LINE_CHANCE * FOURTH_LINE_CHANCE },
+  ].filter((e) => e.p > 0);
+}
+
+/**
+ * 전수 열거용 모델. 열거 규모가 과도하면 null → 호출자가 MC 로 폴백.
+ *
+ * 한 줄의 선택지는 세 종류로 압축된다:
+ *   'row'     — 목표에 관련된 특정 row (등장 여부를 추적해야 한다)
+ *   'sibling' — 관련 row 와 키를 공유하는 나머지 row 들 (그 키를 막아버린다)
+ *   'class'   — 관련 없는 키들을 weight 값이 같은 것끼리 묶은 묶음
+ */
+const MAX_ENUM_LEAVES = 6_000_000;
+
+function buildEnumModel(rows, relevantIdxs) {
+  const keyMass = new Map();
+  const keys = rows.map((r) => dedupeKey(r));
+  let W = 0;
+  rows.forEach((r, i) => {
+    const w = Number(r.prob || 0);
+    W += w;
+    keyMass.set(keys[i], (keyMass.get(keys[i]) || 0) + w);
+  });
+  if (!(W > 0)) return null;
+
+  const relevantSet = new Set(relevantIdxs);
+  const relevantKeys = [...new Set(relevantIdxs.map((i) => keys[i]))];
+  const keyIndex = new Map(relevantKeys.map((k, i) => [k, i]));
+
+  // 관련 row 선택지
+  const rowChoices = relevantIdxs.map((i) => ({
+    kind: 'row',
+    rowIndex: i,
+    w: Number(rows[i].prob || 0),
+    keyBit: 1 << keyIndex.get(keys[i]),
+    keyW: keyMass.get(keys[i]),
+  }));
+
+  // 관련 키 안의 비관련 row 묶음
+  const siblingChoices = [];
+  for (const k of relevantKeys) {
+    let sib = 0;
+    const members = [];
+    rows.forEach((r, i) => {
+      if (keys[i] === k && !relevantSet.has(i)) {
+        sib += Number(r.prob || 0);
+        members.push(i);
+      }
+    });
+    if (sib > 0) {
+      siblingChoices.push({
+        kind: 'sibling',
+        w: sib,
+        keyBit: 1 << keyIndex.get(k),
+        keyW: keyMass.get(k),
+        members,
+      });
+    }
+  }
+
+  // 비관련 키를 weight 값으로 묶기
+  const classMap = new Map();
+  for (const [k, mass] of keyMass) {
+    if (keyIndex.has(k)) continue;
+    const bucket = mass.toFixed(9);
+    if (!classMap.has(bucket)) classMap.set(bucket, { kind: 'class', mass, keys: [] });
+    classMap.get(bucket).keys.push(k);
+  }
+  const classChoices = [...classMap.values()].map((c, i) => ({ ...c, classIdx: i, count: c.keys.length }));
+
+  const branching = rowChoices.length + siblingChoices.length + classChoices.length;
+  if (branching ** 4 > MAX_ENUM_LEAVES) return null;
+
+  return { W, keys, keyMass, rowChoices, siblingChoices, classChoices, relevantIdxs };
+}
+
 /**
  * 반환:
- *   successRate     — 한 카드 성공 확률
+ *   successRate     — 한 카드 성공 확률 (정확값)
  *   compositionRate — 목표 옵션들이 등장할 확률 (값 조건 제외)
  *   valueProb       — 등장했을 때 값 조건을 통과할 평균 확률
  *   composition     — 성공 카드 조립용 줄 구성 (성공 확률로 가중한 저수지 표본)
+ *   exact           — 전수 열거로 구했는지 (false 면 MC 폴백)
  */
 export function estimateTargetProb(rows, targets) {
+  const rowTargets = targets.filter((t) => t.mode !== 'sum');
+  const sumTargets = targets.filter((t) => t.mode === 'sum');
+
+  const wanted = rowTargets.map((t) => t.rowIndex);
+  const groups = sumTargets.map((t) => {
+    const idxs = [];
+    rows.forEach((r, i) => {
+      if (r.name === t.name) idxs.push(i);
+    });
+    return idxs;
+  });
+  const relevantIdxs = [...new Set([...wanted, ...groups.flat()])];
+
+  const model = relevantIdxs.length > 0 ? buildEnumModel(rows, relevantIdxs) : null;
+  if (!model) return estimateTargetProbByMC(rows, targets);
+
+  // 지정 목표의 값 통과 확률은 구성과 무관 — 미리 곱해둔다
+  let rowFixed = 1;
+  for (const t of rowTargets) rowFixed *= valuePassProb(rows[t.rowIndex], t.minValue);
+
+  const tailCache = new Map();
+  const tailFor = (si, members) => {
+    const key = si + ':' + members.join(',');
+    let v = tailCache.get(key);
+    if (v === undefined) {
+      const subset = members.map((i) => rows[i]);
+      const target = Number(sumTargets[si].minValue);
+      v = sumTailProb(subset, target);
+      if (v === null) v = sumTailProbByMC(subset, target);
+      tailCache.set(key, v);
+    }
+    return v;
+  };
+
+  const posOf = new Map(model.relevantIdxs.map((i, n) => [i, n]));
+  const wantedMask = wanted.reduce((m, i) => m | (1 << posOf.get(i)), 0);
+  const groupMasks = groups.map((g) => g.reduce((m, i) => m | (1 << posOf.get(i)), 0));
+
+  const choices = [...model.rowChoices, ...model.siblingChoices, ...model.classChoices];
+  const classCount = model.classChoices.map((c) => c.count);
+
+  let successRate = 0;
+  let compositionRate = 0;
+  let wsum = 0;
+  let reservoir = null;
+  const path = new Array(4);
+
+  const evalLeaf = (presentMask, k, prob) => {
+    if ((presentMask & wantedMask) !== wantedMask) return;
+    let cond = rowFixed;
+    for (let si = 0; si < groupMasks.length && cond > 0; si++) {
+      const hit = presentMask & groupMasks[si];
+      if (hit === 0) return;
+      const members = groups[si].filter((i) => presentMask & (1 << posOf.get(i)));
+      cond *= tailFor(si, members);
+    }
+    compositionRate += prob;
+    if (cond <= 0) return;
+    const w = prob * cond;
+    successRate += w;
+    wsum += w;
+    if (Math.random() * wsum < w) reservoir = path.slice(0, k).map((c) => c);
+  };
+
+  const walk = (pos, k, usedKeyMask, usedMass, prob, presentMask) => {
+    if (prob === 0) return;
+    if (pos === k) {
+      evalLeaf(presentMask, k, prob);
+      return;
+    }
+    // 남은 줄로는 필수 목표를 다 채울 수 없으면 가지치기
+    let missing = 0;
+    let need = wantedMask & ~presentMask;
+    while (need) {
+      missing += need & 1;
+      need >>= 1;
+    }
+    for (let si = 0; si < groupMasks.length; si++) {
+      if ((presentMask & groupMasks[si]) === 0) missing += 1;
+    }
+    if (missing > k - pos) return;
+
+    const D = model.W - usedMass;
+    if (!(D > 0)) return;
+
+    for (const c of choices) {
+      if (c.kind === 'class') {
+        const left = classCount[c.classIdx];
+        if (left <= 0) continue;
+        classCount[c.classIdx] -= 1;
+        path[pos] = c;
+        walk(pos + 1, k, usedKeyMask, usedMass + c.mass, (prob * (left * c.mass)) / D, presentMask);
+        classCount[c.classIdx] += 1;
+      } else {
+        if (usedKeyMask & c.keyBit) continue;
+        path[pos] = c;
+        walk(
+          pos + 1,
+          k,
+          usedKeyMask | c.keyBit,
+          usedMass + c.keyW,
+          (prob * c.w) / D,
+          c.kind === 'row' ? presentMask | (1 << posOf.get(c.rowIndex)) : presentMask,
+        );
+      }
+    }
+  };
+
+  for (const { k, p } of lineCountDist()) walk(0, k, 0, 0, p, 0);
+
+  return {
+    successRate,
+    compositionRate,
+    valueProb: compositionRate > 0 ? successRate / compositionRate : 0,
+    exact: true,
+    samples: 0,
+    hits: 0,
+    composition: reservoir ? resolveComposition(model, rows, reservoir) : null,
+  };
+}
+
+/** 열거 경로(선택지 배열)를 실제 row 인덱스 배열로 환원 */
+function resolveComposition(model, rows, pathChoices) {
+  const used = new Set();
+  const out = [];
+  const pickWeighted = (cands) => {
+    let total = 0;
+    for (const c of cands) total += c.w;
+    let r = Math.random() * total;
+    for (const c of cands) {
+      r -= c.w;
+      if (r <= 1e-12) return c.i;
+    }
+    return cands[cands.length - 1].i;
+  };
+
+  for (const c of pathChoices) {
+    if (c.kind === 'row') {
+      used.add(model.keys[c.rowIndex]);
+      out.push(c.rowIndex);
+    } else if (c.kind === 'sibling') {
+      const i = pickWeighted(c.members.map((i) => ({ i, w: Number(rows[i].prob || 0) })));
+      used.add(model.keys[i]);
+      out.push(i);
+    } else {
+      const free = c.keys.filter((k) => !used.has(k));
+      const key = free.length > 0 ? free[Math.floor(Math.random() * free.length)] : c.keys[0];
+      used.add(key);
+      const members = [];
+      rows.forEach((r, i) => {
+        if (model.keys[i] === key) members.push({ i, w: Number(r.prob || 0) });
+      });
+      out.push(pickWeighted(members));
+    }
+  }
+  return out;
+}
+
+/** 전수 열거가 불가능할 때의 폴백 — 예전 MC 추정기 (현재 데이터에선 미사용) */
+export function estimateTargetProbByMC(rows, targets) {
   const { PRESENCE_PHASE1, PRESENCE_PHASE2, PRESENCE_PHASE2_THRESHOLD } = ITEM_AWAKENING_SIM;
   const sampler = createSampler(rows);
 
@@ -622,6 +874,7 @@ export function estimateTargetProb(rows, targets) {
     successRate,
     compositionRate,
     valueProb: compositionRate > 0 ? successRate / compositionRate : 0,
+    exact: false,
     samples,
     hits,
     composition: reservoir,

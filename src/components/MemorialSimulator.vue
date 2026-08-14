@@ -394,6 +394,13 @@ const meanCost = computed(() => {
         </span>
         · 단일 카드 성공률 {{ pctSmart(result.successRate) }}
       </p>
+      <p
+        v-if="result.successRate > 0 && result.successRate < 1e-4"
+        class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+      >
+        ⚠ 극히 희박한 조합입니다 — 약 <strong>{{ fmt(Math.round(1 / result.successRate)) }}장에 1장</strong> 꼴.
+        목표치를 조금만 낮춰도 필요 횟수가 크게 줄어듭니다.
+      </p>
     </section>
 
     <!-- 1번 실행의 성공 카드 -->
@@ -467,7 +474,8 @@ const meanCost = computed(() => {
         </div>
       </div>
       <div v-else class="text-sm text-rose-600 dark:text-rose-400">
-        ⚠ {{ fmt(sampleWinningCard.tries) }}회 굴렸지만 도달 실패 (maxTries 한도 초과).
+        ⚠ 이 목표 조합은 한 카드로 달성할 수 없습니다 — 카드 최대 줄 수(4줄)와 옵션별 최대치로는
+        모든 조건을 동시에 채울 방법이 존재하지 않습니다.
       </div>
     </section>
   </div>
