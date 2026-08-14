@@ -17,15 +17,11 @@ import {
   normalizeTarget,
   hasAnyCondition,
   computeTargetStats,
-  simulateUntilTarget,
+  sampleTargetOutcome,
   maxAchievableTotal,
   contributingRuneIds,
-  sampleSatisfyingResult,
 } from '../utils/runeWordSim.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
-
-// 실제 굴리기 시연 상한 — 이 안에 못 만나면 조합을 직접 구성해서 보여준다 (약 0.2초)
-const ROLL_DEMO_MAX_TRIES = 300_000;
 
 const INSIGHT_ID = 19;   // 통찰 — 왕룬 점수 예외
 const FIRST_COMBO_ID = 20; // 20번부터 복합 룬
@@ -262,15 +258,10 @@ async function runTargetSim() {
     tRunTarget.value = t;
     tStats.value = computeTargetStats(t);
 
-    // 먼저 실제로 굴려본다. 확률이 낮아 상한 안에 못 만나면(수천만 회짜리 목표 등)
-    // 조건을 만족하는 조합 중 하나를 정확히 균등 추출해서라도 결과를 보여준다.
-    const rolled = simulateUntilTarget(t, ROLL_DEMO_MAX_TRIES);
-    if (rolled.success) {
-      tSample.value = { kind: 'rolled', tries: rolled.tries, ely: rolled.ely, result: rolled.result };
-    } else {
-      const built = sampleSatisfyingResult(t);
-      tSample.value = built ? { kind: 'constructed', result: built } : null;
-    }
+    // 몇 회차에 성공했는지 + 그때 뜬 룬워드. 실제로 굴려서 기다리지 않고
+    // 시도 횟수는 기하분포에서, 당첨 조합은 조건부 균등 추출로 뽑는다
+    // (실제로 굴렸을 때와 분포가 같으면서 평균 수천만 회짜리 목표도 즉시 나온다).
+    tSample.value = sampleTargetOutcome(t, tStats.value.p);
   } finally {
     tRunning.value = false;
   }
@@ -998,36 +989,22 @@ function gradeRange(g) {
         <template v-if="true">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700">
             <div class="text-[11px] font-medium uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1">
-              {{ tSample.kind === 'rolled' ? '실제 굴려본 결과' : '목표 달성 조합 예시' }}
+              이번 시뮬 결과
             </div>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span
-                v-if="tSample.kind === 'rolled'"
-                class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none"
-              >
-                {{ fmt(tSample.tries) }}<span class="text-lg font-bold text-stone-400">회차에 성공</span>
-              </span>
-              <span
-                v-else
-                class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none"
-              >
-                {{ fmt(tSample.result.total) }}<span class="text-lg font-bold text-stone-400">점</span>
+              <span class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none">
+                {{ fmtInf(tSample.tries) }}<span class="text-lg font-bold text-stone-400">회차에 성공</span>
               </span>
               <span :class="['rounded px-2 py-1 text-xs font-bold', GRADE_CHIP[tSample.result.grade]]">
                 {{ fmt(tSample.result.total) }}점 · {{ tSample.result.gradeLabel }}
               </span>
             </div>
-            <p v-if="tSample.kind === 'rolled'" class="text-xs text-stone-500 dark:text-stone-400 mt-2">
-              스크롤 {{ fmt(tSample.tries) }}개 ·
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-2">
+              스크롤 {{ fmtInf(tSample.tries) }}개 ·
               <span class="font-semibold text-amber-600 dark:text-amber-400" :title="fmt(tSample.ely) + ' Ely'">
                 {{ fmtEly(tSample.ely) }} Ely
               </span>
-              소모 — 같은 조건이라도 매번 회차가 달라집니다.
-            </p>
-            <p v-else class="text-xs text-stone-500 dark:text-stone-400 mt-2">
-              확률이 낮아 실제로 굴려서는 만나기 어려운 목표라, 조건을 만족하는 조합 중
-              <strong>하나를 균등 추출</strong>해 보여줍니다. 평균
-              <strong class="text-stone-700 dark:text-stone-200">{{ fmtInf(Math.round(tStats?.mean)) }}회</strong> 시도가 필요합니다.
+              소모 — 같은 조건이라도 매번 회차가 달라집니다 (다시 누르면 재실행).
             </p>
           </div>
 

@@ -19,6 +19,7 @@ import {
   rollRuneWord,
   maxAchievableTotal,
   sampleSatisfyingResult,
+  sampleGeometricTries,
 } from '../src/utils/runeWordSim.js';
 import { MAX_TOTAL, RUNES } from '../src/data/runeWordData.js';
 
@@ -254,6 +255,25 @@ for (const [label, raw] of SAMPLER_CASES) {
   console.log(
     `왕룬 미지정 → 8종 모두 왕룬 등장(${cnt.size}/8) · 최대 편차 ${(maxDev * 100).toFixed(1)}% → ${uniform ? 'OK' : 'FAIL'}`
   );
+}
+
+// ── 시도 횟수 추출 (기하분포) ──
+//   실제로 굴리는 대신 Geometric(p) 에서 뽑는다. 평균이 1/p 에 수렴해야 한다.
+{
+  const RUNS = 200_000;
+  let ok = true;
+  for (const p of [0.2666667, 0.0644, 1.7085e-7]) {
+    let sum = 0;
+    for (let i = 0; i < RUNS; i++) sum += sampleGeometricTries(p);
+    const mean = sum / RUNS;
+    const expected = 1 / p;
+    const dev = Math.abs(mean - expected) / expected;
+    if (dev > 0.02) ok = false;
+    console.log(
+      `Geometric(p=${p.toExponential(3)}) 평균 ${Math.round(mean).toLocaleString()} / 기대 ${Math.round(expected).toLocaleString()} · 편차 ${(dev * 100).toFixed(2)}% → ${dev <= 0.02 ? 'OK' : 'FAIL'}`
+    );
+  }
+  if (!ok) allOk = false;
 }
 
 // ── 최대 달성 총점 ──

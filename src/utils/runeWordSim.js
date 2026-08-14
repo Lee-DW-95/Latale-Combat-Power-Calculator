@@ -32,9 +32,6 @@ import {
   displayDesc,
 } from '../data/runeWordData.js';
 
-// 목표 도달 시뮬 1회 실행의 안전 상한 (p 가 극히 작을 때 무한루프 방지)
-const SAMPLE_MAX_TRIES = 2_000_000;
-
 const N = RUNES.length;      // 30
 const K = RUNE_SLOTS;        // 8
 const REST = RUNE_SLOTS - 1; // 왕룬 제외 나머지 7칸
@@ -428,19 +425,26 @@ export function computeTargetStats(t) {
 }
 
 // ============================================================
-// 목표 도달까지 실제로 굴려보기 (1회 실행 캡처)
+// 목표 도달 1회 실행 — "몇 회차에 성공했고, 그때 뜬 룬워드는 무엇인가"
+//
+// 실제로 굴려서 기다리지 않고 두 조각을 각각 정확히 추출한다.
+//   · 시도 횟수  : 기하분포 Geometric(p) — 매 시도가 독립이므로 이게 정확한 분포다
+//   · 당첨 조합  : 조건을 만족하는 경우 중 균등 추출
+// 실제로 굴렸을 때와 분포가 완전히 같으면서, 평균 수천만 회짜리 목표도 즉시 나온다.
+// (아이템 각성 시뮬의 sampleGeometricTries 와 같은 방식)
 // ============================================================
-export function simulateUntilTarget(t, maxTries = SAMPLE_MAX_TRIES) {
-  let tries = 0;
-  while (tries < maxTries) {
-    const idx = drawIndexes();
-    tries++;
-    const result = buildResult(idx);
-    if (matchesTarget(result, t)) {
-      return { success: true, tries, result, ely: tries * ELY_PER_ROLL };
-    }
-  }
-  return { success: false, tries: maxTries, result: null, ely: maxTries * ELY_PER_ROLL };
+export function sampleGeometricTries(p) {
+  if (!(p > 0)) return Infinity;
+  if (p >= 1) return 1;
+  const u = Math.random() || Number.MIN_VALUE;
+  return Math.max(1, Math.ceil(Math.log(u) / Math.log(1 - p)));
 }
 
-export { ELY_PER_ROLL, MAX_TOTAL, SAMPLE_MAX_TRIES };
+export function sampleTargetOutcome(t, p) {
+  const result = sampleSatisfyingResult(t);
+  if (!result) return null;
+  const tries = sampleGeometricTries(p);
+  return { tries, ely: tries * ELY_PER_ROLL, result };
+}
+
+export { ELY_PER_ROLL, MAX_TOTAL };
