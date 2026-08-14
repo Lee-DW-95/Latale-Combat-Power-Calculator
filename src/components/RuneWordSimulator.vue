@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   RUNES,
   RUNE_SLOTS,
@@ -326,7 +326,7 @@ const targetSummary = computed(() => {
           sub: o.carriers
             .map((c) => (c.extras.length ? `${c.name} (${c.extras.join(', ')} 동반)` : c.name))
             .join(' 또는 '),
-          tail: `${o.maxScore}점`,
+          tail: o.minScore === o.maxScore ? `${o.maxScore}점` : `${o.minScore}~${o.maxScore}점`,
         };
       }),
     });
@@ -433,6 +433,13 @@ async function loopUntilGoal() {
     simLoopMsg.value = `이론 최대 총점은 ${MAX_TOTAL}점입니다.`;
     return;
   }
+  // 음수를 넣으면 첫 굴림에 무조건 "달성" 이 돼버린다 — 0 으로 잡는다
+  if (goal < 0) {
+    simGoalScore.value = 0;
+    simLoopOk.value = false;
+    simLoopMsg.value = '0 이상만 입력할 수 있습니다.';
+    return;
+  }
 
   simLooping.value = true;
   simLoopOk.value = false;
@@ -480,9 +487,21 @@ function stopLoop() {
 
 const simEly = computed(() => simCount.value * ELY_PER_ROLL);
 
+// 입력한 목표 총점이 얼마나 어려운지 — 목표 시뮬과 같은 조합론 DP 로 정확히 계산해 미리 보여준다
+const simGoalStats = computed(() => {
+  const g = Number(simGoalScore.value);
+  if (!simGoalScore.value || !Number.isFinite(g) || g <= 0 || g > MAX_TOTAL) return null;
+  return computeTargetStats(normalizeTarget({ minTotal: g }));
+});
+
 function showHistory(item) {
   simCurrent.value = item;
 }
+
+// 탭을 벗어나면 반복을 멈춘다 (보이지 않는 곳에서 계속 도는 것 방지)
+watch(subTab, (tab) => {
+  if (tab !== 'sim' && simLooping.value) stopFlag.value = true;
+});
 
 // ============================================================
 // [4] 옵션표 — 단일 룬 / 복합 룬 분리, 왕룬 기준 토글
@@ -837,7 +856,7 @@ function gradeRange(g) {
                     :disabled="isUsedInOtherRow(o.key, i)"
                   >
                     {{ o.text }} — {{ o.runeIds.map((id) => RUNES[id].name).join(' 또는 ') }}
-                    ({{ o.runeIds.length > 1 && o.maxScore > 0 ? '최대 ' : '' }}{{ o.maxScore }}점){{ isUsedInOtherRow(o.key, i) ? ' · 선택됨' : '' }}
+                    ({{ o.minScore === o.maxScore ? o.maxScore : o.minScore + '~' + o.maxScore }}점){{ isUsedInOtherRow(o.key, i) ? ' · 선택됨' : '' }}
                   </option>
                 </optgroup>
               </select>
@@ -1261,6 +1280,16 @@ function gradeRange(g) {
               class="w-32 rounded-lg px-3 py-2 text-sm tabular-nums bg-white dark:bg-stone-900 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </label>
+          <p
+            v-if="simGoalStats"
+            class="text-xs text-stone-500 dark:text-stone-400 pb-2.5 tabular-nums"
+          >
+            1회 확률 <strong class="text-cyan-600 dark:text-cyan-400">{{ pctSmart(simGoalStats.p) }}</strong>
+            · 평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmtInf(Math.round(simGoalStats.mean)) }}회</strong>
+            <span :title="Number.isFinite(simGoalStats.meanEly) ? fmt(Math.round(simGoalStats.meanEly)) + ' Ely' : ''">
+              (<span class="text-amber-600 dark:text-amber-400">{{ fmtEly(simGoalStats.meanEly) }} Ely</span>)
+            </span>
+          </p>
           <button
             type="button"
             @click="loopUntilGoal"

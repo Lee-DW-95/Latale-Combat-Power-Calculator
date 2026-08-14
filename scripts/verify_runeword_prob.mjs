@@ -19,12 +19,16 @@ import {
   rollRuneWord,
   maxAchievableTotal,
 } from '../src/utils/runeWordSim.js';
-import { MAX_TOTAL, RUNE_OPTIONS } from '../src/data/runeWordData.js';
+import { MAX_TOTAL, RUNES, RUNE_OPTIONS } from '../src/data/runeWordData.js';
 
-// 옵션 key 는 "담당 룬 집합" 기준이므로, 효과 문구로 찾아 쓴다
-function optKey(effectText) {
-  const o = RUNE_OPTIONS.find((x) => x.effects.includes(effectText));
-  if (!o) throw new Error(`옵션을 찾을 수 없음: ${effectText}`);
+// 옵션 key 는 "담당 룬 집합" 기준이라 효과 문구로 찾아 쓴다.
+//   effects 를 정확히 이 목록으로 갖는 항목을 고른다 (단일 효과 / 조합 구분).
+function optKey(...effectTexts) {
+  const o = RUNE_OPTIONS.find(
+    (x) =>
+      x.effects.length === effectTexts.length && effectTexts.every((e) => x.effects.includes(e))
+  );
+  if (!o) throw new Error(`옵션을 찾을 수 없음: ${effectTexts.join(' + ')}`);
   return o.key;
 }
 
@@ -55,14 +59,18 @@ function monteCarlo(target, runs) {
 const MC_RUNS = 2_000_000;
 
 // 룬 id 참조
-const 파멸 = 10, 통찰 = 19, 헌신파괴 = 25, 악몽죽음 = 28, 파멸폭주 = 29;
+const 헌신 = 6, 파괴 = 8, 파멸 = 10, 통찰 = 19, 헌신파괴 = 25, 악몽죽음 = 28, 파멸폭주 = 29;
 
 // 옵션 키
 const OPT_CRIT_DMG = optKey('크리티컬 대미지 +50%');   // 파멸, 파멸 & 폭주
-const OPT_CRIT_RATE = optKey('크리티컬 확률 +1%');      // 파멸 & 폭주
-const OPT_PEN = optKey('물리/마법 관통력 +10%');        // 통찰 (쿨감과 병합됨)
+// 크확은 파멸 & 폭주 단독이라 크댐까지 보장 효과로 묶인다
+const OPT_CRIT_BOTH = optKey('크리티컬 대미지 +50%', '크리티컬 확률 +1%');
+const OPT_PEN = optKey('물리/마법 관통력 +10%', '타격 시 0.1% 확률로 쿨타임 1초 감소'); // 통찰
 const OPT_ATK_PCT = optKey('공격력/속성력 +5%');        // 격노, 열광 & 격노
+const OPT_MIN_DMG = optKey('최소 대미지 +50%');         // 헌신, 헌신 & 파괴
 const OPT_MAX_DMG = optKey('최대 대미지 +50%');         // 파괴, 헌신 & 파괴
+// 한 룬(헌신 & 파괴)이 최소·최대를 같이 주는 조합 목표
+const OPT_MINMAX_DMG = optKey('최소 대미지 +50%', '최대 대미지 +50%');
 
 const RUNE_CASES = [
   {
@@ -131,10 +139,21 @@ const OPTION_CASES = [
     analytic: (comb(N - 1, K - 1) - comb(N - 3, K - 1)) / comb(N, K),
   },
   {
-    label: '★겹침: 크댐 + 크확 (크확⊂크댐 → 크확과 동일)',
-    raw: { selectMode: 'option', optionKeys: [OPT_CRIT_DMG, OPT_CRIT_RATE], mode: 'all', kingId: null, minTotal: 0 },
-    // 크확은 파멸&폭주뿐이라, 그게 뽑히면 크댐도 자동 충족 → P = 파멸&폭주 등장 확률
+    label: '★겹침: 크댐 + 크댐&크확 (후자⊂전자 → 후자와 동일)',
+    raw: { selectMode: 'option', optionKeys: [OPT_CRIT_DMG, OPT_CRIT_BOTH], mode: 'all', kingId: null, minTotal: 0 },
+    // 크댐&크확은 파멸&폭주뿐이라, 그게 뽑히면 크댐도 자동 충족 → P = 파멸&폭주 등장 확률
     analytic: K / N,
+  },
+  {
+    label: '★조합: 최소 & 최대 동시 (헌신 & 파괴 단독)',
+    raw: { selectMode: 'option', optionKeys: [OPT_MINMAX_DMG], mode: 'all', kingId: null, minTotal: 0 },
+    analytic: K / N,
+  },
+  {
+    label: '★대조: 최소 / 최대 따로 (헌신+파괴 분리도 인정)',
+    raw: { selectMode: 'option', optionKeys: [OPT_MIN_DMG, OPT_MAX_DMG], mode: 'all', kingId: null, minTotal: 0 },
+    // 포함배제: 1 - P(헌신·헌신&파괴 없음) - P(파괴·헌신&파괴 없음) + P(셋 다 없음)
+    analytic: 1 - 2 * (comb(N - 2, K) / comb(N, K)) + comb(N - 3, K) / comb(N, K),
   },
   {
     label: '옵션: 크댐/공속%/최대뎀 중 2개 이상',
@@ -220,21 +239,35 @@ const noDup = [...dupSets.values()].every((n) => n === 1);
 if (!noDup) allOk = false;
 console.log(`옵션 ${RUNE_OPTIONS.length}종 · 담당 룬 집합 중복 없음 → ${noDup ? 'OK' : 'FAIL'}`);
 
+// 복합 효과 룬은 전부 "그 룬 단독" 을 목표로 지정할 수 있어야 한다
+//   (헌신 & 파괴처럼 두 효과가 모두 단일 룬과 겹치면 예전엔 지정할 방법이 없었다)
+const carrierSets = new Set(RUNE_OPTIONS.map((o) => o.runeIds.join(',')));
+const comboRunes = RUNES.filter((r) => r.desc.split(', ').length > 1);
+const missing = comboRunes.filter((r) => !carrierSets.has(String(r.id)));
+if (missing.length) allOk = false;
+console.log(
+  `복합 효과 룬 ${comboRunes.length}종 단독 지정 가능 → ` +
+    (missing.length ? `FAIL (불가: ${missing.map((r) => r.name).join(', ')})` : 'OK')
+);
+
 const idxChecks = [
-  ['크리티컬 대미지 +50%', [파멸, 파멸폭주], 1],
-  ['크리티컬 확률 +1%', [파멸폭주], 1],
-  ['물리/마법 관통력 +10%', [통찰], 2], // 쿨감과 병합 → 효과 2개
-  ['보스 몬스터 대미지 +10000', [악몽죽음], 2], // 보몬지배력과 병합
+  [['크리티컬 대미지 +50%'], [파멸, 파멸폭주]],
+  [['크리티컬 대미지 +50%', '크리티컬 확률 +1%'], [파멸폭주]],
+  [['물리/마법 관통력 +10%', '타격 시 0.1% 확률로 쿨타임 1초 감소'], [통찰]],
+  [['최소 대미지 +50%'], [헌신, 헌신파괴]],
+  [['최대 대미지 +50%'], [파괴, 헌신파괴]],
+  [['최소 대미지 +50%', '최대 대미지 +50%'], [헌신파괴]],
 ];
-for (const [effect, expectRunes, expectEffects] of idxChecks) {
-  const o = RUNE_OPTIONS.find((x) => x.effects.includes(effect));
+for (const [effects, expectRunes] of idxChecks) {
+  const o = RUNE_OPTIONS.find(
+    (x) => x.effects.length === effects.length && effects.every((e) => x.effects.includes(e))
+  );
   const runes = [...(o?.runeIds ?? [])];
-  const sameRunes = runes.length === expectRunes.length && runes.every((v, i) => v === expectRunes[i]);
-  const sameEffects = (o?.effects.length ?? 0) === expectEffects;
-  if (!sameRunes || !sameEffects) allOk = false;
+  const same = runes.length === expectRunes.length && runes.every((v, i) => v === expectRunes[i]);
+  if (!same) allOk = false;
   console.log(
-    `${effect.padEnd(24)} → 룬 [${runes}] 효과 ${o?.effects.length}개 ` +
-      `${sameRunes && sameEffects ? 'OK' : `FAIL (기대 룬 [${expectRunes}] 효과 ${expectEffects}개)`}`
+    `${effects.join(' + ').padEnd(46)} → 룬 [${runes}] ` +
+      `${same ? 'OK' : `FAIL (기대 [${expectRunes}])`}`
   );
 }
 

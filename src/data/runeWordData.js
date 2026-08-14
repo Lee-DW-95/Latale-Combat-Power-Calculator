@@ -159,56 +159,70 @@ function optionsOf(rune) {
 }
 
 function buildOptionIndex() {
-  // 1) 개별 효과 → 그 효과를 가진 룬 목록
-  const byEffect = new Map();
+  // 1) 고를 수 있는 "효과 묶음" 후보를 전부 열거한다.
+  //    · 단일 효과            → 최소 대미지 +50%   (헌신 또는 헌신 & 파괴)
+  //    · 룬이 묶어서 주는 조합 → 최소 +50% & 최대 +50% (헌신 & 파괴 단독)
+  //    단일 효과만 열거하면 헌신 & 파괴처럼 두 효과가 모두 단일 룬과 겹치는 복합 룬을
+  //    아예 지정할 수 없다. 조합까지 넣어야 "최소/최대가 같이 붙은 옵션" 을 고를 수 있다.
+  const candidates = [];
   for (const rune of RUNES) {
-    for (const text of optionsOf(rune)) {
-      if (!byEffect.has(text)) byEffect.set(text, []);
-      byEffect.get(text).push(rune.id);
-    }
+    const effects = optionsOf(rune);
+    for (const e of effects) candidates.push([e]);
+    if (effects.length > 1) candidates.push(effects);
   }
 
-  // 2) 담당 룬 집합이 완전히 같은 효과들은 "목표" 로서 구별되지 않으므로 하나로 합친다.
-  //    예) 통찰의 "물리/마법 관통력 +10%" 와 "쿨타임 1초 감소" 는 둘 다 통찰로만 얻는다
-  //        → 어느 쪽을 골라도 필요한 룬도, 확률도, 결과도 완전히 동일하다.
-  //    현재 데이터 기준 4쌍(통찰 / 악몽&죽음 / 야성&지배 / 서약)이 합쳐져 28종 → 24종.
-  //    반면 크댐(파멸|파멸&폭주) 과 크확(파멸&폭주) 은 담당 룬이 달라 그대로 분리된다.
+  // 2) 각 후보 묶음을 "그 효과를 전부 가진 룬 집합" = 담당 룬으로 환원한다.
+  //    담당 룬 집합이 같으면 목표로서 구별되지 않으므로 하나로 합친다.
+  //    예) 통찰의 관통력 / 쿨감은 둘 다 통찰로만 얻으므로 어느 쪽을 골라도 결과가 같다.
+  //    반면 크댐(파멸 | 파멸 & 폭주) 과 크확(파멸 & 폭주) 은 담당 룬이 달라 분리 유지된다.
   const byCarrierSet = new Map();
-  for (const [text, runeIds] of byEffect) {
-    const key = runeIds.join('-');
-    if (!byCarrierSet.has(key)) byCarrierSet.set(key, { key, runeIds, effects: [] });
-    byCarrierSet.get(key).effects.push(text);
+  for (const wanted of candidates) {
+    const runeIds = RUNES.filter((r) => {
+      const effs = optionsOf(r);
+      return wanted.every((w) => effs.includes(w));
+    }).map((r) => r.id);
+    if (runeIds.length === 0) continue;
+    byCarrierSet.set(runeIds.join('-'), runeIds);
   }
 
-  return [...byCarrierSet.values()]
-    .map(({ key, runeIds, effects }) => {
-      const carriers = runeIds.map((id) => {
+  return [...byCarrierSet.entries()]
+    .map(([key, runeIds]) => {
+      const carrierEffects = runeIds.map((id) => optionsOf(RUNES[id]));
+      // 이 목표로 "보장되는" 효과 = 담당 룬들의 효과 교집합.
+      //   담당이 헌신 & 파괴 단독이면 최소·최대 둘 다 보장,
+      //   담당이 헌신 | 헌신 & 파괴 면 최소만 보장(헌신만 떴을 수 있으므로).
+      const effects = carrierEffects[0].filter((e) => carrierEffects.every((list) => list.includes(e)));
+
+      const carriers = runeIds.map((id, idx) => {
         const r = RUNES[id];
-        const all = optionsOf(r);
+        const all = carrierEffects[idx];
         return Object.freeze({
           id,
           name: r.name,
           score: r.score,
           desc: r.desc,
           effects: Object.freeze(all),
-          // 이 목표가 지정한 효과 말고, 이 룬이 덤으로 같이 주는 나머지 효과
+          // 보장 효과 말고, 이 룬으로 충족될 때 덤으로 같이 오는 나머지 효과
           extras: Object.freeze(all.filter((e) => !effects.includes(e))),
         });
       });
+
       return {
         key,
         text: effects.join(', '),
         effects: Object.freeze(effects),
         runeIds: Object.freeze(runeIds),
         carriers: Object.freeze(carriers),
-        // 어느 룬으로 얻든 다른 옵션이 같이 딸려오는가
+        // 어느 룬으로 충족되느냐에 따라 다른 옵션이 같이 딸려올 수 있는가
         hasExtras: carriers.some((c) => c.extras.length > 0),
-        // 이 옵션을 가진 룬 중 최고 점수 — 목록 정렬 및 전투/기타 판정에 쓴다
+        // 담당 룬 중 최저/최고 점수 — 목록 정렬, 전투/기타 판정, 점수 범위 표기에 쓴다
+        //   최소 대미지 +50% 는 헌신(25점) 으로 충족될 수도, 헌신 & 파괴(55점) 로 충족될 수도 있다
+        minScore: Math.min(...runeIds.map((id) => RUNES[id].score)),
         maxScore: Math.max(...runeIds.map((id) => RUNES[id].score)),
       };
     })
     .map((o) => Object.freeze({ ...o, isCombat: o.maxScore > 0 }))
-    .sort((a, b) => b.maxScore - a.maxScore || a.runeIds[0] - b.runeIds[0]);
+    .sort((a, b) => b.maxScore - a.maxScore || a.runeIds[0] - b.runeIds[0] || a.runeIds.length - b.runeIds.length);
 }
 
 export const RUNE_OPTIONS = Object.freeze(buildOptionIndex());
