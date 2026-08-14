@@ -130,118 +130,27 @@ export const MAX_TOTAL = (() => {
   return max;
 })();
 
-// ============================================================
-// 목표 시뮬 UI 용 — select 에 뿌릴 룬 목록 (점수 높은 순)
-// ============================================================
-export const RUNES_BY_SCORE = Object.freeze(
-  [...RUNES].sort((a, b) => b.score - a.score || a.id - b.id)
-);
 
 // ============================================================
-// 옵션 인덱스 — "룬 이름" 이 아니라 "옵션" 으로 목표를 잡기 위한 역방향 색인
+// 목표 시뮬 select 용 — 룬 하나 = 옵션 하나
 //
-// 같은 옵션이 여러 룬에 걸쳐 있다. 예) 크리티컬 대미지 +50% → 파멸 / 파멸 & 폭주
-// → "크댐이 붙었으면 좋겠다" 는 목표는 특정 룬 하나가 아니라
-//   "이 옵션을 가진 룬 중 아무거나 1개 이상" (OR 조건) 으로 풀어야 한다.
+// 게임에서 룬워드 한 칸에는 룬 하나가 박히고, 그 룬의 옵션 문구가 곧 그 칸의 옵션이다.
+//   헌신(최소 +50%) / 파괴(최대 +50%) / 헌신 & 파괴(최소 +50%, 최대 +50%) 는
+//   서로 완전히 다른 옵션이며, "최소 대미지를 가진 룬" 같은 묶음이 아니다.
+// → 옵션 목록은 룬 30종과 1:1 이다. "A 또는 B" 식의 묶음 항목은 두지 않는다.
+//   여러 룬 중 아무거나를 원하면 그 룬들을 고르고 "N개 이상" 조건을 쓰면 된다.
+//   (예: 파멸 + 파멸 & 폭주 를 고르고 1개 이상 → 크리티컬 대미지가 붙기만 하면 성공)
 //
-// desc 를 ", " 로 분해하면 개별 옵션이 그대로 떨어진다.
-//   "올스탯 +1500, 올스탯 +5%" → ["올스탯 +1500", "올스탯 +5%"]
-// 현재 데이터 기준 28종, 그 중 14종이 2개 룬에 걸쳐 있다.
-//
-// ⚠ 분해하면 "한 룬이 두 옵션을 묶어서 준다" 는 사실이 사라진다.
-//   예) 크리티컬 확률 +1% 은 단독으로 존재하지 않고 파멸 & 폭주 를 통해서만 오는데,
-//       그 룬을 얻으면 크리티컬 대미지 +50% 도 자동으로 같이 딸려온다.
-//   → carriers 에 룬별 "전체 효과 목록" 을 남겨서 UI 가 이걸 보여줄 수 있게 한다.
-//   (확률 계산은 애초에 룬 단위라 영향 없음 — 표시용 정보다)
+// 단일 룬 / 복합 룬으로 나누고 각 그룹 안에서는 점수 높은 순으로 정렬한다.
 // ============================================================
-function optionsOf(rune) {
-  return rune.desc.split(', ');
-}
+const FIRST_COMBO_ID = 20; // 20번부터 복합 룬 (A & B)
 
-function buildOptionIndex() {
-  // 1) 고를 수 있는 "효과 묶음" 후보를 전부 열거한다.
-  //    · 단일 효과            → 최소 대미지 +50%   (헌신 또는 헌신 & 파괴)
-  //    · 룬이 묶어서 주는 조합 → 최소 +50% & 최대 +50% (헌신 & 파괴 단독)
-  //    단일 효과만 열거하면 헌신 & 파괴처럼 두 효과가 모두 단일 룬과 겹치는 복합 룬을
-  //    아예 지정할 수 없다. 조합까지 넣어야 "최소/최대가 같이 붙은 옵션" 을 고를 수 있다.
-  const candidates = [];
-  for (const rune of RUNES) {
-    const effects = optionsOf(rune);
-    for (const e of effects) candidates.push([e]);
-    if (effects.length > 1) candidates.push(effects);
-  }
+export const SINGLE_RUNES = Object.freeze(RUNES.filter((r) => r.id < FIRST_COMBO_ID));
+export const COMBO_RUNES = Object.freeze(RUNES.filter((r) => r.id >= FIRST_COMBO_ID));
 
-  // 2) 각 후보 묶음을 "그 효과를 전부 가진 룬 집합" = 담당 룬으로 환원한다.
-  //    담당 룬 집합이 같으면 목표로서 구별되지 않으므로 하나로 합친다.
-  //    예) 통찰의 관통력 / 쿨감은 둘 다 통찰로만 얻으므로 어느 쪽을 골라도 결과가 같다.
-  //    반면 크댐(파멸 | 파멸 & 폭주) 과 크확(파멸 & 폭주) 은 담당 룬이 달라 분리 유지된다.
-  const byCarrierSet = new Map();
-  for (const wanted of candidates) {
-    const runeIds = RUNES.filter((r) => {
-      const effs = optionsOf(r);
-      return wanted.every((w) => effs.includes(w));
-    }).map((r) => r.id);
-    if (runeIds.length === 0) continue;
-    byCarrierSet.set(runeIds.join('-'), runeIds);
-  }
+const byScoreDesc = (a, b) => b.score - a.score || a.id - b.id;
 
-  return [...byCarrierSet.entries()]
-    .map(([key, runeIds]) => {
-      const carrierEffects = runeIds.map((id) => optionsOf(RUNES[id]));
-      // 이 목표로 "보장되는" 효과 = 담당 룬들의 효과 교집합.
-      //   담당이 헌신 & 파괴 단독이면 최소·최대 둘 다 보장,
-      //   담당이 헌신 | 헌신 & 파괴 면 최소만 보장(헌신만 떴을 수 있으므로).
-      const effects = carrierEffects[0].filter((e) => carrierEffects.every((list) => list.includes(e)));
-
-      const carriers = runeIds.map((id, idx) => {
-        const r = RUNES[id];
-        const all = carrierEffects[idx];
-        return Object.freeze({
-          id,
-          name: r.name,
-          score: r.score,
-          desc: r.desc,
-          effects: Object.freeze(all),
-          // 보장 효과 말고, 이 룬으로 충족될 때 덤으로 같이 오는 나머지 효과
-          extras: Object.freeze(all.filter((e) => !effects.includes(e))),
-        });
-      });
-
-      return {
-        key,
-        text: effects.join(', '),
-        effects: Object.freeze(effects),
-        runeIds: Object.freeze(runeIds),
-        carriers: Object.freeze(carriers),
-        // 어느 룬으로 충족되느냐에 따라 다른 옵션이 같이 딸려올 수 있는가
-        hasExtras: carriers.some((c) => c.extras.length > 0),
-        // 담당 룬 중 최저/최고 점수 — 목록 정렬, 전투/기타 판정, 점수 범위 표기에 쓴다
-        //   최소 대미지 +50% 는 헌신(25점) 으로 충족될 수도, 헌신 & 파괴(55점) 로 충족될 수도 있다
-        minScore: Math.min(...runeIds.map((id) => RUNES[id].score)),
-        maxScore: Math.max(...runeIds.map((id) => RUNES[id].score)),
-      };
-    })
-    .map((o) => Object.freeze({ ...o, isCombat: o.maxScore > 0 }))
-    .sort((a, b) => b.maxScore - a.maxScore || a.runeIds[0] - b.runeIds[0] || a.runeIds.length - b.runeIds.length);
-}
-
-export const RUNE_OPTIONS = Object.freeze(buildOptionIndex());
-
-export const RUNE_OPTION_BY_KEY = Object.freeze(
-  Object.fromEntries(RUNE_OPTIONS.map((o) => [o.key, o]))
-);
-
-// UI 표시용 묶음 — 점수가 붙는 전투 옵션과 그렇지 않은 부가 옵션을 분리
-export const RUNE_OPTION_GROUPS = Object.freeze([
-  {
-    key: 'combat',
-    label: '전투 옵션',
-    options: Object.freeze(RUNE_OPTIONS.filter((o) => o.isCombat)),
-  },
-  {
-    key: 'etc',
-    label: '기타 옵션',
-    note: '점수에 반영되지 않는 편의 옵션',
-    options: Object.freeze(RUNE_OPTIONS.filter((o) => !o.isCombat)),
-  },
+export const RUNE_SELECT_GROUPS = Object.freeze([
+  { key: 'single', label: '단일 룬', runes: Object.freeze([...SINGLE_RUNES].sort(byScoreDesc)) },
+  { key: 'combo', label: '복합 룬', runes: Object.freeze([...COMBO_RUNES].sort(byScoreDesc)) },
 ]);

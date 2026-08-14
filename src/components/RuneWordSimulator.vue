@@ -6,9 +6,7 @@ import {
   ELY_PER_ROLL,
   MAX_TOTAL,
   GRADES,
-  RUNE_OPTIONS,
-  RUNE_OPTION_GROUPS,
-  RUNE_OPTION_BY_KEY,
+  RUNE_SELECT_GROUPS,
   displayDesc,
   isMidRune,
   isMajorRune,
@@ -22,7 +20,6 @@ import {
   simulateUntilTarget,
   maxAchievableTotal,
   contributingRuneIds,
-  MAX_OPTION_TARGETS,
 } from '../utils/runeWordSim.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
 
@@ -149,20 +146,13 @@ function resetManual() {
 // ============================================================
 // [2] 목표 옵션 시뮬
 // ============================================================
-// 목표를 고르는 방식 — 옵션 기준이 기본.
-//   'option' : 크리티컬 대미지 / 관통력 처럼 "붙었으면 하는 옵션" 으로 고른다.
-//              같은 옵션이 여러 룬에 걸쳐 있어서(크댐 = 파멸 | 파멸&폭주) 룬 이름만으론 지정할 수 없다.
-//   'rune'   : 특정 룬 자체를 지정한다.
-const tSelectMode = ref('option');
+// 룬 하나 = 옵션 하나. 헌신(최소 +50%) / 파괴(최대 +50%) / 헌신 & 파괴(둘 다) 는
+// 서로 다른 옵션이므로 목표도 룬 단위로 고른다.
+//   여러 룬 중 아무거나를 원하면 그 룬들을 고르고 "N개 이상" 조건을 쓰면 된다.
 
-// 목표는 각성석/메모리얼 시뮬과 동일하게 "행 추가" 방식으로 고른다.
-//   각 행 = select 하나. '' 이면 그 행은 조건 없음.
-const tOptionRows = ref([{ key: RUNE_OPTIONS[0].key }]);
+// 각성석/메모리얼 시뮬과 동일한 "행 추가" 방식. 각 행 = select 하나 ('' 이면 조건 없음).
 const tRuneRows = ref([{ id: '' }]);
 
-const tOptionKeys = computed(() => [
-  ...new Set(tOptionRows.value.map((r) => r.key).filter(Boolean)),
-]);
 const tRuneIds = computed(() => [
   ...new Set(tRuneRows.value.map((r) => r.id).filter((v) => v !== '' && v != null).map(Number)),
 ]);
@@ -178,9 +168,7 @@ const tRunTarget = ref(null);
 
 const target = computed(() =>
   normalizeTarget({
-    selectMode: tSelectMode.value,
     runeIds: tRuneIds.value,
-    optionKeys: tOptionKeys.value,
     mode: tMode.value,
     atLeast: tAtLeast.value,
     kingId: tKingId.value === '' ? null : Number(tKingId.value),
@@ -188,55 +176,28 @@ const target = computed(() =>
   })
 );
 
-// 현재 모드에서 선택된 목표 개수
-const tSelectedCount = computed(() =>
-  tSelectMode.value === 'option' ? tOptionKeys.value.length : tRuneIds.value.length
-);
+const tSelectedCount = computed(() => tRuneIds.value.length);
 
-// 행에 선택된 옵션 객체 (없으면 null)
-function rowOption(row) {
-  return row?.key ? RUNE_OPTION_BY_KEY[row.key] ?? null : null;
-}
+const targetRows = computed(() => tRuneRows.value);
+const maxTargetRows = RUNE_SLOTS;
 
-// 모드별 목표 행 배열 / 최대 행 수
-const targetRows = computed(() => (tSelectMode.value === 'option' ? tOptionRows.value : tRuneRows.value));
-const maxTargetRows = computed(() => (tSelectMode.value === 'option' ? MAX_OPTION_TARGETS : RUNE_SLOTS));
-
-function setSelectMode(m) {
-  if (tSelectMode.value === m) return;
-  tSelectMode.value = m;
-  tMode.value = 'all';
-  tAtLeast.value = 1;
-  tStats.value = null;
-  tSample.value = null;
-}
-
-// 다른 행이 이미 쓰고 있는 값 — select 에서 disable 처리 (각성석 시뮬과 동일)
+// 다른 행이 이미 쓰고 있는 룬 — select 에서 disable 처리 (각성석 시뮬과 동일)
 function isUsedInOtherRow(value, rowIdx) {
   if (value === '') return false;
-  return targetRows.value.some((r, i) => {
-    if (i === rowIdx) return false;
-    return String(tSelectMode.value === 'option' ? r.key : r.id) === String(value);
-  });
+  return tRuneRows.value.some((r, i) => i !== rowIdx && String(r.id) === String(value));
 }
 
 function addTargetRow() {
-  const rows = targetRows.value;
-  if (rows.length >= maxTargetRows.value) return;
-  if (tSelectMode.value === 'option') {
-    const used = new Set(rows.map((r) => r.key));
-    const next = RUNE_OPTIONS.find((o) => !used.has(o.key))?.key ?? '';
-    rows.push({ key: next });
-  } else {
-    const used = new Set(rows.map((r) => String(r.id)));
-    const next = RUNES.find((r) => !used.has(String(r.id)))?.id ?? '';
-    rows.push({ id: String(next) });
-  }
+  const rows = tRuneRows.value;
+  if (rows.length >= maxTargetRows) return;
+  const used = new Set(rows.map((r) => String(r.id)));
+  const next = RUNES.find((r) => !used.has(String(r.id)))?.id ?? '';
+  rows.push({ id: String(next) });
   onTargetChanged();
 }
 
 function removeTargetRow(idx) {
-  const rows = targetRows.value;
+  const rows = tRuneRows.value;
   if (rows.length <= 1) return;
   rows.splice(idx, 1);
   onTargetChanged();
@@ -278,7 +239,6 @@ const canRunTarget = computed(
 );
 
 function resetTarget() {
-  tOptionRows.value = [{ key: RUNE_OPTIONS[0].key }];
   tRuneRows.value = [{ id: '' }];
   tMode.value = 'all';
   tAtLeast.value = 1;
@@ -304,42 +264,22 @@ async function runTargetSim() {
   }
 }
 
-// 목표 요약 — 이름만 나열하면 무슨 옵션인지 알 수 없으므로 항목마다 근거를 같이 낸다
-//   items[].sub 는 "이 옵션을 가진 룬" 처럼 그 목표가 어떤 룬으로 충족되는지 설명한다
+// 목표 요약 — 옵션 문구를 앞세우고 어떤 룬인지 뒤에 붙인다
 const targetSummary = computed(() => {
   const t = tRunTarget.value;
   if (!t) return [];
   const lines = [];
 
-  if (t.selectMode === 'option' && t.optionKeys.length > 0) {
+  if (t.runeIds.length > 0) {
     lines.push({
       head:
         t.mode === 'all'
-          ? `아래 ${t.optionKeys.length}개 옵션이 전부 등장`
+          ? `아래 ${t.runeIds.length}개 옵션이 전부 등장`
           : `아래 옵션 중 ${t.atLeast}개 이상 등장`,
-      items: t.optionKeys.map((key) => {
-        const o = RUNE_OPTION_BY_KEY[key];
-        return {
-          id: key,
-          main: o.text,
-          // 어떤 룬으로 충족되는지 + 그 룬이 같이 주는 옵션까지 그대로 적는다
-          sub: o.carriers
-            .map((c) => (c.extras.length ? `${c.name} (${c.extras.join(', ')} 동반)` : c.name))
-            .join(' 또는 '),
-          tail: o.minScore === o.maxScore ? `${o.maxScore}점` : `${o.minScore}~${o.maxScore}점`,
-        };
-      }),
-    });
-  } else if (t.runeIds.length > 0) {
-    lines.push({
-      head:
-        t.mode === 'all'
-          ? `아래 ${t.runeIds.length}개 룬이 전부 등장`
-          : `아래 룬 중 ${t.atLeast}개 이상 등장`,
       items: t.runeIds.map((id) => ({
         id,
-        main: RUNES[id].name,
-        sub: RUNES[id].desc,
+        main: RUNES[id].desc,
+        sub: RUNES[id].name,
         tail: `${RUNES[id].score}점`,
       })),
     });
@@ -519,13 +459,6 @@ function toOptionRow(r) {
   };
 }
 
-// 선택한 옵션 중 "다른 옵션이 같이 딸려오는" 게 하나라도 있으면 범례를 낸다
-const anyRowHasExtras = computed(
-  () =>
-    tSelectMode.value === 'option' &&
-    tOptionRows.value.some((r) => rowOption(r)?.hasExtras)
-);
-
 const optionGroups = computed(() => [
   { key: 'single', label: '단일 룬', rows: RUNES.filter((r) => r.id < FIRST_COMBO_ID).map(toOptionRow) },
   { key: 'combo', label: '복합 룬', rows: RUNES.filter((r) => r.id >= FIRST_COMBO_ID).map(toOptionRow) },
@@ -549,7 +482,7 @@ function gradeRange(g) {
         <span>스크롤 1개 = {{ fmt(ELY_PER_ROLL) }} Ely</span>
         <span>등급 컷 240 / 380 / 470</span>
         <span>이론 최대 {{ MAX_TOTAL }}점</span>
-        <span>옵션 {{ RUNE_OPTIONS.length }}종</span>
+        <span>옵션 {{ RUNES.length }}종</span>
         <span>점수 체계 latale.info 동일</span>
       </div>
     </div>
@@ -773,65 +706,39 @@ function gradeRange(g) {
           </button>
         </div>
 
-        <!-- 선택 방식 -->
-        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div class="inline-flex rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden">
-            <button
-              type="button"
-              @click="setSelectMode('option')"
-              :class="[
-                'px-3.5 py-2 text-xs font-medium transition',
-                tSelectMode === 'option'
-                  ? 'bg-cyan-600 text-white'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
-              ]"
-            >
-              옵션으로 선택
-            </button>
-            <button
-              type="button"
-              @click="setSelectMode('rune')"
-              :class="[
-                'px-3.5 py-2 text-xs font-medium transition border-l border-stone-200 dark:border-stone-700',
-                tSelectMode === 'rune'
-                  ? 'bg-cyan-600 text-white'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
-              ]"
-            >
-              룬으로 선택
-            </button>
-          </div>
-          <span
-            :class="[
-              'text-xs tabular-nums font-semibold',
-              tSelectedCount ? 'text-cyan-600 dark:text-cyan-400' : 'text-stone-400 dark:text-stone-500',
-            ]"
-          >
-            목표 {{ tSelectedCount }}개
-          </span>
-        </div>
-
         <!-- 목표 옵션 행 (각성석/메모리얼 시뮬과 동일한 "+ 추가" 방식) -->
         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span class="text-sm font-medium text-stone-700 dark:text-stone-300">
-            목표 {{ tSelectMode === 'option' ? '옵션' : '룬' }}
+            목표 옵션
             <span class="text-xs text-stone-400 dark:text-stone-500">
               (최대 {{ maxTargetRows }}개 — 한 룬워드에서 동시에 충족)
             </span>
           </span>
-          <button
-            type="button"
-            @click="addTargetRow"
-            :disabled="targetRows.length >= maxTargetRows"
-            class="text-xs rounded-md ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
-          >
-            + {{ tSelectMode === 'option' ? '옵션' : '룬' }} 추가
-          </button>
+          <div class="flex items-center gap-2">
+            <span
+              :class="[
+                'text-xs tabular-nums font-semibold',
+                tSelectedCount ? 'text-cyan-600 dark:text-cyan-400' : 'text-stone-400 dark:text-stone-500',
+              ]"
+            >
+              목표 {{ tSelectedCount }}개
+            </span>
+            <button
+              type="button"
+              @click="addTargetRow"
+              :disabled="targetRows.length >= maxTargetRows"
+              class="text-xs rounded-md ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 transition"
+            >
+              + 옵션 추가
+            </button>
+          </div>
         </div>
 
-        <p v-if="tSelectMode === 'option'" class="text-xs text-stone-500 dark:text-stone-400 mb-2">
-          같은 옵션이 여러 룬에 걸쳐 있으면 <strong>그 중 아무 룬이나 1개</strong> 뜨면 충족으로 봅니다
-          (크리티컬 대미지 = 파멸 <em>또는</em> 파멸 &amp; 폭주).
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-2">
+          룬 하나가 곧 옵션 하나입니다. <strong>헌신</strong>(최소 +50%) ·
+          <strong>파괴</strong>(최대 +50%) · <strong>헌신 &amp; 파괴</strong>(둘 다) 는 서로 다른 옵션입니다.
+          <br />
+          여러 옵션 중 아무거나 하나면 될 때는 그 옵션들을 고른 뒤 아래 <strong>N개 이상</strong>을 쓰세요.
         </p>
 
         <div class="space-y-2 mb-4">
@@ -840,73 +747,20 @@ function gradeRange(g) {
             :key="i"
             class="grid grid-cols-[1fr_auto] gap-2 items-start"
           >
-            <!-- 옵션 모드 -->
-            <div v-if="tSelectMode === 'option'">
-              <select
-                v-model="row.key"
-                @change="onTargetChanged"
-                class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-              >
-                <option value="">— 선택 안 함 —</option>
-                <optgroup v-for="g in RUNE_OPTION_GROUPS" :key="g.key" :label="g.label">
-                  <option
-                    v-for="o in g.options"
-                    :key="o.key"
-                    :value="o.key"
-                    :disabled="isUsedInOtherRow(o.key, i)"
-                  >
-                    {{ o.text }} — {{ o.runeIds.map((id) => RUNES[id].name).join(' 또는 ') }}
-                    ({{ o.minScore === o.maxScore ? o.maxScore : o.minScore + '~' + o.maxScore }}점){{ isUsedInOtherRow(o.key, i) ? ' · 선택됨' : '' }}
-                  </option>
-                </optgroup>
-              </select>
-
-              <!--
-                옵션은 룬에 묶여서 온다. 예) 크리티컬 확률 +1% 은 파멸 & 폭주 로만 얻을 수 있고,
-                그 룬은 크리티컬 대미지 +50% 도 같이 준다. 어떤 룬으로 충족되며 무엇이 딸려오는지 그대로 보여준다.
-              -->
-              <div v-if="rowOption(row)" class="mt-1.5 space-y-0.5">
-                <div
-                  v-for="c in rowOption(row).carriers"
-                  :key="c.id"
-                  class="text-[11px] leading-snug flex gap-1.5"
-                >
-                  <span class="text-stone-300 dark:text-stone-600 shrink-0">└</span>
-                  <span class="min-w-0">
-                    <strong class="text-stone-600 dark:text-stone-300">{{ c.name }}</strong>
-                    <span class="text-stone-400 dark:text-stone-500"> · </span>
-                    <template v-for="(eff, ei) in c.effects" :key="ei">
-                      <span v-if="ei > 0" class="text-stone-400 dark:text-stone-500">, </span>
-                      <span
-                        :class="
-                          rowOption(row).effects.includes(eff)
-                            ? 'text-cyan-600 dark:text-cyan-400 font-semibold'
-                            : 'text-amber-600 dark:text-amber-400'
-                        "
-                      >{{ eff }}</span>
-                    </template>
-                    <span class="tabular-nums text-stone-400 dark:text-stone-500"> ({{ c.score }}점)</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 룬 모드 -->
             <select
-              v-else
               v-model="row.id"
               @change="onTargetChanged"
               class="w-full rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             >
               <option value="">— 선택 안 함 —</option>
-              <optgroup v-for="g in optionGroups" :key="g.key" :label="g.label">
+              <optgroup v-for="g in RUNE_SELECT_GROUPS" :key="g.key" :label="g.label">
                 <option
-                  v-for="r in g.rows"
+                  v-for="r in g.runes"
                   :key="r.id"
                   :value="String(r.id)"
                   :disabled="isUsedInOtherRow(r.id, i)"
                 >
-                  {{ r.name }} — {{ r.desc }} ({{ r.score }}점){{ isUsedInOtherRow(r.id, i) ? ' · 선택됨' : '' }}
+                  {{ r.desc }} — {{ r.name }} ({{ r.score }}점){{ isUsedInOtherRow(r.id, i) ? ' · 선택됨' : '' }}
                 </option>
               </optgroup>
             </select>
@@ -921,11 +775,6 @@ function gradeRange(g) {
               ✕
             </button>
           </div>
-
-          <p v-if="anyRowHasExtras" class="text-[11px] text-stone-400 dark:text-stone-500 pl-4">
-            <span class="text-cyan-600 dark:text-cyan-400 font-semibold">청록</span> = 지정한 옵션 ·
-            <span class="text-amber-600 dark:text-amber-400 font-semibold">주황</span> = 그 룬이 같이 주는 옵션
-          </p>
         </div>
 
         <!-- 조건 -->
@@ -1025,7 +874,7 @@ function gradeRange(g) {
             {{ tRunning ? '계산 중...' : '목표 도달 시뮬' }}
           </button>
           <span v-if="!targetHasCondition" class="text-xs text-stone-400 dark:text-stone-500">
-            원하는 {{ tSelectMode === 'option' ? '옵션' : '룬' }} · 왕룬 지정 · 최소 총점 중 하나 이상을 설정해주세요.
+            목표 옵션 · 왕룬 지정 · 최소 총점 중 하나 이상을 설정해주세요.
           </span>
         </div>
       </section>
