@@ -178,35 +178,145 @@ export function contributingRuneIds(result, t) {
 // 클램프 덕분에 "이상" 조건이 마지막 칸 하나로 모인다.
 // 룬은 중복해서 뽑히지 않으므로 카운트만으로 정확하다.
 // ============================================================
+// 왕룬을 king 으로 고정했을 때 나머지 7칸이 만족해야 하는 조건
+//   pool     : 남은 29종 (id / score / 목표 룬 여부)
+//   needRest : 나머지 7칸에서 채워야 할 목표 룬 개수
+//   thr      : 나머지 7칸 점수 합의 하한
+// 애초에 불가능하면 null.
+function buildKingContext(t, king, wanted) {
+  const thr = Math.max(0, t.minTotal - kingScoreOf(king));
+  const needRest = Math.max(0, t.need - (wanted.has(king) ? 1 : 0));
+
+  const pool = [];
+  let poolWantedCount = 0;
+  for (let i = 0; i < N; i++) {
+    if (i === king) continue;
+    const isWanted = wanted.has(i);
+    if (isWanted) poolWantedCount++;
+    pool.push({ id: i, score: RUNES[i].score, isWanted });
+  }
+  if (needRest > Math.min(REST, poolWantedCount)) return null;
+
+  return { pool, needRest, thr };
+}
+
+// 왕룬 후보별 경우의 수 — 확률 계산과 조합 추출이 같은 표를 쓴다
+function waysByKing(t) {
+  const wanted = new Set(t.runeIds);
+  const out = [];
+
+  for (let king = 0; king < N; king++) {
+    if (t.kingId !== null && king !== t.kingId) continue;
+    const ctx = buildKingContext(t, king, wanted);
+    if (!ctx) continue;
+    const ways = countWays(ctx.pool, REST, ctx.needRest, ctx.thr);
+    if (ways > 0) out.push({ king, ctx, ways });
+  }
+  return out;
+}
+
 export function successProbability(t) {
   if (!hasAnyCondition(t)) return 1;
   if (t.need > K) return 0;
 
-  const wanted = new Set(t.runeIds);
   let p = 0;
+  for (const { ways } of waysByKing(t)) {
+    p += (1 / N) * (ways / REST_TOTAL_WAYS);
+  }
+  return p;
+}
 
-  for (let king = 0; king < N; king++) {
-    if (t.kingId !== null && king !== t.kingId) continue;
+// ============================================================
+// 목표를 만족하는 조합 하나를 균등 추출
+//
+// 확률이 낮으면(예: 평균 4천만 회) 실제로 굴려서는 만날 수 없다.
+// 그래도 "그래서 어떤 룬워드가 나오는데?" 는 보여줘야 하므로,
+// 조건을 만족하는 전체 경우 중에서 하나를 정확히 균등 추출한다.
+//   ① 왕룬을 경우의 수에 비례해 고른다
+//   ② 나머지 7칸은 DP 를 역방향으로 세워 조건부 균등 추출한다
+// ============================================================
+export function sampleSatisfyingResult(t) {
+  if (!hasAnyCondition(t)) return rollRuneWord();
+  if (t.need > K) return null;
 
-    const kingSc = kingScoreOf(king);
-    const thr = Math.max(0, t.minTotal - kingSc);
-    const needRest = Math.max(0, t.need - (wanted.has(king) ? 1 : 0));
+  const candidates = waysByKing(t);
+  const totalWays = candidates.reduce((s, c) => s + c.ways, 0);
+  if (totalWays <= 0) return null;
 
-    const pool = [];
-    let poolWantedCount = 0;
-    for (let i = 0; i < N; i++) {
-      if (i === king) continue;
-      const isWanted = wanted.has(i);
-      if (isWanted) poolWantedCount++;
-      pool.push({ score: RUNES[i].score, isWanted });
+  let r = Math.random() * totalWays;
+  let chosen = candidates[candidates.length - 1];
+  for (const c of candidates) {
+    r -= c.ways;
+    if (r <= 0) {
+      chosen = c;
+      break;
     }
-    if (needRest > Math.min(REST, poolWantedCount)) continue;
-
-    const ways = countWays(pool, REST, needRest, thr);
-    if (ways > 0) p += (1 / N) * (ways / REST_TOTAL_WAYS);
   }
 
-  return p;
+  const restIds = sampleRest(chosen.ctx, REST);
+  if (restIds.length !== REST) return null;
+
+  // 앞 7칸의 순서는 점수에 영향이 없지만 실제 뽑기처럼 섞어서 보여준다
+  for (let i = restIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [restIds[i], restIds[j]] = [restIds[j], restIds[i]];
+  }
+  return buildResult([...restIds, chosen.king]);
+}
+
+// pool 에서 pick 개를 (목표 룬 needC개 이상, 합 thr 이상) 조건 하에 균등 추출.
+//   g[i][j][c][s] = pool[i..] 에서 j개를 골라 최종적으로 (needC, thr) 에 도달하는 경우의 수
+//   이 표를 앞에서부터 훑으며 "포함/제외" 를 경우의 수 비율대로 뽑으면 균등 추출이 된다.
+function sampleRest(ctx, pick) {
+  const { pool, needRest: needC, thr } = ctx;
+  const n = pool.length;
+  const C = needC + 1;
+  const S = thr + 1;
+  const stride = C * S;
+  const layer = (pick + 1) * stride;
+  const g = new Float64Array((n + 1) * layer);
+
+  // 마지막 지점: 더 고를 것이 없고 (c, s) 가 목표에 도달해 있어야 한다
+  g[n * layer + needC * S + thr] = 1;
+
+  for (let i = n - 1; i >= 0; i--) {
+    const it = pool[i];
+    const nc0 = it.isWanted ? 1 : 0;
+    for (let j = 0; j <= pick; j++) {
+      for (let c = 0; c < C; c++) {
+        const nc = Math.min(needC, c + nc0);
+        for (let s = 0; s < S; s++) {
+          let v = g[(i + 1) * layer + j * stride + c * S + s]; // 제외
+          if (j > 0) {
+            const ns = Math.min(thr, s + it.score);
+            v += g[(i + 1) * layer + (j - 1) * stride + nc * S + ns]; // 포함
+          }
+          g[i * layer + j * stride + c * S + s] = v;
+        }
+      }
+    }
+  }
+
+  const out = [];
+  let j = pick;
+  let c = 0;
+  let s = 0;
+  for (let i = 0; i < n && j > 0; i++) {
+    const it = pool[i];
+    const nc = it.isWanted ? Math.min(needC, c + 1) : c;
+    const ns = Math.min(thr, s + it.score);
+    const inc = g[(i + 1) * layer + (j - 1) * stride + nc * S + ns];
+    const exc = g[(i + 1) * layer + j * stride + c * S + s];
+    const tot = inc + exc;
+    if (tot <= 0) break;
+    if (Math.random() * tot < inc) {
+      out.push(it.id);
+      j--;
+      c = nc;
+      s = ns;
+    }
+  }
+  return out;
 }
 
 // pool 에서 정확히 pick 개를 골라, 목표 룬을 needC 개 이상 포함하고 합이 thr 이상인 경우의 수

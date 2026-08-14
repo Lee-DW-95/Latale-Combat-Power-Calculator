@@ -20,8 +20,12 @@ import {
   simulateUntilTarget,
   maxAchievableTotal,
   contributingRuneIds,
+  sampleSatisfyingResult,
 } from '../utils/runeWordSim.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
+
+// 실제 굴리기 시연 상한 — 이 안에 못 만나면 조합을 직접 구성해서 보여준다 (약 0.2초)
+const ROLL_DEMO_MAX_TRIES = 300_000;
 
 const INSIGHT_ID = 19;   // 통찰 — 왕룬 점수 예외
 const FIRST_COMBO_ID = 20; // 20번부터 복합 룬
@@ -257,8 +261,16 @@ async function runTargetSim() {
     const t = target.value;
     tRunTarget.value = t;
     tStats.value = computeTargetStats(t);
-    // p 가 극단적으로 작으면 실제 굴리기는 생략 (수천만 회 = 수 초 이상)
-    tSample.value = tStats.value.p >= 1e-6 ? simulateUntilTarget(t) : null;
+
+    // 먼저 실제로 굴려본다. 확률이 낮아 상한 안에 못 만나면(수천만 회짜리 목표 등)
+    // 조건을 만족하는 조합 중 하나를 정확히 균등 추출해서라도 결과를 보여준다.
+    const rolled = simulateUntilTarget(t, ROLL_DEMO_MAX_TRIES);
+    if (rolled.success) {
+      tSample.value = { kind: 'rolled', tries: rolled.tries, ely: rolled.ely, result: rolled.result };
+    } else {
+      const built = sampleSatisfyingResult(t);
+      tSample.value = built ? { kind: 'constructed', result: built } : null;
+    }
   } finally {
     tRunning.value = false;
   }
@@ -983,25 +995,39 @@ function gradeRange(g) {
         v-if="tSample"
         class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
       >
-        <template v-if="tSample.success">
+        <template v-if="true">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700">
             <div class="text-[11px] font-medium uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1">
-              실제 굴려본 결과
+              {{ tSample.kind === 'rolled' ? '실제 굴려본 결과' : '목표 달성 조합 예시' }}
             </div>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none">
+              <span
+                v-if="tSample.kind === 'rolled'"
+                class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none"
+              >
                 {{ fmt(tSample.tries) }}<span class="text-lg font-bold text-stone-400">회차에 성공</span>
+              </span>
+              <span
+                v-else
+                class="text-3xl font-extrabold tabular-nums text-stone-800 dark:text-stone-100 leading-none"
+              >
+                {{ fmt(tSample.result.total) }}<span class="text-lg font-bold text-stone-400">점</span>
               </span>
               <span :class="['rounded px-2 py-1 text-xs font-bold', GRADE_CHIP[tSample.result.grade]]">
                 {{ fmt(tSample.result.total) }}점 · {{ tSample.result.gradeLabel }}
               </span>
             </div>
-            <p class="text-xs text-stone-500 dark:text-stone-400 mt-2">
+            <p v-if="tSample.kind === 'rolled'" class="text-xs text-stone-500 dark:text-stone-400 mt-2">
               스크롤 {{ fmt(tSample.tries) }}개 ·
               <span class="font-semibold text-amber-600 dark:text-amber-400" :title="fmt(tSample.ely) + ' Ely'">
                 {{ fmtEly(tSample.ely) }} Ely
               </span>
               소모 — 같은 조건이라도 매번 회차가 달라집니다.
+            </p>
+            <p v-else class="text-xs text-stone-500 dark:text-stone-400 mt-2">
+              확률이 낮아 실제로 굴려서는 만나기 어려운 목표라, 조건을 만족하는 조합 중
+              <strong>하나를 균등 추출</strong>해 보여줍니다. 평균
+              <strong class="text-stone-700 dark:text-stone-200">{{ fmtInf(Math.round(tStats?.mean)) }}회</strong> 시도가 필요합니다.
             </p>
           </div>
 
@@ -1037,17 +1063,7 @@ function gradeRange(g) {
             </li>
           </ul>
         </template>
-        <div v-else class="px-5 py-4 text-sm text-rose-600 dark:text-rose-400">
-          {{ fmt(tSample.tries) }}회 굴렸지만 도달하지 못했습니다 (안전 상한 초과). 위 확률 분석 값을 참고해주세요.
-        </div>
       </section>
-
-      <div
-        v-else-if="tStats && tStats.p > 0"
-        class="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
-      >
-        확률이 너무 낮아 (평균 {{ fmtInf(Math.round(tStats.mean)) }}회) 실제 굴리기 시연은 생략했습니다.
-      </div>
 
       <div
         v-else-if="tStats && tStats.p === 0"

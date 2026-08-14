@@ -18,6 +18,7 @@ import {
   matchesTarget,
   rollRuneWord,
   maxAchievableTotal,
+  sampleSatisfyingResult,
 } from '../src/utils/runeWordSim.js';
 import { MAX_TOTAL, RUNES } from '../src/data/runeWordData.js';
 
@@ -49,6 +50,9 @@ const MC_RUNS = 2_000_000;
 
 // 룬 id 참조
 const 헌신 = 6, 파괴 = 8, 파멸 = 10, 통찰 = 19, 헌신파괴 = 25, 악몽죽음 = 28, 파멸폭주 = 29;
+
+// 점수 상위 8종 — 왕룬 배분과 조합 추출 검증에 쓴다
+const TOP8 = [...RUNES].sort((a, b) => b.score - a.score).slice(0, 8).map((r) => r.id);
 
 const RUNE_CASES = [
   {
@@ -208,6 +212,48 @@ if (!trioDistinct) allOk = false;
 console.log(`헌신 / 파괴 / 헌신 & 파괴 옵션 상이 → ${trioDistinct ? 'OK' : 'FAIL'}`);
 for (const r of trio) {
   console.log(`   ${r.name.padEnd(12)} ${String(r.score).padStart(3)}점  ${r.desc}`);
+}
+
+// ── 목표 달성 조합 추출기 ──
+//   확률이 낮아 실제로 굴려서는 못 만나는 목표도 조합을 직접 구성해 보여준다.
+//   ① 추출한 조합이 반드시 목표를 만족해야 하고
+//   ② 왕룬 지정이 없으면 가능한 왕룬들이 고르게 나와야 한다.
+console.log('\n── 목표 달성 조합 추출 ' + '─'.repeat(42));
+
+const SAMPLER_CASES = [
+  ['상위 8종 + 총점 530 (평균 4천만 회)', { runeIds: TOP8, mode: 'all', kingId: null, minTotal: 530 }],
+  ['상위 8종 (조건 없음)', { runeIds: TOP8, mode: 'all', kingId: null, minTotal: 0 }],
+  ['왕룬 통찰 + 총점 450', { runeIds: [], mode: 'all', kingId: 통찰, minTotal: 450 }],
+  ['헌신 & 파괴 + 파멸 & 폭주', { runeIds: [헌신파괴, 파멸폭주], mode: 'all', kingId: null, minTotal: 0 }],
+];
+for (const [label, raw] of SAMPLER_CASES) {
+  const t = normalizeTarget(raw);
+  let bad = 0;
+  for (let i = 0; i < 500; i++) {
+    const r = sampleSatisfyingResult(t);
+    if (!r || !matchesTarget(r, t)) bad++;
+  }
+  if (bad) allOk = false;
+  console.log(`${label.padEnd(34)} 500회 추출 · 목표 불만족 ${bad}건 → ${bad ? 'FAIL' : 'OK'}`);
+}
+
+// 왕룬 미지정이면 선택한 8종이 고르게 왕룬이 되어야 한다 (χ² 대신 편차 상한으로 확인)
+{
+  const t = normalizeTarget({ runeIds: TOP8, mode: 'all', kingId: null, minTotal: 0 });
+  const RUNS = 8000;
+  const cnt = new Map();
+  for (let i = 0; i < RUNS; i++) {
+    const k = sampleSatisfyingResult(t).rows[K - 1].runeId;
+    cnt.set(k, (cnt.get(k) ?? 0) + 1);
+  }
+  const expected = RUNS / TOP8.length;
+  const allKings = cnt.size === TOP8.length;
+  const maxDev = Math.max(...[...cnt.values()].map((v) => Math.abs(v - expected) / expected));
+  const uniform = allKings && maxDev < 0.2;
+  if (!uniform) allOk = false;
+  console.log(
+    `왕룬 미지정 → 8종 모두 왕룬 등장(${cnt.size}/8) · 최대 편차 ${(maxDev * 100).toFixed(1)}% → ${uniform ? 'OK' : 'FAIL'}`
+  );
 }
 
 // ── 최대 달성 총점 ──
