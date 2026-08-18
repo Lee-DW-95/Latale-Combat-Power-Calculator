@@ -200,12 +200,29 @@ const achievedSums = computed(() => {
 // ============================================================
 // 스타일 매핑
 // ============================================================
-const LINE_CLASS = {
-  '': 'text-stone-700 dark:text-stone-200',
-  good: 'text-orange-600 dark:text-orange-300 font-semibold',
-  s: 'text-cyan-700 dark:text-cyan-300 font-semibold',
-  's-strong': 'text-fuchsia-600 dark:text-fuchsia-300 font-bold',
+// 유효옵(무기 공격력, 크리티컬 대미지 …)은 굵게만 두면 눈에 안 들어와서 등급 색으로 칠한다.
+//   [1] 초록 / [2] 노랑 / [3] 빨강 / [S] 보라 — 배지와 옵션 글자에 같은 색을 쓴다.
+// 유효옵이 아닌 줄은 회색으로 눌러 유효옵만 떠 보이게 한다.
+const TIER_CHIP = {
+  1: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300',
+  2: 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+  3: 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300',
+  S: 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300',
 };
+const MUTED_CHIP = 'bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400';
+
+const TIER_TEXT = {
+  1: 'text-emerald-600 dark:text-emerald-300',
+  2: 'text-amber-600 dark:text-amber-300',
+  3: 'text-rose-600 dark:text-rose-300',
+  S: 'text-violet-600 dark:text-violet-300',
+};
+const MUTED_TEXT = 'text-stone-500 dark:text-stone-400';
+
+function tierChip(tier, vital = true) {
+  const palette = (vital && TIER_CHIP[tier]) || MUTED_CHIP;
+  return `inline-block rounded px-1.5 text-[11px] font-bold tabular-nums align-[1px] ${palette}`;
+}
 
 // 범례에 쓸 유효옵 목록 — 세트마다 있는 옵션이 달라서 고정 문구로 두면 거짓말이 된다.
 // (예: 올스탯% 는 액세서리 세트에만 있고 무기/정령석에는 아예 없다)
@@ -217,11 +234,12 @@ const vitalNamesInSet = computed(() => {
   return [...seen];
 });
 
-// 유효옵(vital)은 grade 와 직교하는 축이다 — grade 가 이미 색을 쓰고 있으므로
-// 색을 덮어쓰지 않고 ◆ 마커로만 표시하고, 무등급 줄만 살짝 밝게 올린다.
+// 유효옵만 등급 색 + 굵게. grade(값이 얼마나 잘 떴나)는 색을 또 쓰면 축이 겹치므로 밑줄로 얹는다.
+//   (grade 가 붙는 줄은 전부 유효옵이다 — 3등급 주력 딜옵 / 대미지 감소% / S등급 스킬)
 function lineClass(line) {
-  if (line.vital && !line.grade) return 'text-stone-800 dark:text-stone-100 font-medium';
-  return LINE_CLASS[line.grade];
+  if (!line.vital) return MUTED_TEXT;
+  const strong = line.grade === 's-strong' ? ' underline decoration-2 underline-offset-2' : '';
+  return `${TIER_TEXT[line.tier] ?? ''} font-bold${strong}`;
 }
 
 function cardStyle(roll) {
@@ -251,12 +269,17 @@ function cardStyle(roll) {
       <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (챙길 값어치가
       있는 주력 옵션 — 이 세트 기준:
       <template v-if="vitalNamesInSet.length">{{ vitalNamesInSet.join(', ') }}</template>
-      <template v-else>없음</template>),
-      <span class="text-orange-600 dark:text-orange-300 font-semibold">주황</span> = 3등급 주력
-      딜옵션이 범위 상위 20% 구간,
-      <span class="text-cyan-700 dark:text-cyan-300 font-semibold">청록</span> = S등급 스킬 옵션 ·
-      3등급 대미지 감소%,
-      <span class="text-fuchsia-600 dark:text-fuchsia-300 font-bold">자주</span> = S등급 18 이상.
+      <template v-else>없음</template>). 유효옵만 등급 색으로 칠하고, 나머지 줄은
+      <span :class="MUTED_TEXT">회색</span>으로 눌러둔다.
+      <br />
+      <strong>유효옵 등급 색</strong>:
+      <span :class="tierChip(1)">[1]</span> <span :class="`${TIER_TEXT[1]} font-bold`">초록</span> ·
+      <span :class="tierChip(2)">[2]</span> <span :class="`${TIER_TEXT[2]} font-bold`">노랑</span> ·
+      <span :class="tierChip(3)">[3]</span> <span :class="`${TIER_TEXT[3]} font-bold`">빨강</span> ·
+      <span :class="tierChip('S')">[S]</span>
+      <span :class="`${TIER_TEXT.S} font-bold`">보라</span> — 숫자가 클수록 같은 옵션이라도 수치
+      범위가 높다 (S 는 스킬 레벨 옵션).
+      <span class="font-bold underline decoration-2 underline-offset-2">밑줄</span> = S등급 18 이상.
       <br />
       <strong class="text-xs">⚠️</strong> 비공식 시뮬레이터 — 공개 자료 기반이라 실제 게임 확률과
       다를 수 있음.
@@ -503,7 +526,8 @@ function cardStyle(roll) {
                     title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
                     >◆</span
                   >
-                  {{ line.text }}
+                  <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
+                  {{ line.body }}
                 </div>
               </div>
             </div>
@@ -591,7 +615,8 @@ function cardStyle(roll) {
                 title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
                 >◆</span
               >
-              {{ line.text }}
+              <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
+              {{ line.body }}
             </div>
           </div>
         </div>
@@ -627,13 +652,13 @@ function cardStyle(roll) {
                 :key="i"
                 class="border-b border-stone-100 dark:border-stone-700/50"
               >
-                <td class="py-1.5 pr-3 text-stone-500 dark:text-stone-400">{{ row.tier }}</td>
+                <td class="py-1.5 pr-3">
+                  <span :class="tierChip(row.tier, isVitalOption(row))">[{{ row.tier }}]</span>
+                </td>
                 <td
                   :class="[
                     'py-1.5 pr-3',
-                    isVitalOption(row)
-                      ? 'text-stone-800 dark:text-stone-100 font-medium'
-                      : 'text-stone-700 dark:text-stone-200',
+                    isVitalOption(row) ? `${TIER_TEXT[row.tier] ?? ''} font-bold` : MUTED_TEXT,
                   ]"
                 >
                   <span v-if="isVitalOption(row)" class="text-amber-500 dark:text-amber-400">◆</span>

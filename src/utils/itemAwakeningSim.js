@@ -270,13 +270,18 @@ export function gradeOf(row, val) {
   return '';
 }
 
-/** 확정된 row + 값으로 표시용 줄 객체를 만든다. */
+/**
+ * 확정된 row + 값으로 표시용 줄 객체를 만든다.
+ *   text — "[3] 무공 +8%"  (등급 포함 전체 문자열)
+ *   body — "무공 +8%"      (등급 배지를 따로 색칠해 그릴 때 쓰는 본문)
+ */
 function makeLine(row, rowIndex, val) {
   return {
     rowIndex,
     tier: row.tier,
     name: row.name,
     value: val,
+    body: formatOption(row.name, val),
     text: `[${row.tier}] ${formatOption(row.name, val)}`,
     grade: gradeOf(row, val),
     vital: isVitalOption(row),
