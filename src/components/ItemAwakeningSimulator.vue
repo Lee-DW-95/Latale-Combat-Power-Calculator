@@ -242,6 +242,44 @@ function lineClass(line) {
   return `${TIER_TEXT[line.tier] ?? ''} font-bold${strong}`;
 }
 
+// ============================================================
+// 등급% — 이 줄의 값이 해당 등급 행의 최대치 대비 몇 % 인지
+//   (인챈트 시뮬 규칙: value / max × 100, Math.floor · ≥90 빨강 / ≥70 노랑)
+//   min~max 가 등급([1]~[3]/[S])마다 다르므로 "그 줄이 속한 행" 의 max 를 기준으로 잡는다.
+// ============================================================
+function lineRow(line) {
+  if (!line || line.rowIndex == null) return null;
+  return activeSet.value.rows[line.rowIndex] ?? null;
+}
+
+function lineMax(line) {
+  const row = lineRow(line);
+  return row ? Number(row.max) : null;
+}
+
+function linePct(line) {
+  const max = lineMax(line);
+  if (!max || line.value == null) return null;
+  const p = (Number(line.value) / max) * 100;
+  if (!Number.isFinite(p)) return null;
+  return Math.floor(p);
+}
+
+function pctBadgeClass(p) {
+  if (p == null) return 'text-stone-400 dark:text-stone-500';
+  if (p >= 90) return 'text-rose-600 dark:text-rose-400 font-bold';
+  if (p >= 70) return 'text-amber-600 dark:text-amber-400 font-bold';
+  return 'text-stone-400 dark:text-stone-500';
+}
+
+// 합계 목표 달성치의 % — 이론상 최대 합계 대비
+function sumPct(s) {
+  const max = maxPossibleSum(activeSet.value.rows, s.name);
+  if (!max) return null;
+  const p = (Number(s.total) / Number(max)) * 100;
+  return Number.isFinite(p) ? Math.floor(p) : null;
+}
+
 function cardStyle(roll) {
   if (roll.hasS) {
     return 'ring-2 ring-fuchsia-400 dark:ring-fuchsia-500 bg-fuchsia-50/60 dark:bg-fuchsia-950/20';
@@ -490,10 +528,23 @@ function cardStyle(roll) {
             v-if="achievedSums.length"
             class="mb-4 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
           >
-            <div v-for="s in achievedSums" :key="s.name">
-              <strong>{{ s.name }}</strong> 합계
-              <strong>{{ fmtOptionValue(s.total) }}</strong>
-              (목표 {{ fmtOptionValue(s.target) }}) — {{ s.parts }}개 등급 합산
+            <div
+              v-for="s in achievedSums"
+              :key="s.name"
+              class="flex items-center justify-between gap-3"
+            >
+              <span>
+                <strong>{{ s.name }}</strong> 합계
+                <strong>{{ fmtOptionValue(s.total) }}</strong>
+                (목표 {{ fmtOptionValue(s.target) }}) — {{ s.parts }}개 등급 합산
+              </span>
+              <span
+                v-if="sumPct(s) != null"
+                :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(sumPct(s))]"
+                :title="`이론상 최대 합계 ${fmtOptionValue(maxPossibleSum(activeSet.rows, s.name))} 대비`"
+              >
+                [{{ sumPct(s) }}%]
+              </span>
             </div>
           </div>
 
@@ -517,17 +568,26 @@ function cardStyle(roll) {
                 <div
                   v-for="(line, i) in analysis.card.lines"
                   :key="i"
-                  :class="['text-sm leading-relaxed', lineClass(line)]"
+                  class="text-sm leading-relaxed flex items-center justify-between gap-3"
                 >
-                  <span v-if="isTargetLine(line)" class="text-cyan-600 dark:text-cyan-400">★</span>
+                  <span :class="lineClass(line)">
+                    <span v-if="isTargetLine(line)" class="text-cyan-600 dark:text-cyan-400">★</span>
+                    <span
+                      v-if="line.vital"
+                      class="text-amber-500 dark:text-amber-400"
+                      title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
+                      >◆</span
+                    >
+                    <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
+                    {{ line.body }}
+                  </span>
                   <span
-                    v-if="line.vital"
-                    class="text-amber-500 dark:text-amber-400"
-                    title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
-                    >◆</span
+                    v-if="linePct(line) != null"
+                    :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+                    :title="`[${line.tier}] 등급 최대 ${fmtOptionValue(lineMax(line))} 대비`"
                   >
-                  <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
-                  {{ line.body }}
+                    [{{ linePct(line) }}%]
+                  </span>
                 </div>
               </div>
             </div>
@@ -607,16 +667,25 @@ function cardStyle(roll) {
             <div
               v-for="(line, i) in roll.lines"
               :key="i"
-              :class="['text-sm leading-relaxed', lineClass(line)]"
+              class="text-sm leading-relaxed flex items-center justify-between gap-3"
             >
+              <span :class="lineClass(line)">
+                <span
+                  v-if="line.vital"
+                  class="text-amber-500 dark:text-amber-400"
+                  title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
+                  >◆</span
+                >
+                <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
+                {{ line.body }}
+              </span>
               <span
-                v-if="line.vital"
-                class="text-amber-500 dark:text-amber-400"
-                title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
-                >◆</span
+                v-if="linePct(line) != null"
+                :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+                :title="`[${line.tier}] 등급 최대 ${fmtOptionValue(lineMax(line))} 대비`"
               >
-              <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
-              {{ line.body }}
+                [{{ linePct(line) }}%]
+              </span>
             </div>
           </div>
         </div>
