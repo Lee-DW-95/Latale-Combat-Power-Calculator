@@ -412,7 +412,7 @@ const savedTimeLabel = computed(() => {
 
       <!-- ───── 탭 2: 메모리얼 시뮬 ───── -->
       <template v-else-if="activeTab === 'memorial'">
-        <MemorialSimulator />
+        <MemorialSimulator :stats="stats" />
       </template>
 
       <!-- ───── 탭 3: 인챈트 시뮬 ───── -->
@@ -441,12 +441,12 @@ const savedTimeLabel = computed(() => {
 
       <!-- ───── 탭 6: 각성석 시뮬 ───── -->
       <template v-else-if="activeTab === 'awakening'">
-        <AwakeningSimulator />
+        <AwakeningSimulator :stats="stats" />
       </template>
 
       <!-- ───── 탭 7: 아이템 각성 시뮬 ───── -->
       <template v-else-if="activeTab === 'itemAwakening'">
-        <ItemAwakeningSimulator />
+        <ItemAwakeningSimulator :stats="stats" />
       </template>
 
       <!-- ───── 탭 8: 룬워드 시뮬 ───── -->

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   ALL_MEMORIALS,
   uniqueBaseLabels,
@@ -12,7 +12,21 @@ import {
   simulateUntilSingleCardReaches,
   maxPossibleSingleCard,
 } from '../utils/memorialSim.js';
+import {
+  normalizeMemorialCard,
+  memorialOptionMatcher,
+  evaluateLines,
+} from '../utils/rollEquiv.js';
+import { calculateBattlePower } from '../utils/battlePower.js';
+import { useRollLog } from '../composables/useRollLog.js';
+import RollLogPanel from './RollLogPanel.vue';
+import RollBulkRun from './RollBulkRun.vue';
 import { fmtInf as fmt, pctSmart } from '../utils/format.js';
+
+const props = defineProps({
+  // 활성 캐릭터 T창 스탯 — 굴림 결과의 "크댐 환산" 계산 기준 (없으면 환산 생략).
+  stats: { type: Object, default: null },
+});
 
 const MAX_TARGETS = 4;
 
@@ -25,8 +39,7 @@ const result = ref(null);
 
 const sampleRoll = ref(null);
 const sampleWinningCard = ref(null); // 시뮬에서 성공한 카드 정보
-const rollCount = ref(0);            // 1회 굴려보기 누적 시도 횟수
-const lastRollIndex = ref(0);        // 마지막 굴림 회차 (헤더 표시용)
+const lastRollIndex = ref(0);        // 마지막 굴림 회차 (헤더 표시용, 누적 rollCount 는 굴림 기록 컴포저블 소유)
 
 const selectedMemorial = computed(() => ALL_MEMORIALS[selectedMemorialKey.value]);
 
@@ -42,8 +55,9 @@ function onMemorialChange() {
   result.value = null;
   sampleRoll.value = null;
   sampleWinningCard.value = null;
-  rollCount.value = 0;
   lastRollIndex.value = 0;
+  // 메모리얼이 바뀌면 기존 기록은 다른 카드 기준이라 의미가 없다 — 회차와 함께 비운다.
+  resetRollCount();
 }
 
 if (availableLabels.value.length > 0 && !targets.value[0].base) {
@@ -118,17 +132,103 @@ async function runSimulation() {
   }
 }
 
+// ============================================================
+// 굴림 기록 — 조건(크댐환산 합 / 특정 옵션 합)을 넘은 카드만 회차와 함께 누적.
+//   메모리얼은 "최종 크리티컬 대미지" 처럼 T창 BP 식 밖의 옵션이 있어
+//   특정 옵션 조건이 특히 유용하다 (환산 대상이 아니라 합계로 판정).
+// ============================================================
+const {
+  criterion: logCriterion,
+  records: logRecords,
+  count: rollCount,
+  nextIndex,
+  record: recordRoll,
+  clear: clearRollLog,
+  resetAll: resetRollLog,
+  bulkTimes,
+  bulkRunning,
+  bulkProgress,
+  bulkSummary,
+  bulkRun,
+  bulkCancel,
+} = useRollLog('latale_memorialRollLog_v1', { matcher: memorialOptionMatcher });
+
+const sampleConv = ref(null);   // 현재 표시 중인 굴림의 크댐 환산
+const sampleHit = ref(false);   // 현재 굴림이 기록 조건을 넘었는지
+
+const baseBP = computed(() => (props.stats ? calculateBattlePower(props.stats) : 0));
+const hasStats = computed(() => baseBP.value > 0);
+const statsForLog = computed(() => (hasStats.value ? props.stats : null));
+
+// 기록 조건 셀렉트 목록 — 선택된 메모리얼의 옵션 (티어 통합)
+const logOptionKeys = computed(() =>
+  availableLabels.value.map((lb) => ({ key: lb, label: lb })),
+);
+
+// 메모리얼을 바꾸면 옵션 목록이 달라진다 — 없는 옵션이 선택돼 있으면 첫 옵션으로.
+watch(logOptionKeys, (list) => {
+  if (!list.length) return;
+  if (!list.some((o) => o.key === logCriterion.value.option)) {
+    logCriterion.value.option = list[0].key;
+  }
+}, { immediate: true });
+
 function rollSample() {
   if (!selectedMemorial.value) return;
-  sampleRoll.value = rollOnce(selectedMemorial.value);
-  rollCount.value += 1;
-  lastRollIndex.value = rollCount.value;
+  const lines = rollOnce(selectedMemorial.value);
+  sampleRoll.value = lines;
+  lastRollIndex.value = nextIndex();
+
+  const r = recordRoll({
+    lines: normalizeMemorialCard(lines),
+    stats: statsForLog.value,
+    index: lastRollIndex.value,
+    tag: selectedMemorial.value.name,
+  });
+  sampleConv.value = r.evaluated;
+  sampleHit.value = r.hit;
+}
+
+// 대량 굴림 — N 회를 한 번에 돌리고, 끝나면 그 구간 최고 카드를 미리보기에 띄운다.
+async function runBulk(times) {
+  if (!selectedMemorial.value) return;
+  const memorial = selectedMemorial.value;
+  const s = await bulkRun({
+    times,
+    rollFn: () => rollOnce(memorial),
+    normalize: normalizeMemorialCard,
+    stats: statsForLog.value,
+    tag: memorial.name,
+  });
+  if (s && s.bestCard) {
+    sampleRoll.value = s.bestCard;
+    lastRollIndex.value = s.bestIndex;
+    sampleConv.value = s.bestEvaluated;
+    sampleHit.value = s.bestHit;
+  }
 }
 
 function resetRollCount() {
-  rollCount.value = 0;
   lastRollIndex.value = 0;
   sampleRoll.value = null;
+  sampleConv.value = null;
+  sampleHit.value = false;
+  resetRollLog();
+}
+
+// 스탯이 바뀌면(캐릭터 전환 등) 표시 중인 굴림의 환산값 재계산.
+watch(baseBP, () => {
+  if (!sampleRoll.value) return;
+  sampleConv.value = statsForLog.value
+    ? evaluateLines(normalizeMemorialCard(sampleRoll.value), props.stats)
+    : null;
+});
+
+// 환산치 표시 — 소수 1자리, 정수면 정수
+function fmtRef(v) {
+  if (!Number.isFinite(Number(v))) return '-';
+  const n = Number(v);
+  return Math.abs(n - Math.round(n)) < 0.05 ? String(Math.round(n)) : n.toFixed(1);
 }
 
 // ============================================================
@@ -325,48 +425,115 @@ const meanCost = computed(() => {
           type="button"
           @click="resetRollCount"
           class="rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400 transition"
-          title="누적 횟수 초기화"
+          title="누적 횟수 + 굴림 기록 초기화"
         >
           ↺ 초기화
         </button>
       </div>
+
+      <RollBulkRun
+        v-model:times="bulkTimes"
+        :running="bulkRunning"
+        :progress="bulkProgress"
+        :summary="bulkSummary"
+        :criterion="logCriterion"
+        :option-label="logCriterion.option"
+        :has-stats="hasStats"
+        @run="runBulk"
+        @cancel="bulkCancel"
+      />
     </section>
 
-    <!-- 1회 굴림 -->
-    <section
-      v-if="sampleRoll"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
-    >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 flex items-center justify-between gap-3">
-        <span>
-          🎰 1회 굴림 결과
-          <span class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span>
-        </span>
-        <span class="text-xs text-stone-500 dark:text-stone-400 font-normal">{{ sampleRoll.length }}줄 · 누적 {{ fmt(rollCount) }}회</span>
-      </h2>
-      <ul class="space-y-1.5">
-        <li
-          v-for="(line, i) in sampleRoll"
-          :key="i"
-          :class="[
-            'rounded-md px-3 py-2 text-sm tabular-nums flex items-center justify-between gap-3',
-            finalDamageBgClass(line.label)
-              || (lineHighlights(line.label)
-                ? 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 font-semibold text-amber-800 dark:text-amber-200'
-                : 'bg-stone-50 dark:bg-stone-900/40 text-stone-700 dark:text-stone-300'),
-          ]"
-        >
-          <span>▶ {{ line.label }} +{{ fmtLineVal(line.value) }}</span>
-          <span
-            v-if="linePct(line) != null"
-            :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
-            :title="`해당 티어 최대 ${fmtLineVal(line.hi)} 대비`"
-          >
-            [{{ linePct(line) }}%]
+    <!-- 1회 굴림 + 우측 기록 패널 -->
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+      <section
+        v-if="sampleRoll"
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      >
+        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 flex items-center justify-between gap-3">
+          <span>
+            🎰 1회 굴림 결과
+            <span class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span>
           </span>
-        </li>
-      </ul>
-    </section>
+          <span class="text-xs text-stone-500 dark:text-stone-400 font-normal">{{ sampleRoll.length }}줄 · 누적 {{ fmt(rollCount) }}회</span>
+        </h2>
+
+        <div
+          v-if="sampleConv"
+          :class="[
+            'inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md ring-1 mb-3 text-sm font-extrabold tabular-nums',
+            sampleHit
+              ? 'ring-orange-400 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300'
+              : 'ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400',
+          ]"
+          title="이 카드의 모든 옵션을 크댐 하나로 환산했을 때의 합 (종합 BP 기준)"
+        >
+          <span class="text-[11px] font-semibold text-stone-400">크댐환산</span>
+          {{ fmtRef(sampleConv.total) }}%
+          <span v-if="sampleHit" class="text-[11px] font-semibold ml-0.5">기록됨 ★</span>
+        </div>
+        <div v-else-if="sampleHit" class="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md ring-1 mb-3 text-sm font-extrabold ring-orange-400 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300">
+          기록됨 ★
+        </div>
+
+        <ul class="space-y-1.5">
+          <li
+            v-for="(line, i) in sampleRoll"
+            :key="i"
+            :class="[
+              'rounded-md px-3 py-2 text-sm tabular-nums flex items-center justify-between gap-3',
+              finalDamageBgClass(line.label)
+                || (lineHighlights(line.label)
+                  ? 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 font-semibold text-amber-800 dark:text-amber-200'
+                  : 'bg-stone-50 dark:bg-stone-900/40 text-stone-700 dark:text-stone-300'),
+            ]"
+          >
+            <span>▶ {{ line.label }} +{{ fmtLineVal(line.value) }}</span>
+            <span class="flex items-center gap-2 whitespace-nowrap">
+              <span
+                v-if="sampleConv && sampleConv.lines[i]"
+                :class="[
+                  'text-xs tabular-nums',
+                  sampleConv.lines[i].convertible
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-stone-400 dark:text-stone-600',
+                ]"
+                :title="sampleConv.lines[i].convertible
+                  ? '이 옵션 단독 효과를 크댐으로 환산한 값'
+                  : '전투력 공식에 들어가지 않는 옵션 — 환산 제외 (최종 대미지 계열/방어 스탯 등)'"
+              >
+                {{ sampleConv.lines[i].convertible ? '≈크댐 ' + fmtRef(sampleConv.lines[i].refAmount) + '%' : '환산 제외' }}
+              </span>
+              <span
+                v-if="linePct(line) != null"
+                :class="['text-xs tabular-nums', pctBadgeClass(linePct(line))]"
+                :title="'해당 티어 최대 ' + fmtLineVal(line.hi) + ' 대비'"
+              >
+                [{{ linePct(line) }}%]
+              </span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section
+        v-else
+        class="rounded-2xl bg-stone-100 dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-sm text-stone-500 dark:text-stone-400"
+      >
+        🎰 위의 <strong>1회 굴려보기</strong>를 누르면 카드 1장이 여기 표시되고,
+        설정한 조건을 넘으면 우측에 회차와 함께 기록됩니다.
+      </section>
+
+      <RollLogPanel
+        v-model:criterion="logCriterion"
+        :records="logRecords"
+        :option-keys="logOptionKeys"
+        :has-stats="hasStats"
+        title="📜 대박 굴림 기록"
+        equiv-note="최종 크리티컬/최소/최대 대미지는 최종 곱연산이라 T창 BP 식 밖 — 환산에서 빠집니다. 그쪽을 노린다면 특정 옵션 조건을 쓰세요."
+        @clear="clearRollLog"
+      />
+    </div>
 
 
     <!-- 시뮬 결과 (목표 요약 한 줄) -->

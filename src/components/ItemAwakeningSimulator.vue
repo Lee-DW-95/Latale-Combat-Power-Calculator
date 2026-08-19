@@ -18,8 +18,22 @@ import {
   vitalLabel,
 } from '../utils/itemAwakeningSim.js';
 import { ITEM_AWAKENING_SIM } from '../utils/simConstants.js';
+import {
+  normalizeItemAwakeningCard,
+  itemAwakeningOptionKeys,
+  evaluateLines,
+} from '../utils/rollEquiv.js';
+import { calculateBattlePower } from '../utils/battlePower.js';
+import { useRollLog } from '../composables/useRollLog.js';
 import { fmt, fmtInf, pctSmart } from '../utils/format.js';
 import CollapsibleSection from './CollapsibleSection.vue';
+import RollLogPanel from './RollLogPanel.vue';
+import RollBulkRun from './RollBulkRun.vue';
+
+const props = defineProps({
+  // 활성 캐릭터 T창 스탯 — 굴림 결과의 "크댐 환산" 계산 기준 (없으면 환산 생략).
+  stats: { type: Object, default: null },
+});
 
 const MAX_TARGETS = ITEM_AWAKENING_SIM.MAX_TARGETS;
 
@@ -32,24 +46,84 @@ const activeSet = computed(() => ITEM_AWAKENING_SETS[activeIdx.value]);
 const sampler = computed(() => createSampler(activeSet.value.rows));
 
 // ============================================================
-// 돌려보기
+// 돌려보기 + 굴림 기록
+//   여러 번 돌리다 놓친 카드를 되짚어 볼 수 있게, 조건을 넘은 카드만
+//   회차 번호와 함께 우측 패널에 누적한다 (조건/기록은 공용 컴포저블).
 // ============================================================
-const tryCount = ref(0);
 const rolls = ref([]); // 최근 배치의 결과 카드만 표시 (누적 X)
+
+const {
+  criterion: logCriterion,
+  records: logRecords,
+  count: tryCount,
+  nextIndex,
+  record: recordRoll,
+  clear: clearRollLog,
+  resetAll: resetRollLog,
+  bulkTimes,
+  bulkRunning,
+  bulkProgress,
+  bulkSummary,
+  bulkRun,
+  bulkCancel,
+} = useRollLog('latale_itemAwakRollLog_v1');
+
+const baseBP = computed(() => (props.stats ? calculateBattlePower(props.stats) : 0));
+const hasStats = computed(() => baseBP.value > 0);
+const statsForLog = computed(() => (hasStats.value ? props.stats : null));
+
+// 기록 조건 셀렉트 목록 — 현재 세트의 옵션 (등급 통합)
+const logOptionKeys = computed(() => itemAwakeningOptionKeys(activeSet.value.rows));
+
+// 세트를 바꾸면 옵션 목록이 달라진다 — 없는 옵션이 선택돼 있으면 첫 옵션으로.
+watch(logOptionKeys, (list) => {
+  if (!list.length) return;
+  if (!list.some((o) => o.key === logCriterion.value.option)) {
+    logCriterion.value.option = list[0].key;
+  }
+}, { immediate: true });
 
 function run(times) {
   const batch = [];
   for (let i = 0; i < times; i += 1) {
     const roll = rollOnceWith(sampler.value);
-    tryCount.value += 1;
-    batch.push({ ...roll, no: tryCount.value });
+    const no = nextIndex();
+    const r = recordRoll({
+      lines: normalizeItemAwakeningCard(roll),
+      stats: statsForLog.value,
+      index: no,
+      tag: activeSet.value.label,
+    });
+    batch.push({ ...roll, no, conv: r.evaluated, hit: r.hit });
   }
   rolls.value = batch;
 }
 
+// 대량 굴림 — N 회를 한 번에 돌리고, 끝나면 그 구간 최고 카드 1장만 남겨 보여준다.
+async function runBulk(times) {
+  const smp = sampler.value;
+  const s = await bulkRun({
+    times,
+    rollFn: () => rollOnceWith(smp),
+    normalize: normalizeItemAwakeningCard,
+    stats: statsForLog.value,
+    tag: activeSet.value.label,
+  });
+  if (s && s.bestCard) {
+    rolls.value = [{ ...s.bestCard, no: s.bestIndex, conv: s.bestEvaluated, hit: s.bestHit }];
+  }
+}
+
 function resetRolls() {
-  tryCount.value = 0;
   rolls.value = [];
+  resetRollLog();
+}
+
+// 환산치 표시 — 소수 1자리, 정수면 정수
+function fmtRef(v) {
+  if (!Number.isFinite(Number(v))) return '-';
+  const n = Number(v);
+  return Math.abs(n - Math.round(n)) < 0.05 ? String(Math.round(n)) : n.toFixed(1);
 }
 
 // ============================================================
@@ -597,100 +671,155 @@ function cardStyle(roll) {
     </section>
 
     <!-- ============================================================ -->
-    <!-- 돌려보기                                                      -->
+    <!-- 돌려보기 + 우측 굴림 기록                                      -->
     <!-- ============================================================ -->
-    <section
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
-    >
-      <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🎲 직접 돌려보기</h2>
-        <div class="text-right">
-          <div class="text-xs text-stone-500 dark:text-stone-400">시도 횟수</div>
-          <div class="text-2xl font-bold tabular-nums text-cyan-700 dark:text-cyan-300">
-            {{ fmt(tryCount) }}회
-          </div>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <button
-          type="button"
-          @click="run(1)"
-          class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-cyan-600 text-white hover:bg-cyan-700 transition"
-        >
-          🎯 1회 돌리기
-        </button>
-        <button
-          type="button"
-          @click="run(6)"
-          class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 transition"
-        >
-          🔥 6회 돌리기
-        </button>
-        <button
-          type="button"
-          @click="resetRolls"
-          class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-white dark:bg-stone-800 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
-        >
-          ♻️ 초기화
-        </button>
-      </div>
-
-      <p
-        v-if="rolls.length === 0"
-        class="text-sm text-stone-500 dark:text-stone-400 py-6 text-center"
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+      <section
+        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        돌리기 버튼을 눌러주세요.
-      </p>
-
-      <div
-        v-else
-        class="mt-4"
-        :class="
-          rolls.length === 1
-            ? 'grid grid-cols-1'
-            : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3'
-        "
-      >
-        <div
-          v-for="roll in rolls"
-          :key="roll.no"
-          :class="['rounded-xl p-4 shadow-sm', cardStyle(roll)]"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-stone-700 dark:text-stone-200">각성 결과</span>
-            <span class="text-xs text-stone-500 dark:text-stone-400">
-              #{{ roll.no }} · {{ roll.count }}옵션
-            </span>
-          </div>
-          <div class="space-y-1">
-            <div
-              v-for="(line, i) in roll.lines"
-              :key="i"
-              class="text-sm leading-relaxed flex items-center justify-between gap-3"
-            >
-              <span :class="lineClass(line)">
-                <span
-                  v-if="line.vital"
-                  class="text-amber-500 dark:text-amber-400"
-                  title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
-                  >◆</span
-                >
-                <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
-                {{ line.body }}
-              </span>
-              <span
-                v-if="linePct(line) != null"
-                :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
-                :title="`[${line.tier}] 등급 최대 ${fmtOptionValue(lineMax(line))} 대비`"
-              >
-                [{{ linePct(line) }}%]
-              </span>
+        <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
+          <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🎲 직접 돌려보기</h2>
+          <div class="text-right">
+            <div class="text-xs text-stone-500 dark:text-stone-400">시도 횟수</div>
+            <div class="text-2xl font-bold tabular-nums text-cyan-700 dark:text-cyan-300">
+              {{ fmt(tryCount) }}회
             </div>
           </div>
         </div>
-      </div>
-    </section>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button
+            type="button"
+            @click="run(1)"
+            class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-cyan-600 text-white hover:bg-cyan-700 transition"
+          >
+            🎯 1회 돌리기
+          </button>
+          <button
+            type="button"
+            @click="run(6)"
+            class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 transition"
+          >
+            🔥 6회 돌리기
+          </button>
+          <button
+            type="button"
+            @click="resetRolls"
+            class="rounded-lg px-4 py-2.5 text-sm font-semibold bg-white dark:bg-stone-800 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+            title="시도 횟수 + 굴림 기록 초기화"
+          >
+            ♻️ 초기화
+          </button>
+        </div>
+
+        <RollBulkRun
+          v-model:times="bulkTimes"
+          :running="bulkRunning"
+          :progress="bulkProgress"
+          :summary="bulkSummary"
+          :criterion="logCriterion"
+          :option-label="logOptionKeys.find((o) => o.key === logCriterion.option)?.label ?? ''"
+          :has-stats="hasStats"
+          @run="runBulk"
+          @cancel="bulkCancel"
+        />
+
+        <p
+          v-if="rolls.length === 0"
+          class="text-sm text-stone-500 dark:text-stone-400 py-6 text-center"
+        >
+          돌리기 버튼을 눌러주세요. 설정한 조건을 넘은 카드는 우측에 회차와 함께 기록됩니다.
+        </p>
+
+        <div
+          v-else
+          class="mt-4"
+          :class="
+            rolls.length === 1
+              ? 'grid grid-cols-1'
+              : 'grid grid-cols-1 md:grid-cols-2 gap-3'
+          "
+        >
+          <div
+            v-for="roll in rolls"
+            :key="roll.no"
+            :class="['rounded-xl p-4 shadow-sm', cardStyle(roll)]"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-bold text-stone-700 dark:text-stone-200">각성 결과</span>
+              <span class="text-xs text-stone-500 dark:text-stone-400">
+                #{{ roll.no }} · {{ roll.count }}옵션
+              </span>
+            </div>
+            <div
+              v-if="roll.conv"
+              :class="[
+                'inline-flex items-baseline gap-1 px-2 py-0.5 rounded ring-1 mb-2 text-xs font-extrabold tabular-nums',
+                roll.hit
+                  ? 'ring-orange-400 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300'
+                  : 'ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400',
+              ]"
+              title="이 카드의 모든 옵션을 크댐 하나로 환산했을 때의 합 (종합 BP 기준)"
+            >
+              <span class="text-[10px] font-semibold text-stone-400">크댐환산</span>
+              {{ fmtRef(roll.conv.total) }}%
+              <span v-if="roll.hit" class="text-[10px] font-semibold ml-0.5">기록됨 ★</span>
+            </div>
+            <div
+              v-else-if="roll.hit"
+              class="inline-flex px-2 py-0.5 rounded ring-1 mb-2 text-xs font-extrabold ring-orange-400 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300"
+            >
+              기록됨 ★
+            </div>
+            <div class="space-y-1">
+              <div
+                v-for="(line, i) in roll.lines"
+                :key="i"
+                class="text-sm leading-relaxed flex items-center justify-between gap-3"
+              >
+                <span :class="lineClass(line)">
+                  <span
+                    v-if="line.vital"
+                    class="text-amber-500 dark:text-amber-400"
+                    title="유효옵 — 각성석에서도 유효옵으로 표기되는 주력 옵션"
+                    >◆</span
+                  >
+                  <span :class="tierChip(line.tier, line.vital)">[{{ line.tier }}]</span>
+                  {{ line.body }}
+                </span>
+                <span class="flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    v-if="roll.conv && roll.conv.lines[i] && roll.conv.lines[i].convertible"
+                    class="text-xs tabular-nums text-emerald-600 dark:text-emerald-400"
+                    title="이 옵션 단독 효과를 크댐으로 환산한 값"
+                  >
+                    ≈크댐 {{ fmtRef(roll.conv.lines[i].refAmount) }}%
+                  </span>
+                  <span
+                    v-if="linePct(line) != null"
+                    :class="['text-xs tabular-nums', pctBadgeClass(linePct(line))]"
+                    :title="'[' + line.tier + '] 등급 최대 ' + fmtOptionValue(lineMax(line)) + ' 대비'"
+                  >
+                    [{{ linePct(line) }}%]
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <RollLogPanel
+        v-model:criterion="logCriterion"
+        :records="logRecords"
+        :option-keys="logOptionKeys"
+        :has-stats="hasStats"
+        title="📜 대박 각성 기록"
+        equiv-note="스킬 레벨·백어택 등 T창 BP 식 밖의 옵션은 환산에서 빠집니다."
+        @clear="clearRollLog"
+      />
+    </div>
+
 
     <!-- ============================================================ -->
     <!-- 확률표 (기본 접힘)                                            -->

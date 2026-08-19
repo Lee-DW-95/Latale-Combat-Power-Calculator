@@ -2,14 +2,19 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import {
   calculateBattlePower,
-  calculateDirectBP,
-  calculateSummonBP,
-  calculateBPVsMonster,
   getStatLabel,
   equipDelta,
   solveEquivalentAmount,
   STAT_KEYS,
 } from '../utils/battlePower.js';
+import {
+  PEN_CAP,
+  NATURAL_UNIT,
+  bpFor,
+  bpWithOption,
+  applyEquipToStats,
+  solveRefAmountForDelta as solveRefAmount,
+} from '../utils/statEquivalence.js';
 import { fmtRound as fmt } from '../utils/format.js';
 import { makeEmptyAwakStone } from '../utils/awakening.js';
 
@@ -59,72 +64,13 @@ const MARGINAL_STEPS = [
 // ============================================================
 // 공통 유틸 — 옵션 메커니즘 (한계 효율 + 환산 + 빠른 시뮬 공유)
 // ============================================================
-const PEN_CAP = 99;
-
-// 스탯별 자연 단위 메커니즘 — 사용자 인식 옵션 단위
-//   'pct': 누적 +Npp (% 옵션 칼럼)
-//   'raw': raw +N 가산 (가산값 칼럼)
-const NATURAL_UNIT = {
-  주스탯: 'pct', 공격력: 'pct', 고댐: 'pct', 일몬추: 'pct', 보몬추: 'pct',
-  크댐: 'raw', 최소뎀: 'raw', 최대뎀: 'raw',
-  일몬지: 'raw', 보몬지: 'raw', 근마효율: 'raw', 관통: 'raw',
-};
+// PEN_CAP / NATURAL_UNIT / bpFor / bpWithOption 는 utils/statEquivalence.js 공용 엔진 사용.
+//   각성석 시뮬(AwakeningSimulator)의 크댐 환산과 같은 수치를 내야 하므로 단일 소스로 통일.
 
 // 옵션 단위 라벨 — UI 표시 (사용자에게 통일된 "+N%" 또는 "+N pp/raw")
 function optionUnitLabel(statKey) {
   if (statKey === '관통') return '';
   return '%';
-}
-
-// BP 계산 — mode 별 ('avg' | 'direct' | 'summon' | 'normal' | 'boss')
-function bpFor(stats, mode) {
-  if (mode === 'direct') return calculateDirectBP(stats);
-  if (mode === 'summon') return calculateSummonBP(stats);
-  if (mode === 'normal') return calculateBPVsMonster(stats, 'normal');
-  if (mode === 'boss') return calculateBPVsMonster(stats, 'boss');
-  return calculateBattlePower(stats);
-}
-
-// 스탯 옵션 +amount 적용 시 BP 계산 (스탯별 자연 단위 메커니즘 적용)
-function bpWithOption(baseStats, statKey, amount, mode = 'avg') {
-  const newStats = { ...baseStats };
-  const unit = NATURAL_UNIT[statKey];
-
-  if (unit === 'pct') {
-    // 누적 +Npp 옵션 (equipDelta 의 % 옵션 메커니즘)
-    const equip = { [`${statKey}_퍼`]: amount };
-    const delta = equipDelta(baseStats, equip);
-    for (const k of STAT_KEYS) {
-      newStats[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
-    }
-    return bpFor(newStats, mode);
-  }
-
-  // raw 가산 메커니즘
-  if (statKey === '근마효율') {
-    newStats.근마효율 = (Number(baseStats.근마효율) || 0) + amount;
-    return bpFor(newStats, mode);
-  }
-  if (statKey === '일몬지' || statKey === '보몬지') {
-    // BP 식 내부 Math.floor 때문에 일몬지/보몬지 1% 단위 입력이 plateau 에 갇혀
-    // 짝수에서만 응답하는 문제 — amount × SCALE 로 측정한 뒤 선형 환산해 소수점 정밀도 확보.
-    const SCALE = 10000;
-    newStats[statKey] = (Number(baseStats[statKey]) || 0) + amount * SCALE;
-    const scaledBP = bpFor(newStats, mode);
-    const baseBPVal = bpFor(baseStats, mode);
-    return baseBPVal + (scaledBP - baseBPVal) / SCALE;
-  }
-  if (statKey === '관통') {
-    newStats.관통 = Math.max(0, Math.min(PEN_CAP, (Number(baseStats.관통) || 0) + amount));
-    return bpFor(newStats, mode);
-  }
-  // 크댐/최소뎀/최대뎀: equipDelta 가산값 메커니즘 (기본값에 raw +N → 표시 +N×(1+누적))
-  const equip = { [statKey]: amount };
-  const delta = equipDelta(baseStats, equip);
-  for (const k of STAT_KEYS) {
-    newStats[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
-  }
-  return bpFor(newStats, mode);
 }
 
 const baseBP = computed(() => calculateBattlePower(props.stats));
@@ -349,31 +295,9 @@ function resetAwakStoneAt(idx) {
   awakStones.value.splice(idx, 1, makeEmptyStone());
 }
 
-// equip 객체를 stats 에 적용해 새 stats 객체 반환 (equipDelta 활용)
-function applyEquipToStats(baseStats, equip) {
-  const delta = equipDelta(baseStats, equip);
-  const out = { ...baseStats };
-  for (const k of STAT_KEYS) {
-    out[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
-  }
-  return out;
-}
-
-// 주어진 ΔBP 를 기준 스탯(기본 크댐) 옵션 하나로 재현했을 때 필요한 amount.
-//   공용 솔버로 floor 양자화·캡을 일관 처리. 기준 스탯이 천장에 막혀 도달 불가하면
-//   합산이 깨지지 않도록 천장값 기준 선형 근사로 폴백한다 (refStat=크댐 은 사실상 항상 도달).
+// 공용 환산 솔버 래퍼 — props.stats 를 고정 인자로 넣어 기존 호출부 시그니처를 유지한다.
 function solveRefAmountForDelta(refKey, targetDelta, baseBPForMode, mode) {
-  const r = solveEquivalentAmount(
-    (amt) => bpWithOption(props.stats, refKey, amt, mode) - baseBPForMode,
-    targetDelta,
-  );
-  if (r.reachable) return r.amount;
-  // 도달 불가(캡): 천장값에 비례한 선형 추정으로 폴백.
-  if (Number.isFinite(r.reachableDelta) && r.reachableDelta !== 0) {
-    const probe = bpWithOption(props.stats, refKey, 1, mode) - baseBPForMode;
-    if (probe !== 0) return targetDelta / probe;
-  }
-  return 0;
+  return solveRefAmount(props.stats, refKey, targetDelta, baseBPForMode, mode);
 }
 
 // 각성석 환산 결과 — 각 옵션을 단독 적용한 ΔBP 를 기준 스탯(예: 크댐) 환산값으로 바꾼 뒤 합산.
