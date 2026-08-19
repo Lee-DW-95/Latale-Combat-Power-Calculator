@@ -16,6 +16,7 @@ import {
   awakeningOptionKeys,
   evaluateLines,
 } from '../utils/rollEquiv.js';
+import { simulateEquivTarget } from '../utils/equivTargetSim.js';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { useRollLog } from '../composables/useRollLog.js';
 import RollLogPanel from './RollLogPanel.vue';
@@ -35,6 +36,15 @@ const targets = ref([{ displayLabel: ALL_OPTION_LABELS[0], value: '' }]);
 
 const isRunning = ref(false);
 const result = ref(null);          // 통계 결과
+
+// 시뮬 조건 모드
+//   option — 목표 옵션 (크리 ≥ 120 · 보몬지 ≥ 5 …) · 닫힌 수식으로 정확히 계산
+//   equiv  — 크댐환산 합 ≥ N · 수식이 없어 몬테카를로로 성공률을 추정 (T창 정보 필요)
+const simMode = ref('option');
+const equivTarget = ref(150);      // 크댐환산 기준치
+const equivRuns = ref(200000);     // 몬테카를로 표본 수
+const equivProgress = ref(0);
+let equivCancelled = false;
 const sampleWinningCard = ref(null); // 1번 실행 성공 카드
 const sampleRoll = ref(null);       // 1회 굴려보기 미리보기
 const lastRollIndex = ref(0);      // 마지막으로 표시된 굴림의 회차 (rollCount 는 굴림 기록 컴포저블 소유)
@@ -84,14 +94,17 @@ const allTargetsFeasible = computed(() =>
   targetFeasibilities.value.every((f) => f.feasible !== false)
 );
 
-// 성공 카드 라인 강조 (목표에 포함된 옵션이면 ★)
+// 성공 카드 라인 강조 (목표에 포함된 옵션이면 ★) — 크댐환산 모드엔 옵션 목표가 없다
 function lineHighlights(line) {
+  if (result.value?.mode === 'equiv') return false;
   return validTargets.value.some(
     (t) => t.displayLabel === line.displayLabel && line.value >= t.value
   );
 }
 
 async function runSimulation() {
+  if (simMode.value === 'equiv') return runEquivSimulation();
+
   const ts = validTargets.value;
   if (ts.length === 0) return;
   if (!allTargetsFeasible.value) return;
@@ -101,13 +114,60 @@ async function runSimulation() {
 
   try {
     const stats = computeStatistics(ts);
-    result.value = { targets: ts, ...stats };
+    result.value = { mode: 'option', targets: ts, ...stats };
     const sample = simulateUntilTargetReached(ts);
     sampleWinningCard.value = sample;
   } finally {
     isRunning.value = false;
   }
 }
+
+// 크댐환산 목표 시뮬 — N 장 굴려 성공률을 추정하고, 통계는 기하분포로 낸다.
+async function runEquivSimulation() {
+  const th = Number(equivTarget.value);
+  if (!hasStats.value || !(th > 0)) return;
+
+  isRunning.value = true;
+  equivCancelled = false;
+  equivProgress.value = 0;
+  result.value = null;
+  sampleWinningCard.value = null;
+  await new Promise((r) => setTimeout(r, 30));
+
+  try {
+    const r = await simulateEquivTarget({
+      threshold: th,
+      runs: equivRuns.value,
+      rollFn: rollOnce,
+      normalize: normalizeAwakeningCard,
+      stats: statsForLog.value,
+      onProgress: (done) => { equivProgress.value = done; },
+      shouldCancel: () => equivCancelled,
+    });
+    if (!r) return;
+    result.value = { mode: 'equiv', targets: [], ...r };
+    if (r.sampleCard) {
+      sampleWinningCard.value = {
+        success: true,
+        tries: r.tries,
+        card: r.sampleCard,
+        conv: r.sampleConv,
+      };
+    }
+  } finally {
+    isRunning.value = false;
+  }
+}
+
+function cancelEquivSimulation() {
+  equivCancelled = true;
+}
+
+// 시뮬 실행 가능 여부 — 모드별로 조건이 다르다
+const canRunSimulation = computed(() => {
+  if (simMode.value === 'equiv') return hasStats.value && Number(equivTarget.value) > 0;
+  return validTargets.value.length > 0 && allTargetsFeasible.value;
+});
 
 // ============================================================
 // 굴림 기록 — 1회 굴려보기를 여러 번 돌릴 때 놓친 대박 카드를
@@ -292,6 +352,38 @@ function fmtVal(v) {
     >
       <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
 
+      <!-- 조건 모드 — 옵션별 목표 vs 카드 전체 크댐환산 -->
+      <div class="flex gap-1 mb-4">
+        <button
+          type="button"
+          @click="simMode = 'option'"
+          :class="[
+            'flex-1 rounded-md px-3 py-2 text-xs font-semibold transition',
+            simMode === 'option'
+              ? 'bg-cyan-600 text-white'
+              : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
+          ]"
+          title="크리 ≥ 120 · 보몬지 ≥ 5 처럼 옵션별 목표를 한 카드에서 동시에 만족"
+        >
+          옵션 조건
+        </button>
+        <button
+          type="button"
+          @click="simMode = 'equiv'"
+          :class="[
+            'flex-1 rounded-md px-3 py-2 text-xs font-semibold transition',
+            simMode === 'equiv'
+              ? 'bg-cyan-600 text-white'
+              : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
+          ]"
+          title="옵션 종류를 가리지 않고, 카드 전체를 크댐으로 환산한 합이 기준치 이상"
+        >
+          크댐환산 조건
+        </button>
+      </div>
+
+      <!-- (A) 옵션 조건 -->
+      <div v-show="simMode === 'option'">
       <div class="mb-2 flex items-center justify-between">
         <span class="block text-sm font-medium text-stone-700 dark:text-stone-300">
           목표 옵션 (최대 {{ MAX_TARGETS }}개 — 한 카드 안에서 모두 동시 만족)
@@ -370,12 +462,95 @@ function fmtVal(v) {
           </button>
         </div>
       </div>
+      </div>
+
+      <!-- (B) 크댐환산 조건 -->
+      <div v-show="simMode === 'equiv'" class="mb-4">
+        <p class="text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
+          카드 전체를 크댐으로 환산한 합이 기준치 이상 (옵션 종류는 안 가림)
+        </p>
+
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-sm text-stone-600 dark:text-stone-300 whitespace-nowrap">크댐환산 합 ≥</span>
+          <input
+            v-model="equivTarget"
+            type="number"
+            step="any"
+            min="0"
+            :disabled="isRunning"
+            class="w-28 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:opacity-50"
+          />
+          <span class="text-xs text-stone-400 ml-2 whitespace-nowrap">표본</span>
+          <input
+            v-model="equivRuns"
+            type="number"
+            min="1"
+            max="1000000"
+            step="1"
+            :disabled="isRunning"
+            class="w-28 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-2 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:opacity-50"
+          />
+          <span class="text-xs text-stone-400">회</span>
+          <div class="flex gap-1">
+            <button
+              v-for="n in [10000, 100000, 200000, 1000000]"
+              :key="n"
+              type="button"
+              @click="equivRuns = n"
+              :disabled="isRunning"
+              :class="[
+                'rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-40',
+                Number(equivRuns) === n
+                  ? 'bg-stone-700 dark:bg-stone-200 text-white dark:text-stone-900'
+                  : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
+              ]"
+            >
+              {{ n >= 10000 ? `${n / 10000}만` : fmt(n) }}
+            </button>
+          </div>
+        </div>
+
+        <p
+          v-if="!hasStats"
+          class="rounded-md bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+        >
+          ⚠ T창 정보가 있어야 환산이 됩니다 — <strong>전투력 계산</strong> 탭에서 캐릭터 정보를
+          입력하거나 로그인해 캐릭터를 불러오세요.
+        </p>
+        <p v-else class="text-xs text-stone-500 dark:text-stone-400">
+          이 조건은 닫힌 수식이 없어 <strong>표본 {{ fmt(Number(equivRuns) || 0) }}장을 실제로 굴려</strong>
+          성공률을 추정합니다 — 표본이 클수록 정확하고, 적중이 0 이면 "그보다 드물다" 까지만 알 수 있습니다.
+          우측 굴림 기록과 같은 환산 기준(종합 BP)입니다.
+        </p>
+
+        <!-- 진행률 -->
+        <div v-if="isRunning" class="mt-2">
+          <div class="h-1.5 rounded-full bg-stone-200 dark:bg-stone-700 overflow-hidden">
+            <div
+              class="h-full bg-cyan-500 transition-all duration-100"
+              :style="{ width: Math.min(100, (equivProgress / (Number(equivRuns) || 1)) * 100) + '%' }"
+            />
+          </div>
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-[11px] tabular-nums text-stone-500 dark:text-stone-400">
+              {{ fmt(equivProgress) }} / {{ fmt(Number(equivRuns) || 0) }}장
+            </span>
+            <button
+              type="button"
+              @click="cancelEquivSimulation"
+              class="rounded-md px-2 py-0.5 text-[11px] font-semibold bg-rose-600 text-white hover:bg-rose-700 transition"
+            >
+              ■ 중단
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div class="flex flex-wrap gap-2">
         <button
           type="button"
           @click="runSimulation"
-          :disabled="isRunning || validTargets.length === 0 || !allTargetsFeasible"
+          :disabled="isRunning || !canRunSimulation"
           class="rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-stone-300 disabled:dark:bg-stone-700 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition"
         >
           {{ isRunning ? '⏳ 시뮬 중...' : '🎲 목표 도달 시뮬' }}
@@ -531,7 +706,7 @@ function fmtVal(v) {
       <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
         🎯 시뮬 조건 요약
       </h2>
-      <ul class="space-y-0.5 mb-2">
+      <ul v-if="result.mode !== 'equiv'" class="space-y-0.5 mb-2">
         <li
           v-for="(t, i) in result.targets"
           :key="i"
@@ -540,14 +715,52 @@ function fmtVal(v) {
           ▸ {{ t.displayLabel }} ≥ {{ t.value }}
         </li>
       </ul>
-      <p class="text-xs text-stone-500 dark:text-stone-400">
-        평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(result.mean) }}회</strong> 시도 예상
+      <p v-else class="text-sm text-cyan-600 dark:text-cyan-400 font-medium mb-2">
+        ▸ 크댐환산 합 ≥ {{ result.threshold }}
+        <span class="text-xs text-stone-400 dark:text-stone-500 font-normal ml-1">
+          (표본 {{ fmt(result.runs) }}장 중 {{ fmt(result.hits) }}장 적중<span v-if="result.cancelled"> · 중단됨</span>)
+        </span>
+      </p>
+
+      <p v-if="result.mode === 'equiv' && result.hits === 0" class="text-xs text-amber-700 dark:text-amber-300">
+        표본 {{ fmt(result.runs) }}장에서 한 장도 못 넘었습니다 — 성공률은 최대
+        {{ pctSmart(result.ci.hi) }} (평균 {{ fmt(Math.ceil(1 / result.ci.hi)) }}회보다 드묾).
+        표본을 늘리거나 기준치를 낮춰보세요.
+        <span v-if="result.bestConv">이 표본의 최고치는 크댐환산 {{ fmtRef(result.bestConv.total) }} 였습니다.</span>
+      </p>
+      <p v-else class="text-xs text-stone-500 dark:text-stone-400">
+        평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(Math.round(result.mean)) }}회</strong> 시도 예상
         <span v-if="meanCost">
           (평균 인던 재료 <strong class="text-amber-700 dark:text-amber-300">{{ fmt(meanCost.material) }}</strong>개,
           망치 <strong class="text-rose-700 dark:text-rose-300">{{ fmt(meanCost.hammer) }}</strong>개)
         </span>
         · 단일 카드 성공률 {{ pctSmart(result.successRate) }}
+        <span v-if="result.mode === 'equiv'" class="text-stone-400 dark:text-stone-500">
+          (95% 신뢰구간 {{ pctSmart(result.ci.lo) }} ~ {{ pctSmart(result.ci.hi) }})
+        </span>
       </p>
+
+      <!-- 크댐환산 모드는 추정이라 분포까지 같이 봐야 감이 온다 -->
+      <div
+        v-if="result.mode === 'equiv' && result.hits > 0"
+        class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2"
+      >
+        <div
+          v-for="q in [
+            { k: 'p50', label: '절반은 이 안에', v: result.p50 },
+            { k: 'p90', label: '10명 중 9명', v: result.p90 },
+            { k: 'p99', label: '100명 중 99명', v: result.p99 },
+            { k: 'p999', label: '1000명 중 999명', v: result.p999 },
+          ]"
+          :key="q.k"
+          class="rounded-lg bg-stone-50 dark:bg-stone-900/50 ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2"
+        >
+          <div class="text-[10px] text-stone-400 dark:text-stone-500">{{ q.label }}</div>
+          <div class="text-sm font-bold tabular-nums text-stone-700 dark:text-stone-200">
+            {{ fmt(q.v) }}회
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- 1번 실행의 성공 카드 -->
@@ -574,6 +787,9 @@ function fmtVal(v) {
 
         <p class="text-xs text-stone-500 dark:text-stone-400">
           이번 시뮬 1회 실행 결과 — 같은 조건이라도 매번 회차가 다릅니다 (위 버튼 다시 누르면 재실행).
+          <span v-if="result?.mode === 'equiv'">
+            카드는 표본에서 조건을 넘긴 것 중 무작위로 한 장 고른 것입니다.
+          </span>
         </p>
 
         <!-- 카드 -->
@@ -587,6 +803,14 @@ function fmtVal(v) {
             ]"
           >
             {{ sampleWinningCard.card.stone.name }}
+          </div>
+          <div
+            v-if="sampleWinningCard.conv"
+            class="inline-flex items-baseline gap-1 px-2 py-0.5 rounded ring-1 ring-orange-400/70 bg-orange-500/10 mb-2 ml-2 text-xs font-extrabold tabular-nums text-orange-300"
+            title="이 카드의 모든 옵션을 크댐 하나로 환산했을 때의 합 (종합 BP 기준)"
+          >
+            <span class="text-[10px] font-semibold text-stone-400">크댐환산</span>
+            {{ fmtRef(sampleWinningCard.conv.total) }}%
           </div>
           <ul class="space-y-1 font-mono text-sm mb-3">
             <li
@@ -609,18 +833,38 @@ function fmtVal(v) {
                 ▶ {{ line.base }} +{{ fmtVal(line.value) }}{{ line.unit }}
                 <span v-if="lineHighlights(line)" class="text-[10px]">★</span>
               </span>
-              <span
-                v-if="linePct(line) != null"
-                :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
-                :title="`해당 옵션 최대값 ${fmtVal(maxPossibleValue(line.displayLabel))}${line.unit} 대비`"
-              >
-                {{ linePct(line) }}%
+              <span class="flex items-center gap-2 whitespace-nowrap">
+                <span
+                  v-if="sampleWinningCard.conv && sampleWinningCard.conv.lines[i]"
+                  :class="[
+                    'text-xs tabular-nums',
+                    sampleWinningCard.conv.lines[i].convertible ? 'text-emerald-300/90' : 'text-stone-600',
+                  ]"
+                  :title="sampleWinningCard.conv.lines[i].convertible
+                    ? '이 옵션 단독 효과를 크댐으로 환산한 값'
+                    : '전투력 공식에 들어가지 않는 옵션 — 환산 제외'"
+                >
+                  {{ sampleWinningCard.conv.lines[i].convertible
+                    ? '≈크댐 ' + fmtRef(sampleWinningCard.conv.lines[i].refAmount) + '%'
+                    : '환산 제외' }}
+                </span>
+                <span
+                  v-if="linePct(line) != null"
+                  :class="['text-xs whitespace-nowrap tabular-nums', pctBadgeClass(linePct(line))]"
+                  :title="`해당 옵션 최대값 ${fmtVal(maxPossibleValue(line.displayLabel))}${line.unit} 대비`"
+                >
+                  {{ linePct(line) }}%
+                </span>
               </span>
             </li>
           </ul>
           <div class="text-xs space-y-0.5 border-t border-emerald-700/50 pt-2 text-emerald-300">
+            <div v-if="result?.mode === 'equiv'" class="font-medium">
+              ✓ <strong>크댐환산 합 {{ fmtRef(sampleWinningCard.conv?.total) }}</strong>
+              ≥ {{ result.threshold }}
+            </div>
             <div
-              v-for="(t, i) in result?.targets ?? []"
+              v-for="(t, i) in result?.mode === 'equiv' ? [] : (result?.targets ?? [])"
               :key="i"
               class="font-medium"
             >
