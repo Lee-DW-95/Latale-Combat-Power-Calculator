@@ -4,6 +4,7 @@ import { ALL_MEMORIALS, uniqueBaseLabels } from '../data/memorialProbabilities.j
 import { evaluateLines, normalizeMemorialCard } from '../utils/rollEquiv.js';
 import {
   MEMORIAL_CARD_MAX,
+  MEMORIAL_CARD_LINES,
   makeEmptyMemorialCard,
   activeMemorialLines,
   memorialOf,
@@ -25,6 +26,12 @@ function labelsFor(card) {
   return m ? uniqueBaseLabels(m) : [];
 }
 
+// 일반 메모리얼은 1줄 고정, 세트는 최대 4줄 — 입력 줄 수를 종류에 맞춘다.
+function lineCountFor(card) {
+  const m = memorialOf(card);
+  return m?.type === 'normal' ? 1 : MEMORIAL_CARD_LINES;
+}
+
 function addCard() {
   if (memorials.value.length >= MEMORIAL_CARD_MAX) return;
   memorials.value = [...memorials.value, makeEmptyMemorialCard()];
@@ -38,15 +45,16 @@ function resetAll() {
   memorials.value = [];
 }
 
-// 메모리얼 종류가 바뀌면 그 메모리얼에 없는 옵션 줄은 비운다 (값은 남겨도 의미가 없다).
+// 메모리얼 종류가 바뀌면 그 메모리얼에 없는 옵션 줄과, 줄 수를 넘는 줄(세트→일반)은 비운다.
 function onKeyChange(card) {
   const labels = labelsFor(card);
-  for (const line of card.lines) {
-    if (line.label && !labels.includes(line.label)) {
+  const n = lineCountFor(card);
+  card.lines.forEach((line, i) => {
+    if (i >= n || (line.label && !labels.includes(line.label))) {
       line.label = '';
       line.value = '';
     }
-  }
+  });
 }
 
 // 같은 카드 안에서 같은 옵션을 두 줄에 고르는 것은 허용한다 — 실제 게임에서도 같은 옵션이
@@ -139,7 +147,7 @@ const totalConv = computed(() =>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-7">
           <div
-            v-for="(line, lIdx) in card.lines"
+            v-for="(line, lIdx) in card.lines.slice(0, lineCountFor(card))"
             :key="lIdx"
             class="flex items-center gap-1"
           >
