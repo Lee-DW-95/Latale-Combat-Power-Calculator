@@ -4,6 +4,7 @@ import { calculateBattlePower } from '../utils/battlePower.js';
 import { rollOnce as rollAwakening } from '../utils/awakeningSim.js';
 import { rollOnce as rollMemorial } from '../utils/memorialSim.js';
 import { rollRuneWord } from '../utils/runeWordSim.js';
+import { RUNES, RUNE_SLOTS, scoreOf, gradeOf } from '../data/runeWordData.js';
 import {
   normalizeAwakeningCard,
   normalizeAwakStoneLoadout,
@@ -20,6 +21,7 @@ import { runewordRows } from '../utils/runewordLoadout.js';
 import {
   analyzeSlots,
   expectedAfterRolls,
+  slotOutlook,
   ELY_BUDGETS,
   DEFAULT_ELY_BUDGET,
   DEFAULT_SAMPLES,
@@ -168,6 +170,16 @@ async function run() {
       const bySlot = new Map(slots.map((s) => [s.id, s]));
       r.slots.forEach((s) => { s.system = bySlot.get(s.id)?.system || ''; });
       r.dist = markRaw(r.dist);
+      // 룬워드 점수 기준(info 사이트 점수) 분포 — 환산 순위와 별개로 룬워드 행에 병기한다.
+      //   점수는 BP 계산이 없어 빠르므로 여기서 바로 표본을 만든다.
+      if (r.slots.some((s) => s.group === 'runeword')) {
+        const n = samples.value;
+        const scores = new Float64Array(n);
+        for (let i = 0; i < n; i += 1) scores[i] = rollRuneWord().total;
+        scores.sort();
+        const cur = currentRuneScore();
+        r.runeScore = markRaw({ sorted: scores, current: cur, ...slotOutlook(scores, cur, r.budgets) });
+      }
       result.value = r;
       stale.value = false;
     }
@@ -179,6 +191,35 @@ async function run() {
 
 function cancel() {
   cancelFlag = true;
+}
+
+// 지금 장착한 룬워드의 info 사이트 점수 (왕룬 2배, 통찰 왕룬 120 고정)
+function currentRuneScore() {
+  let total = 0;
+  (props.runeword || []).forEach((id, i) => {
+    if (id === null || id === undefined || !RUNES[id]) return;
+    total += scoreOf(RUNES[id], i === RUNE_SLOTS - 1);
+  });
+  return total;
+}
+
+// 룬워드 점수 기준 — 예산(굴림 횟수) 소진 시 기대 점수
+function runeScoreAtBudget(rolls) {
+  const rs = result.value?.runeScore;
+  if (!rs) return null;
+  const e = rolls > 0 ? expectedAfterRolls(rs.sorted, rs.current, rolls) : rs.current;
+  return { expected: e, gain: e - rs.current };
+}
+
+function runeScoreCurve() {
+  const rs = result.value?.runeScore;
+  const s = ranked.value.find((x) => x.group === 'runeword');
+  if (!rs || !s) return [];
+  return ELY_BUDGETS.map((B) => {
+    const rolls = s.costEly > 0 ? Math.floor(B / s.costEly) : 0;
+    const e = rolls > 0 ? expectedAfterRolls(rs.sorted, rs.current, rolls) : rs.current;
+    return { budget: B, rolls, expected: e, gain: e - rs.current };
+  });
 }
 
 // 입력(스탯·각성석·메모리얼·룬워드)이 바뀌면 결과는 이전 상태 기준 — 다시 돌리라고 표시만 한다.
@@ -467,6 +508,11 @@ function setPriceMan(key, raw) {
                         :class="rarityClass(s.pImprove)"
                         :title="rarityTitle(s.pImprove)"
                       >{{ rarityLabel(s.pImprove) }}</span>
+                      <div v-if="s.group === 'runeword' && result.runeScore" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400 tabular-nums">
+                        점수 <strong class="text-stone-700 dark:text-stone-200">{{ result.runeScore.current }}점</strong>
+                        ({{ gradeOf(result.runeScore.current).label }})
+                        <span class="ml-1 px-1.5 py-0.5 rounded-full" :class="rarityClass(result.runeScore.pImprove)" :title="'점수 기준: ' + rarityTitle(result.runeScore.pImprove)">{{ rarityLabel(result.runeScore.pImprove) }}</span>
+                      </div>
                     </template>
                   </td>
                   <td class="px-2 py-2 text-stone-600 dark:text-stone-300 whitespace-nowrap tabular-nums">
@@ -477,6 +523,15 @@ function setPriceMan(key, raw) {
                       성공하면 평균 <strong class="text-stone-800 dark:text-stone-100">{{ fmt1(s.meanIfImprove) }}%급</strong>
                     </template>
                     <span v-else class="text-stone-400 dark:text-stone-500 italic">표본 {{ fmt(result.samples) }}장 중 더 좋은 카드 없음</span>
+                    <div v-if="s.group === 'runeword' && result.runeScore" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
+                      점수 기준:
+                      <template v-if="result.runeScore.pImprove > 0">
+                        개선까지 평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(Math.round(result.runeScore.expectedRollsToImprove)) }}회</strong>
+                        ≈ {{ elyLabel(result.runeScore.expectedRollsToImprove * s.costEly) }} ·
+                        성공하면 평균 <strong class="text-stone-700 dark:text-stone-200">{{ Math.round(result.runeScore.meanIfImprove) }}점</strong>
+                      </template>
+                      <span v-else class="italic">표본 내 더 높은 점수 없음</span>
+                    </div>
                   </td>
                   <td class="px-2 py-2 text-right whitespace-nowrap tabular-nums">
                     <div class="font-semibold text-cyan-700 dark:text-cyan-300">
@@ -485,6 +540,10 @@ function setPriceMan(key, raw) {
                     </div>
                     <div class="text-[10px] text-stone-400 dark:text-stone-500">
                       1억당 {{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}
+                    </div>
+                    <div v-if="s.group === 'runeword' && result.runeScore && runeScoreAtBudget(s.rolls)" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
+                      점수 <strong class="text-stone-700 dark:text-stone-200">+{{ Math.round(runeScoreAtBudget(s.rolls).gain) }}점</strong>
+                      (기대 {{ Math.round(runeScoreAtBudget(s.rolls).expected) }}점)
                     </div>
                   </td>
                 </tr>
@@ -519,6 +578,24 @@ function setPriceMan(key, raw) {
                         <p class="mt-1.5 text-stone-500 dark:text-stone-400">
                           굴린 카드 표본: 평균 {{ fmt1(s.sampleMean) }} · 중앙값 {{ fmt1(s.sampleMedian) }} · 최고 {{ fmt1(s.sampleMax) }}
                         </p>
+                        <template v-if="s.group === 'runeword' && result.runeScore">
+                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-3 mb-1">
+                            룬워드 점수 기준 (info 사이트 점수 · 참고용, 순위에는 안 씀)
+                          </p>
+                          <ul class="space-y-0.5">
+                            <li v-for="row in runeScoreCurve()" :key="row.budget" class="flex justify-between gap-3">
+                              <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400">({{ fmt(row.rolls) }}회)</span></span>
+                              <span class="text-stone-700 dark:text-stone-200">
+                                {{ Math.round(row.expected) }}점
+                                <span class="text-cyan-700 dark:text-cyan-300">(+{{ Math.round(row.gain) }})</span>
+                              </span>
+                            </li>
+                          </ul>
+                          <p class="mt-1.5 text-stone-500 dark:text-stone-400">
+                            점수 표본: 평균 {{ Math.round(result.runeScore.sampleMean) }} · 중앙값 {{ Math.round(result.runeScore.sampleMedian) }} · 최고 {{ Math.round(result.runeScore.sampleMax) }} ·
+                            지금 {{ result.runeScore.current }}점보다 높을 확률 {{ (result.runeScore.pImprove * 100).toFixed(2) }}%
+                          </p>
+                        </template>
                       </div>
                     </div>
                   </td>
