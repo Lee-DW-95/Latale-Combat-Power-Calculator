@@ -346,11 +346,29 @@ function rarityTitle(p) {
   if (!(p > 0)) return `표본 ${fmt(result.value?.samples || 0)}장 중 지금보다 좋은 카드가 한 장도 없음`;
   return `이 슬롯을 다시 굴리면 ${(p * 100).toFixed(2)}% 확률로만 지금보다 좋은 카드가 나온다 (평균 ${fmt(Math.round(1 / p))}회에 1장)`;
 }
-function rarityClass(p) {
-  if (!(p > 0) || p < 0.001) return 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300';
-  if (p < 0.01) return 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300';
-  if (p < 0.2) return 'bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-300';
-  return 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500';
+
+// 희귀도 점 색 — 주황: 1,000장 중 1장급 이상 / 청록: 100장 중 1장급 / 회색: 그 이하
+function rarityDot(p) {
+  if (!(p > 0) || p < 0.001) return 'bg-orange-500';
+  if (p < 0.01) return 'bg-cyan-500';
+  if (p < 0.2) return 'bg-stone-400';
+  return 'bg-stone-300 dark:bg-stone-600';
+}
+
+// 목록 막대 — 현재 정렬 기준의 1순위 대비 비율. 예산 기준이면 기대 이득, 그 외엔 해당 지표
+function gainBarPct(slot) {
+  const rows = ranked.value;
+  if (!rows.length) return 0;
+  const k = sortKey.value;
+  const metric = (r) => {
+    if (k === 'perRoll') return r.gainPerRoll;
+    if (k === 'pImprove') return r.pImprove;
+    if (k === 'ifImprove') return r.pImprove > 0 ? r.meanIfImprove - r.current : 0;
+    return r.gainAtBudget;
+  };
+  const max = Math.max(...rows.map(metric));
+  if (!(max > 0)) return 0;
+  return Math.max(0, Math.min(100, (metric(slot) / max) * 100));
 }
 
 // 펼친 행의 "예산별 기대" 표 — 예산 후보 전체에 대해 즉석 계산
@@ -376,376 +394,372 @@ function setPriceMan(key, raw) {
 </script>
 
 <template>
-  <div>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
-      저장된 각성석·메모리얼·룬워드를 하나씩 "다시 굴렸을 때" 의 크댐환산 분포를 확률표로 표본 추출해,
-      현재 옵션보다 좋아질 확률과 기대 이득을 구합니다. 재화가 다른 내실끼리 비교하기 위해 1회 비용을
-      시세로 <strong>엘리 환산</strong>하고, <strong>같은 엘리 예산</strong>을 어디에 쓰는 게 기대 이득이 큰지로 순위를 매깁니다.
+  <div class="space-y-4">
+    <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+      저장된 각성석·메모리얼·룬워드를 하나씩 "다시 굴렸을 때" 의 크댐환산 분포를 확률표로 표본 추출해
+      현재 옵션과 비교합니다. 재화가 다른 내실을 한 줄에 세우기 위해 1회 비용을 시세로 엘리 환산하고,
+      <strong class="font-medium text-stone-700 dark:text-stone-200">같은 엘리 예산</strong>을 어디에 쓰는 게 기대 이득이 큰지로 순위를 매깁니다.
       굴려서 나쁘면 이전 옵션을 유지한다는 전제입니다.
     </p>
 
-    <p
+    <div
       v-if="!hasStats"
-      class="text-sm text-stone-500 dark:text-stone-400 py-4 text-center bg-stone-50 dark:bg-stone-900/40 rounded-lg"
+      class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-stone-50 dark:bg-stone-900/40 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
     >
       T창 스탯을 먼저 입력하세요 — 환산 기준(전투력)이 없으면 분석할 수 없습니다.
-    </p>
+    </div>
 
     <template v-else>
-      <!-- 분석 대상 — 전체, 또는 한 시스템만 ("메모리얼 중 무엇부터") -->
-      <div class="flex items-center gap-2 flex-wrap text-xs mb-2">
-        <span class="text-stone-500 dark:text-stone-400">분석 대상</span>
-        <div class="flex items-center gap-1">
-          <button
-            v-for="f in SYSTEM_FILTERS"
-            :key="f"
-            type="button"
-            @click="systemFilter = f"
-            :disabled="running || (f !== '전체' && candidateCounts[f] === 0)"
-            class="px-2.5 py-1 rounded-full ring-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
-            :class="systemFilter === f
-              ? 'bg-cyan-600 text-white ring-cyan-600'
-              : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'"
-          >
-            {{ f }} <span class="tabular-nums opacity-70">{{ candidateCounts[f] }}</span>
-          </button>
+      <!-- ── 설정 ─────────────────────────────────────────── -->
+      <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 p-3 sm:p-4 space-y-3">
+        <!-- 분석 대상: 세그먼트 컨트롤 -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">분석 대상</span>
+          <div class="inline-flex rounded-lg bg-stone-100 dark:bg-stone-900/60 p-0.5">
+            <button
+              v-for="f in SYSTEM_FILTERS"
+              :key="f"
+              type="button"
+              @click="systemFilter = f"
+              :disabled="running || (f !== '전체' && candidateCounts[f] === 0)"
+              class="px-3 py-1.5 rounded-md text-xs font-medium transition disabled:opacity-35 disabled:cursor-not-allowed"
+              :class="systemFilter === f
+                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-50 shadow-sm ring-1 ring-stone-200 dark:ring-stone-600'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-100'"
+            >
+              {{ f }}
+              <span class="ml-1 tabular-nums text-stone-400 dark:text-stone-500">{{ candidateCounts[f] }}</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- 설정 줄 -->
-      <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mb-2">
-        <label class="flex items-center gap-1.5">
-          <span class="text-stone-500 dark:text-stone-400">엘리 예산</span>
-          <select
-            v-model.number="budgetEly"
-            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-          >
-            <option v-for="b in ELY_BUDGETS" :key="b" :value="b">{{ elyLabel(b) }}</option>
-          </select>
-        </label>
-        <label class="flex items-center gap-1.5">
-          <span class="text-stone-500 dark:text-stone-400">표본 수</span>
-          <select
-            v-model.number="samples"
-            :disabled="running"
-            class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-          >
-            <option v-for="n in SAMPLE_CHOICES" :key="n" :value="n">{{ fmt(n) }}</option>
-          </select>
-        </label>
-        <label class="flex items-center gap-1.5 cursor-pointer">
-          <input v-model="includeEmpty" type="checkbox" :disabled="running" class="rounded text-cyan-600 focus:ring-cyan-500" />
-          <span class="text-stone-600 dark:text-stone-300">빈 슬롯 포함</span>
-        </label>
-        <button
-          type="button"
-          @click="showPrices = !showPrices"
-          class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
-        >
-          💰 시세 {{ showPrices ? '접기' : '설정' }}
-        </button>
-        <span class="text-stone-400 dark:text-stone-500">분석 대상 {{ slotCount }}개</span>
-        <div class="ml-auto flex items-center gap-1.5">
-          <button
-            v-if="running"
-            type="button"
-            @click="cancel"
-            class="px-3 py-1.5 rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
-          >
-            중단
-          </button>
-          <button
-            type="button"
-            @click="run"
-            :disabled="running || slotCount === 0"
-            class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition"
-          >
-            {{ running ? '분석 중…' : result ? '다시 분석' : '분석 실행' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 시세 편집 — 만 엘리 단위 -->
-      <div
-        v-if="showPrices"
-        class="rounded-md ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2 mb-3 text-xs"
-      >
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="font-semibold text-stone-600 dark:text-stone-300">재화 시세 (만 엘리 단위, 브라우저에 저장)</span>
-          <button type="button" @click="resetPrices" class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition">기본값</button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5">
-          <label v-for="d in PRICE_DEFS" :key="d.key" class="flex items-center gap-2">
-            <span class="flex-1 text-stone-600 dark:text-stone-300" :title="d.note || ''">{{ d.label }}</span>
-            <input
-              :value="priceMan(d.key)"
-              @input="(e) => setPriceMan(d.key, e.target.value)"
-              type="number"
-              min="0"
-              step="1"
-              class="w-24 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1.5 py-1 text-xs text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-            />
-            <span class="text-stone-400 w-4">만</span>
+        <!-- 예산 · 표본 · 옵션 · 실행 -->
+        <div class="flex items-end gap-x-4 gap-y-3 flex-wrap">
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">엘리 예산</span>
+            <select
+              v-model.number="budgetEly"
+              class="h-9 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            >
+              <option v-for="b in ELY_BUDGETS" :key="b" :value="b">{{ elyLabel(b) }}</option>
+            </select>
           </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">표본 수</span>
+            <select
+              v-model.number="samples"
+              :disabled="running"
+              class="h-9 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            >
+              <option v-for="n in SAMPLE_CHOICES" :key="n" :value="n">{{ fmt(n) }}장</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-2 h-9 cursor-pointer text-sm text-stone-600 dark:text-stone-300">
+            <input v-model="includeEmpty" type="checkbox" :disabled="running" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" />
+            빈 슬롯 포함
+          </label>
+          <button
+            type="button"
+            @click="showPrices = !showPrices"
+            class="h-9 px-3 rounded-lg text-sm ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+          >
+            시세 {{ showPrices ? '닫기' : '설정' }}
+          </button>
+          <span class="h-9 inline-flex items-center text-xs text-stone-400 dark:text-stone-500 tabular-nums">대상 {{ slotCount }}개</span>
+          <div class="ml-auto flex items-center gap-2">
+            <button
+              v-if="running"
+              type="button"
+              @click="cancel"
+              class="h-9 px-3 rounded-lg text-sm ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+            >
+              중단
+            </button>
+            <button
+              type="button"
+              @click="run"
+              :disabled="running || slotCount === 0"
+              class="h-9 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              {{ running ? '분석 중…' : result ? '다시 분석' : '분석 실행' }}
+            </button>
+          </div>
         </div>
-        <p class="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
-          1회 비용 → 각성석 {{ elyLabel(elyFor(AWAK_COST_ITEMS)) }} · 룬워드 {{ elyLabel(elyFor(RUNE_COST_ITEMS)) }} ·
-          메모리얼은 종류별 (세트 파편 20~40 + 결정 3, 일반 파편 0.5~4 + 결정 0.5~1)
+
+        <!-- 시세 -->
+        <div v-if="showPrices" class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">재화 시세 · 만 엘리</span>
+            <button type="button" @click="resetPrices" class="text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition">기본값으로</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
+            <label v-for="d in PRICE_DEFS" :key="d.key" class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-stone-600 dark:text-stone-300" :title="d.note || ''">{{ d.label }}</span>
+              <span class="inline-flex items-center rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 overflow-hidden">
+                <input
+                  :value="priceMan(d.key)"
+                  @input="(e) => setPriceMan(d.key, e.target.value)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="w-24 h-8 border-0 bg-transparent text-stone-900 dark:text-stone-100 px-2 text-sm text-right tabular-nums focus:outline-none"
+                />
+                <span class="px-2 text-xs text-stone-400 border-l border-stone-200 dark:border-stone-700 h-8 inline-flex items-center">만</span>
+              </span>
+            </label>
+          </div>
+          <p class="mt-2 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
+            1회 비용 — 각성석 {{ elyLabel(elyFor(AWAK_COST_ITEMS)) }} · 룬워드 {{ elyLabel(elyFor(RUNE_COST_ITEMS)) }} · 메모리얼은 종류별 (세트 파편 20~40 + 결정 3 · 일반 파편 0.5~4 + 결정 0.5~1)
+          </p>
+        </div>
+
+        <p v-if="slotCount === 0" class="text-xs text-stone-500 dark:text-stone-400">
+          분석할 내실이 없습니다. 위의 각성석·메모리얼·룬워드 섹션에 현재 옵션을 입력하세요
+          (값이 하나도 없는 슬롯은 "빈 슬롯 포함" 을 켜야 들어갑니다).
         </p>
+
+        <div v-if="running">
+          <div class="h-1.5 rounded-full bg-stone-100 dark:bg-stone-900/60 overflow-hidden">
+            <div class="h-full bg-cyan-500 transition-all" :style="{ width: progressPct.toFixed(1) + '%' }"></div>
+          </div>
+          <p class="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">
+            분포 추출 {{ progress ? `${progress.groupIndex + 1}/${progress.groupCount}` : '' }} · {{ progressPct.toFixed(0) }}%
+          </p>
+        </div>
       </div>
 
-      <p v-if="slotCount === 0" class="text-xs text-stone-400 dark:text-stone-500 italic mb-3">
-        분석할 내실이 없습니다. 위의 각성석·메모리얼·룬워드 섹션에 현재 옵션을 입력하세요
-        (값이 하나도 없는 슬롯은 "빈 슬롯 포함" 을 켜야 들어갑니다).
-      </p>
-
-      <!-- 진행률 -->
-      <div v-if="running" class="mb-3">
-        <div class="h-2 rounded bg-stone-100 dark:bg-stone-900/50 overflow-hidden">
-          <div class="h-full bg-cyan-500 transition-all" :style="{ width: progressPct.toFixed(1) + '%' }"></div>
-        </div>
-        <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1 tabular-nums">
-          분포 추출 {{ progress ? `${progress.groupIndex + 1}/${progress.groupCount}` : '' }} · {{ progressPct.toFixed(0) }}%
-        </p>
-      </div>
-
+      <!-- ── 결과 ─────────────────────────────────────────── -->
       <template v-if="result && ranked.length">
-        <p
-          v-if="stale"
-          class="text-[11px] text-orange-600 dark:text-orange-400 mb-2"
-        >
-          ⚠ 분석 후 입력(스탯·내실) 또는 분석 대상이 바뀌었습니다. 아래 결과는 이전 분석 기준입니다 — "다시 분석" 을 눌러 주세요.
+        <p v-if="stale" class="text-xs text-orange-600 dark:text-orange-400">
+          분석 후 입력(스탯·내실) 또는 분석 대상이 바뀌었습니다. 아래 결과는 이전 분석 기준입니다 — "다시 분석" 을 눌러 주세요.
         </p>
 
-        <!-- 정렬 기준 -->
-        <div class="flex items-center gap-x-3 gap-y-2 flex-wrap text-xs mb-3">
-          <span class="text-stone-500 dark:text-stone-400">
-            {{ systemFilter === '전체' ? '전체 내실' : systemFilter + '만' }} {{ ranked.length }}개
+        <!-- 추천 -->
+        <div
+          v-if="best"
+          class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3 flex items-center gap-4 flex-wrap"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
+              {{ systemFilter === '전체' ? '지금 굴릴 곳' : systemFilter + ' 중 먼저 굴릴 곳' }}
+            </p>
+            <p class="text-base font-semibold text-stone-900 dark:text-stone-50 truncate">{{ best.label }}</p>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 tabular-nums">
+              {{ elyLabel(budgetEly) }}이면 {{ fmt(best.rolls) }}회 · 현재 {{ fmt1(best.current) }} → 기대 {{ fmt1(best.expectedAtBudget) }}%급
+              <span class="mx-1 text-stone-300 dark:text-stone-600">|</span>
+              {{ best.empty ? '빈 슬롯' : rarityLabel(best.pImprove) }}
+              <span class="mx-1 text-stone-300 dark:text-stone-600">|</span>
+              개선까지 평균 {{ Number.isFinite(best.expectedRollsToImprove) ? fmt(Math.round(best.expectedRollsToImprove)) + '회' : '—' }}
+            </p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-2xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 leading-none">
+              +{{ fmt1(best.gainAtBudget) }}<span class="text-sm font-medium ml-0.5">%급</span>
+            </p>
+            <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1 tabular-nums">
+              1억당 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}
+            </p>
+          </div>
+        </div>
+
+        <!-- 목록 헤더 -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
+            {{ systemFilter === '전체' ? '전체' : systemFilter }} {{ ranked.length }}개
+            <span class="text-stone-300 dark:text-stone-600 mx-1">·</span>
+            막대는 1순위 대비 기대 이득
           </span>
-          <label class="flex items-center gap-1.5 ml-auto">
-            <span class="text-stone-500 dark:text-stone-400">정렬</span>
+          <label class="ml-auto flex items-center gap-2 text-xs">
+            <span class="text-stone-400 dark:text-stone-500">정렬</span>
             <select
               v-model="sortKey"
-              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              class="h-8 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
               :title="SORT_KEYS.find((k) => k.key === sortKey)?.desc"
             >
               <option v-for="k in SORT_KEYS" :key="k.key" :value="k.key" :title="k.desc">{{ k.label }}</option>
             </select>
           </label>
         </div>
-        <p v-if="sortKey !== 'budget'" class="text-[11px] text-stone-500 dark:text-stone-400 mb-2">
-          ⓘ {{ SORT_KEYS.find((k) => k.key === sortKey)?.desc }} — 비용을 반영하지 않은 관점이라 재화가 다른 시스템끼리 비교에는 맞지 않습니다.
+        <p v-if="sortKey !== 'budget'" class="-mt-2 text-[11px] text-stone-500 dark:text-stone-400">
+          {{ SORT_KEYS.find((k) => k.key === sortKey)?.desc }} — 비용을 반영하지 않은 관점이라 재화가 다른 시스템끼리 비교에는 맞지 않습니다.
         </p>
 
-        <!-- 추천 요약 -->
-        <div
-          v-if="best"
-          class="rounded-lg bg-cyan-50 dark:bg-cyan-900/20 ring-1 ring-cyan-200 dark:ring-cyan-800 px-3 py-2.5 mb-3 text-sm"
-        >
-          <span class="text-cyan-800 dark:text-cyan-200 font-semibold">
-            {{ systemFilter === '전체' ? '1순위' : systemFilter + ' 중 1순위' }}: {{ best.label }}
-          </span>
-          <span class="text-stone-600 dark:text-stone-300">
-            — {{ elyLabel(budgetEly) }} 예산이면 {{ fmt(best.rolls) }}회 굴릴 수 있고, 크댐환산 평균
-            <strong class="text-cyan-700 dark:text-cyan-300 tabular-nums">+{{ fmt1(best.gainAtBudget) }}%급</strong>
-            기대 (현재 {{ fmt1(best.current) }} → {{ fmt1(best.expectedAtBudget) }}).
-            지금 카드는 {{ best.empty ? '빈 슬롯' : rarityLabel(best.pImprove) }}이고, 1회 {{ elyLabel(best.costEly) }}로
-            개선까지 평균 {{ Number.isFinite(best.expectedRollsToImprove) ? fmt(Math.round(best.expectedRollsToImprove)) + '회' : '—' }}
-            (엘리 1억당 기대 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}).
-          </span>
-        </div>
+        <!-- 슬롯 목록 -->
+        <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 divide-y divide-stone-100 dark:divide-stone-700/70 overflow-hidden">
+          <div v-for="(s, i) in ranked" :key="s.id">
+            <button
+              type="button"
+              @click="toggle(s.id)"
+              class="w-full text-left px-3 sm:px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-900/30 transition"
+              :aria-expanded="expanded.has(s.id)"
+            >
+              <div class="grid grid-cols-[2rem_minmax(0,1fr)_auto] sm:grid-cols-[2rem_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.4fr)_7rem] items-center gap-x-3 gap-y-1.5">
+                <!-- 순위 -->
+                <span
+                  class="h-7 w-7 inline-flex items-center justify-center rounded-full text-xs font-semibold tabular-nums"
+                  :class="i === 0
+                    ? 'bg-cyan-600 text-white'
+                    : 'bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300'"
+                >{{ i + 1 }}</span>
 
-        <!-- 순위표 — 슬롯마다 "지금 카드가 얼마나 귀한가 / 굴리면 어떻게 되나 / 예산을 쓰면" 세 칸 -->
-        <div class="overflow-x-auto -mx-1">
-          <table class="min-w-full text-xs">
-            <thead>
-              <tr class="text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
-                <th class="px-2 py-1.5 text-left font-medium w-8">#</th>
-                <th class="px-2 py-1.5 text-left font-medium">슬롯</th>
-                <th
-                  class="px-2 py-1.5 text-left font-medium cursor-help underline decoration-dotted"
-                  title="크댐환산과, 이 슬롯을 다시 굴렸을 때 나오는 카드들 사이에서의 위치. '상위 5%' = 굴린 카드 100장 중 5장만 지금보다 좋다 = 20장 중 1장급. 다른 유저와 비교한 값이 아니라 확률표 기준 희귀도"
-                >현재 카드</th>
-                <th
-                  class="px-2 py-1.5 text-left font-medium cursor-help underline decoration-dotted"
-                  title="지금보다 좋은 카드가 나올 때까지 평균 몇 회(얼마)가 드는지, 그리고 그때 카드의 평균 크댐환산"
-                >굴리면</th>
-                <th
-                  class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300 cursor-help underline decoration-dotted whitespace-nowrap"
-                  title="예산 전부를 이 슬롯에 썼을 때 기대되는 크댐환산 상승. 아래 작은 글씨는 지금 상태에서 1회 굴렸을 때 엘리 1억당 기대 상승 (한계 효율)"
-                >{{ elyLabel(budgetEly) }} 예산 기대 이득</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template v-for="(s, i) in ranked" :key="s.id">
-                <tr
-                  @click="toggle(s.id)"
-                  class="border-b border-stone-100 dark:border-stone-800 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/40 transition align-top"
-                  :class="i === 0 ? 'bg-cyan-50/60 dark:bg-cyan-900/10' : ''"
-                >
-                  <td class="px-2 py-2 text-stone-500 dark:text-stone-400 tabular-nums">{{ i + 1 }}</td>
-                  <td class="px-2 py-2 whitespace-nowrap">
-                    <span class="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 mr-1">{{ s.system }}</span>
-                    <span class="text-stone-800 dark:text-stone-100">{{ s.label }}</span>
-                    <span class="ml-1 text-[10px] text-stone-400 dark:text-stone-500">1회 {{ elyLabel(s.costEly) }}</span>
-                  </td>
-                  <td class="px-2 py-2 whitespace-nowrap">
-                    <template v-if="s.empty">
-                      <span class="text-orange-600 dark:text-orange-400 font-semibold">빈 슬롯</span>
-                    </template>
-                    <template v-else>
-                      <span class="font-semibold text-stone-800 dark:text-stone-100 tabular-nums">{{ fmt1(s.current) }}%급</span>
-                      <span
-                        class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
-                        :class="rarityClass(s.pImprove)"
-                        :title="rarityTitle(s.pImprove)"
-                      >{{ rarityLabel(s.pImprove) }}</span>
-                      <div v-if="s.group === 'runeword' && result.runeScore" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400 tabular-nums">
-                        점수 <strong class="text-stone-700 dark:text-stone-200">{{ result.runeScore.current }}점</strong>
-                        ({{ gradeOf(result.runeScore.current).label }})
-                        <span class="ml-1 px-1.5 py-0.5 rounded-full" :class="rarityClass(result.runeScore.pImprove)" :title="'점수 기준: ' + rarityTitle(result.runeScore.pImprove)">{{ rarityLabel(result.runeScore.pImprove) }}</span>
-                      </div>
-                    </template>
-                  </td>
-                  <td class="px-2 py-2 text-stone-600 dark:text-stone-300 whitespace-nowrap tabular-nums">
-                    <template v-if="s.pImprove > 0">
-                      개선까지 평균 <strong class="text-stone-800 dark:text-stone-100">{{ fmt(Math.round(s.expectedRollsToImprove)) }}회</strong>
-                      <span class="text-stone-400 dark:text-stone-500">≈ {{ elyLabel(s.expectedRollsToImprove * s.costEly) }}</span>
-                      <span class="text-stone-400 dark:text-stone-500 mx-1">·</span>
-                      성공하면 평균 <strong class="text-stone-800 dark:text-stone-100">{{ fmt1(s.meanIfImprove) }}%급</strong>
-                    </template>
-                    <span v-else class="text-stone-400 dark:text-stone-500 italic">표본 {{ fmt(result.samples) }}장 중 더 좋은 카드 없음</span>
-                    <div v-if="s.group === 'runeword' && result.runeScore" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
-                      점수 기준:
-                      <template v-if="result.runeScore.pImprove > 0">
-                        개선까지 평균 <strong class="text-stone-700 dark:text-stone-200">{{ fmt(Math.round(result.runeScore.expectedRollsToImprove)) }}회</strong>
-                        ≈ {{ elyLabel(result.runeScore.expectedRollsToImprove * s.costEly) }} ·
-                        성공하면 평균 <strong class="text-stone-700 dark:text-stone-200">{{ Math.round(result.runeScore.meanIfImprove) }}점</strong>
-                      </template>
-                      <span v-else class="italic">표본 내 더 높은 점수 없음</span>
-                    </div>
-                  </td>
-                  <td class="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    <div class="font-semibold text-cyan-700 dark:text-cyan-300">
-                      +{{ fmt1(s.gainAtBudget) }}
-                      <span class="font-normal text-stone-400 dark:text-stone-500">({{ fmt(s.rolls) }}회)</span>
-                    </div>
-                    <div class="text-[10px] text-stone-400 dark:text-stone-500">
-                      1억당 {{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}
-                    </div>
-                    <div v-if="s.group === 'runeword' && result.runeScore && runeScoreAtBudget(s.rolls)" class="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
-                      점수 <strong class="text-stone-700 dark:text-stone-200">+{{ Math.round(runeScoreAtBudget(s.rolls).gain) }}점</strong>
-                      (기대 {{ Math.round(runeScoreAtBudget(s.rolls).expected) }}점)
-                    </div>
-                  </td>
-                </tr>
-                <tr v-if="expanded.has(s.id)" class="border-b border-stone-100 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/30">
-                  <td colspan="5" class="px-3 py-2">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-                      <div>
-                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">현재 옵션</p>
-                        <p v-if="s.empty" class="text-stone-400 italic">빈 슬롯 — 무엇이 나와도 이득입니다.</p>
-                        <ul v-else class="space-y-0.5">
-                          <li v-for="(l, li) in s.conv.lines" :key="li" class="flex justify-between gap-3">
-                            <span class="text-stone-700 dark:text-stone-200">{{ l.text }}</span>
-                            <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '환산 제외' }}</span>
-                          </li>
-                        </ul>
-                        <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                          {{ s.empty ? '' : rarityTitle(s.pImprove) + ' · ' }}1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} ·
-                          1회 비용 {{ s.cost }} = {{ elyLabel(s.costEly) }}
-                        </p>
+                <!-- 이름 + 막대 -->
+                <div class="min-w-0">
+                  <div class="flex items-start gap-2 min-w-0">
+                    <span class="text-[10px] px-1.5 py-px rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">{{ s.system }}</span>
+                    <span class="text-sm font-medium text-stone-900 dark:text-stone-50 leading-tight break-keep">{{ s.label }}</span>
+                    <span v-if="s.empty" class="text-[10px] text-orange-600 dark:text-orange-400 shrink-0">빈 슬롯</span>
+                  </div>
+                  <div class="mt-1.5 h-1 rounded-full bg-stone-100 dark:bg-stone-700/70 overflow-hidden">
+                    <div class="h-full rounded-full bg-cyan-500/80" :style="{ width: gainBarPct(s) + '%' }"></div>
+                  </div>
+                </div>
 
-                        <!-- 성공 카드 예시 — "성공" = 크댐환산 합이 지금 카드보다 높은 카드 -->
-                        <template v-if="winnerInfo(s) && winnerInfo(s).examples.length">
-                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-3 mb-1">
-                            성공하면 이런 카드
-                            <span class="font-normal text-stone-400 dark:text-stone-500">
-                              — 성공 = 크댐환산 합이 지금({{ fmt1(s.current) }})보다 높은 카드.
-                              {{ winnerInfo(s).basis === 'top' ? '드물어서 상위 표본에서 뽑음' : '성공 카드 평균에 가까운 예시' }}
-                            </span>
-                          </p>
-                          <div class="space-y-1.5">
-                            <div
-                              v-for="(ex, ei) in winnerInfo(s).examples"
-                              :key="ei"
-                              class="rounded-md ring-1 ring-stone-200 dark:ring-stone-700 px-2 py-1.5"
-                            >
-                              <div class="flex justify-between gap-2 mb-0.5">
-                                <span class="text-stone-500 dark:text-stone-400">예시 {{ ei + 1 }}</span>
-                                <span class="font-semibold text-cyan-700 dark:text-cyan-300 tabular-nums">{{ fmt1(ex.total) }}%급</span>
-                              </div>
-                              <ul class="space-y-0.5">
-                                <li v-for="(l, li) in ex.lines" :key="li" class="flex justify-between gap-3">
-                                  <span :class="l.convertible ? 'text-stone-700 dark:text-stone-200' : 'text-stone-400 dark:text-stone-500'">{{ l.text }}</span>
-                                  <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '—' }}</span>
-                                </li>
-                              </ul>
-                            </div>
-                          </div>
-                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-2 mb-1">
-                            성공 카드에 든 옵션
-                            <span class="font-normal text-stone-400 dark:text-stone-500">— 성공 카드 {{ fmt(winnerInfo(s).winnerCount) }}장 중 포함 비율 · 들었을 때 평균값</span>
-                          </p>
-                          <ul class="space-y-0.5">
-                            <li
-                              v-for="o in winnerInfo(s).options.slice(0, 6)"
-                              :key="o.key"
-                              class="flex justify-between gap-3"
-                            >
-                              <span class="text-stone-700 dark:text-stone-200">{{ o.label }}</span>
-                              <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">
-                                {{ (o.share * 100).toFixed(0) }}% · 평균 +{{ fmt1(o.avgValue) }} ({{ fmt1(o.avgRef) }}%급)
-                              </span>
-                            </li>
-                          </ul>
-                        </template>
-                      </div>
-                      <div>
-                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">예산별 기대 환산 (현재 유지 포함)</p>
+                <!-- 현재 카드 -->
+                <div class="min-w-0 col-start-2 sm:col-start-auto">
+                  <p class="text-sm tabular-nums text-stone-900 dark:text-stone-50">
+                    <template v-if="s.empty"><span class="text-stone-400">—</span></template>
+                    <template v-else><span class="font-semibold">{{ fmt1(s.current) }}</span><span class="text-stone-400 text-xs ml-0.5">%급</span></template>
+                  </p>
+                  <p v-if="!s.empty" class="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5 truncate" :title="rarityTitle(s.pImprove)">
+                    <span class="h-1.5 w-1.5 rounded-full shrink-0" :class="rarityDot(s.pImprove)"></span>
+                    <span class="truncate">{{ rarityLabel(s.pImprove) }}</span>
+                  </p>
+                  <p v-if="s.group === 'runeword' && result.runeScore" class="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums truncate">
+                    점수 {{ result.runeScore.current }}점 · {{ gradeOf(result.runeScore.current).label }} · {{ rarityLabel(result.runeScore.pImprove) }}
+                  </p>
+                </div>
+
+                <!-- 굴리면 -->
+                <div class="min-w-0 col-start-2 sm:col-start-auto text-[12px] text-stone-600 dark:text-stone-300 tabular-nums">
+                  <template v-if="s.pImprove > 0">
+                    <p class="truncate">
+                      개선까지 <span class="font-medium text-stone-900 dark:text-stone-50">{{ fmt(Math.round(s.expectedRollsToImprove)) }}회</span>
+                      <span class="text-stone-400"> · {{ elyLabel(s.expectedRollsToImprove * s.costEly) }}</span>
+                    </p>
+                    <p class="truncate">
+                      성공 시 평균 <span class="font-medium text-stone-900 dark:text-stone-50">{{ fmt1(s.meanIfImprove) }}%급</span>
+                      <span class="text-stone-400"> · 1회 {{ elyLabel(s.costEly) }}</span>
+                    </p>
+                  </template>
+                  <p v-else class="text-stone-400 dark:text-stone-500">표본 {{ fmt(result.samples) }}장 중 더 좋은 카드 없음 · 1회 {{ elyLabel(s.costEly) }}</p>
+                  <p v-if="s.group === 'runeword' && result.runeScore && result.runeScore.pImprove > 0" class="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                    점수 기준 개선까지 {{ fmt(Math.round(result.runeScore.expectedRollsToImprove)) }}회 · 성공 시 평균 {{ Math.round(result.runeScore.meanIfImprove) }}점
+                  </p>
+                </div>
+
+                <!-- 예산 기대 이득 -->
+                <div class="text-right tabular-nums col-start-3 row-start-1 sm:col-start-auto sm:row-start-auto">
+                  <p class="text-base font-semibold tracking-tight text-cyan-700 dark:text-cyan-300 leading-tight">
+                    +{{ fmt1(s.gainAtBudget) }}
+                  </p>
+                  <p class="text-[11px] text-stone-400 dark:text-stone-500">{{ fmt(s.rolls) }}회 · 1억당 {{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}</p>
+                  <p v-if="s.group === 'runeword' && result.runeScore && runeScoreAtBudget(s.rolls)" class="text-[11px] text-stone-400 dark:text-stone-500">
+                    점수 +{{ Math.round(runeScoreAtBudget(s.rolls).gain) }} → {{ Math.round(runeScoreAtBudget(s.rolls).expected) }}점
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <!-- 상세 -->
+            <div v-if="expanded.has(s.id)" class="px-3 sm:px-4 pb-4 pt-1 bg-stone-50/70 dark:bg-stone-900/30">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-xs">
+                <div class="space-y-4">
+                  <section>
+                    <h4 class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-1.5">현재 옵션</h4>
+                    <p v-if="s.empty" class="text-stone-400">빈 슬롯 — 무엇이 나와도 이득입니다.</p>
+                    <ul v-else class="space-y-1">
+                      <li v-for="(l, li) in s.conv.lines" :key="li" class="flex justify-between gap-3">
+                        <span class="text-stone-700 dark:text-stone-200">{{ l.text }}</span>
+                        <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '환산 제외' }}</span>
+                      </li>
+                    </ul>
+                    <p class="mt-2 text-stone-500 dark:text-stone-400 leading-relaxed">
+                      {{ s.empty ? '' : rarityTitle(s.pImprove) + ' · ' }}1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} · 1회 비용 {{ s.cost }} = {{ elyLabel(s.costEly) }}
+                    </p>
+                  </section>
+
+                  <section v-if="winnerInfo(s) && winnerInfo(s).examples.length">
+                    <h4 class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-1.5">
+                      성공하면 이런 카드
+                      <span class="normal-case tracking-normal font-normal">
+                        — 성공 = 크댐환산 합이 지금({{ fmt1(s.current) }})보다 높은 카드 ·
+                        {{ winnerInfo(s).basis === 'top' ? '드물어서 상위 표본에서 뽑음' : '성공 카드 평균에 가까운 예시' }}
+                      </span>
+                    </h4>
+                    <div class="grid grid-cols-1 gap-1.5">
+                      <div
+                        v-for="(ex, ei) in winnerInfo(s).examples"
+                        :key="ei"
+                        class="rounded-lg bg-white dark:bg-stone-800 ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2"
+                      >
+                        <div class="flex justify-between gap-2 mb-1">
+                          <span class="text-[11px] text-stone-400 dark:text-stone-500">예시 {{ ei + 1 }}</span>
+                          <span class="font-semibold text-stone-900 dark:text-stone-50 tabular-nums">{{ fmt1(ex.total) }}<span class="text-stone-400 text-[11px] ml-0.5">%급</span></span>
+                        </div>
                         <ul class="space-y-0.5">
-                          <li v-for="row in budgetCurve(s)" :key="row.budget" class="flex justify-between gap-3">
-                            <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400">({{ fmt(row.rolls) }}회)</span></span>
-                            <span class="text-stone-700 dark:text-stone-200">
-                              {{ fmt1(row.expected) }}
-                              <span class="text-cyan-700 dark:text-cyan-300">(+{{ fmt1(row.gain) }})</span>
-                            </span>
+                          <li v-for="(l, li) in ex.lines" :key="li" class="flex justify-between gap-3">
+                            <span :class="l.convertible ? 'text-stone-700 dark:text-stone-200' : 'text-stone-400 dark:text-stone-500'">{{ l.text }}</span>
+                            <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '—' }}</span>
                           </li>
                         </ul>
-                        <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                          굴린 카드 표본: 평균 {{ fmt1(s.sampleMean) }} · 중앙값 {{ fmt1(s.sampleMedian) }} · 최고 {{ fmt1(s.sampleMax) }}
-                        </p>
-                        <template v-if="s.group === 'runeword' && result.runeScore">
-                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-3 mb-1">
-                            룬워드 점수 기준 (info 사이트 점수 · 참고용, 순위에는 안 씀)
-                          </p>
-                          <ul class="space-y-0.5">
-                            <li v-for="row in runeScoreCurve()" :key="row.budget" class="flex justify-between gap-3">
-                              <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400">({{ fmt(row.rolls) }}회)</span></span>
-                              <span class="text-stone-700 dark:text-stone-200">
-                                {{ Math.round(row.expected) }}점
-                                <span class="text-cyan-700 dark:text-cyan-300">(+{{ Math.round(row.gain) }})</span>
-                              </span>
-                            </li>
-                          </ul>
-                          <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                            점수 표본: 평균 {{ Math.round(result.runeScore.sampleMean) }} · 중앙값 {{ Math.round(result.runeScore.sampleMedian) }} · 최고 {{ Math.round(result.runeScore.sampleMax) }} ·
-                            지금 {{ result.runeScore.current }}점보다 높을 확률 {{ (result.runeScore.pImprove * 100).toFixed(2) }}%
-                          </p>
-                        </template>
                       </div>
                     </div>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
+                    <h4 class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mt-3 mb-1.5">
+                      성공 카드에 든 옵션
+                      <span class="normal-case tracking-normal font-normal">— {{ fmt(winnerInfo(s).winnerCount) }}장 중 포함 비율 · 들었을 때 평균</span>
+                    </h4>
+                    <ul class="space-y-1">
+                      <li v-for="o in winnerInfo(s).options.slice(0, 6)" :key="o.key" class="flex items-center gap-2">
+                        <span class="text-stone-700 dark:text-stone-200 w-40 truncate shrink-0">{{ o.label }}</span>
+                        <span class="flex-1 h-1 rounded-full bg-stone-200/70 dark:bg-stone-700 overflow-hidden">
+                          <span class="block h-full bg-stone-400 dark:bg-stone-500" :style="{ width: (o.share * 100).toFixed(0) + '%' }"></span>
+                        </span>
+                        <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums w-40 text-right">
+                          {{ (o.share * 100).toFixed(0) }}% · 평균 +{{ fmt1(o.avgValue) }} ({{ fmt1(o.avgRef) }}%급)
+                        </span>
+                      </li>
+                    </ul>
+                  </section>
+                </div>
+
+                <div class="space-y-4">
+                  <section>
+                    <h4 class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-1.5">예산별 기대 환산 <span class="normal-case tracking-normal font-normal">— 현재 유지 포함</span></h4>
+                    <ul class="space-y-1">
+                      <li v-for="row in budgetCurve(s)" :key="row.budget" class="flex justify-between gap-3 tabular-nums">
+                        <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400 dark:text-stone-500">· {{ fmt(row.rolls) }}회</span></span>
+                        <span class="text-stone-900 dark:text-stone-50">{{ fmt1(row.expected) }} <span class="text-cyan-700 dark:text-cyan-300">+{{ fmt1(row.gain) }}</span></span>
+                      </li>
+                    </ul>
+                    <p class="mt-2 text-stone-500 dark:text-stone-400 tabular-nums">
+                      굴린 카드 표본 — 평균 {{ fmt1(s.sampleMean) }} · 중앙값 {{ fmt1(s.sampleMedian) }} · 최고 {{ fmt1(s.sampleMax) }}
+                    </p>
+                  </section>
+
+                  <section v-if="s.group === 'runeword' && result.runeScore">
+                    <h4 class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-1.5">룬워드 점수 기준 <span class="normal-case tracking-normal font-normal">— info 사이트 점수 · 참고용, 순위에는 안 씀</span></h4>
+                    <ul class="space-y-1">
+                      <li v-for="row in runeScoreCurve()" :key="row.budget" class="flex justify-between gap-3 tabular-nums">
+                        <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400 dark:text-stone-500">· {{ fmt(row.rolls) }}회</span></span>
+                        <span class="text-stone-900 dark:text-stone-50">{{ Math.round(row.expected) }}점 <span class="text-cyan-700 dark:text-cyan-300">+{{ Math.round(row.gain) }}</span></span>
+                      </li>
+                    </ul>
+                    <p class="mt-2 text-stone-500 dark:text-stone-400 tabular-nums">
+                      점수 표본 — 평균 {{ Math.round(result.runeScore.sampleMean) }} · 중앙값 {{ Math.round(result.runeScore.sampleMedian) }} · 최고 {{ Math.round(result.runeScore.sampleMax) }} ·
+                      지금 {{ result.runeScore.current }}점보다 높을 확률 {{ (result.runeScore.pImprove * 100).toFixed(2) }}%
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
-          ⓘ 표본 {{ fmt(result.samples) }}장 기준 몬테카를로 — 1% 미만 확률은 오차가 큽니다 (표본 수를 늘리면 정밀해집니다).
+
+        <p class="text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">
+          표본 {{ fmt(result.samples) }}장 기준 몬테카를로 — 1% 미만 확률은 오차가 큽니다 (표본 수를 늘리면 정밀해집니다).
           예산 기대 이득은 예산 전부를 그 슬롯 하나에 쓴다고 가정한 값이라 순서를 정하는 용도이고, 배분 계획은 아닙니다 —
           굴려서 카드가 좋아지면 개선 확률이 떨어지므로, 새 옵션을 저장한 뒤 다시 분석해 "1억당 기대" 가 가장 큰 곳으로 옮겨 가는 방식을 권합니다.
-          환산은 현재 스탯에 옵션을 단독 적용한 ΔBP 기준이라, 한 슬롯을 크게 올린 뒤에는 다른 슬롯의 수치가 조금 달라집니다.
+          환산은 현재 스탯에 옵션을 단독 적용한 ΔBP 기준이라 한 슬롯을 크게 올린 뒤에는 다른 슬롯의 수치가 조금 달라집니다.
           "최종 ~ 대미지" 는 크리 확률 100% 가정, 크리확률·명중률·방어력·체력 등 BP 무관 옵션은 0 으로 칩니다.
         </p>
       </template>

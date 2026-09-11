@@ -64,51 +64,56 @@ const grade = computed(() => gradeOf(score.value));
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-      <span class="text-xs text-stone-500 dark:text-stone-400">
-        장착 {{ filled }} / {{ RUNE_SLOTS }} · 점수 {{ score }}
-        <span v-if="filled" class="text-stone-400 dark:text-stone-500">({{ grade.label }})</span>
-      </span>
-      <div class="flex items-center gap-3 text-[11px]">
-        <span v-if="conv" class="tabular-nums">
-          <span class="text-stone-500 dark:text-stone-400">크댐환산</span>
-          <span class="font-semibold text-cyan-700 dark:text-cyan-300 ml-1">{{ fmt1(conv.total) }}%급</span>
+  <div class="space-y-3">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-400 max-w-2xl">
+        지금 장착한 룬워드의 룬 8개를 고르면 캐릭터와 함께 저장됩니다. 8번째 칸이 왕룬(수치 2배)입니다.
+        점수는 룬워드 시뮬과 같은 info 사이트 기준이고, 스펙업 방향 분석은 점수가 아니라 크댐환산으로 비교합니다.
+      </p>
+      <div class="flex items-center gap-3 shrink-0 text-xs tabular-nums">
+        <span class="text-stone-500 dark:text-stone-400">
+          장착 {{ filled }}/{{ RUNE_SLOTS }}
+          <span class="text-stone-300 dark:text-stone-600 mx-1">·</span>
+          점수 <span class="font-semibold text-stone-900 dark:text-stone-50">{{ score }}</span>
+          <span v-if="filled" class="text-stone-400 dark:text-stone-500"> {{ grade.label }}</span>
+        </span>
+        <span v-if="conv" class="text-stone-500 dark:text-stone-400">
+          환산 <span class="font-semibold text-stone-900 dark:text-stone-50">{{ fmt1(conv.total) }}</span><span class="text-stone-400 ml-0.5">%급</span>
         </span>
         <button
           type="button"
           @click="reset"
           :disabled="filled === 0"
-          class="px-2 py-1 rounded text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 transition"
+          class="h-8 px-3 rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 transition"
         >
           초기화
         </button>
       </div>
     </div>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
-      지금 장착한 룬워드의 룬 8개를 고르면 캐릭터와 함께 저장됩니다. 8번째 칸이 왕룬(수치 2배)입니다.
-      점수는 룬워드 시뮬과 같은 info 사이트 기준이고, 스펙업 방향 분석은 점수가 아니라 크댐환산으로 비교합니다.
-    </p>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+    <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 px-3 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5">
       <div
         v-for="(id, i) in slots"
         :key="i"
-        class="flex items-center gap-1.5"
+        class="flex items-center gap-2"
       >
         <span
-          class="text-xs w-9 shrink-0 tabular-nums font-semibold text-right"
-          :class="i === RUNE_SLOTS - 1 ? 'text-orange-600 dark:text-orange-400' : 'text-stone-500 dark:text-stone-400'"
+          class="text-[11px] w-7 shrink-0 tabular-nums text-right"
+          :class="i === RUNE_SLOTS - 1 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-stone-400 dark:text-stone-500'"
         >
-          {{ i === RUNE_SLOTS - 1 ? '👑' : `${i + 1}.` }}
+          {{ i === RUNE_SLOTS - 1 ? '왕룬' : i + 1 }}
         </span>
         <select
           :value="id === null || id === undefined ? '' : id"
           @change="(e) => setSlot(i, e.target.value)"
-          class="flex-1 min-w-0 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1.5 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+          class="h-8 flex-1 min-w-0 rounded-lg border-0 ring-1 ring-stone-200 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+          :class="[
+            id === null || id === undefined ? 'text-stone-400 dark:text-stone-500' : '',
+            i === RUNE_SLOTS - 1 ? 'ring-orange-300 dark:ring-orange-700/70' : '',
+          ]"
           :title="id !== null && id !== undefined ? displayDesc(RUNES[id], i === RUNE_SLOTS - 1) : ''"
         >
-          <option value="">(빈 칸)</option>
+          <option value="">빈 칸</option>
           <option
             v-for="r in RUNES"
             :key="r.id"
