@@ -413,9 +413,15 @@ function setPriceMan(key, raw) {
                 <th class="px-2 py-1.5 text-left font-medium w-8">#</th>
                 <th class="px-2 py-1.5 text-left font-medium">슬롯</th>
                 <th class="px-2 py-1.5 text-right font-medium">현재</th>
-                <th class="px-2 py-1.5 text-right font-medium">분포 위치</th>
                 <th class="px-2 py-1.5 text-right font-medium">1회 비용</th>
-                <th class="px-2 py-1.5 text-right font-medium">1회 개선 확률</th>
+                <th
+                  class="px-2 py-1.5 text-right font-medium cursor-help underline decoration-dotted"
+                  title="다시 굴린 카드 표본 중 지금보다 좋은 카드의 비율 — 곧 지금 카드의 분포 위치 (5% = 상위 5%)"
+                >1회 개선 확률</th>
+                <th
+                  class="px-2 py-1.5 text-right font-medium cursor-help underline decoration-dotted"
+                  title="지금보다 좋게 나온 카드들의 평균 크댐환산 — 개선에 성공하면 대략 이 정도가 된다"
+                >개선 시 평균</th>
                 <th class="px-2 py-1.5 text-right font-medium">1억당 기대</th>
                 <th class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300">{{ elyLabel(budgetEly) }} 예산 기대 이득</th>
               </tr>
@@ -434,9 +440,9 @@ function setPriceMan(key, raw) {
                     <span v-if="s.empty" class="ml-1 text-[10px] text-orange-600 dark:text-orange-400">빈 슬롯</span>
                   </td>
                   <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ fmt1(s.current) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-500 dark:text-stone-400">{{ s.empty ? '—' : topPctLabel(s.percentile) }}</td>
                   <td class="px-2 py-1.5 text-right text-stone-500 dark:text-stone-400 whitespace-nowrap" :title="s.cost">{{ elyLabel(s.costEly) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ pct(s.pImprove) }}</td>
+                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200" :title="s.empty ? '' : topPctLabel(s.percentile)">{{ pct(s.pImprove) }}</td>
+                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ s.pImprove > 0 ? fmt1(s.meanIfImprove) : '—' }}</td>
                   <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}</td>
                   <td class="px-2 py-1.5 text-right font-semibold text-cyan-700 dark:text-cyan-300">
                     +{{ fmt1(s.gainAtBudget) }}
@@ -488,7 +494,8 @@ function setPriceMan(key, raw) {
 
         <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
           ⓘ 표본 {{ fmt(result.samples) }}장 기준 몬테카를로 — 1% 미만 확률은 오차가 큽니다 (표본 수를 늘리면 정밀해집니다).
-          예산 기대 이득은 예산 전부를 그 슬롯 하나에 쓴다고 가정한 값이고, "1억당 기대" 는 1회 기준 한계 효율입니다.
+          예산 기대 이득은 예산 전부를 그 슬롯 하나에 쓴다고 가정한 값이라 순서를 정하는 용도이고, 배분 계획은 아닙니다 —
+          굴려서 카드가 좋아지면 개선 확률이 떨어지므로, 새 옵션을 저장한 뒤 다시 분석해 "1억당 기대" 가 가장 큰 곳으로 옮겨 가는 방식을 권합니다.
           환산은 현재 스탯에 옵션을 단독 적용한 ΔBP 기준이라, 한 슬롯을 크게 올린 뒤에는 다른 슬롯의 수치가 조금 달라집니다.
           "최종 ~ 대미지" 는 크리 확률 100% 가정, 크리확률·명중률·방어력·체력 등 BP 무관 옵션은 0 으로 칩니다.
         </p>
