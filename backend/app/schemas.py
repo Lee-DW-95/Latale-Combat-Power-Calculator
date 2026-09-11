@@ -44,6 +44,7 @@ class CharacterBase(BaseModel):
     type: Literal["P", "M"]
     stats: dict[str, Any] = Field(default_factory=dict)
     awak_stones: list[Any] = Field(default_factory=list)
+    memorials: list[Any] = Field(default_factory=list)
 
 
 class CharacterCreate(CharacterBase):

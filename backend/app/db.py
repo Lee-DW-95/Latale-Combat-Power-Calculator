@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import get_settings
@@ -39,3 +39,27 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns()
+
+
+# create_all 은 기존 테이블에 새 컬럼을 추가하지 않는다. Alembic 없이 운영하므로
+# 모델에 있는데 실제 테이블에 없는 JSON 컬럼만 ADD COLUMN 으로 보충한다 (idempotent).
+#   (컬럼명, DDL) — 새 JSON 리스트 컬럼을 늘릴 때 여기에 한 줄 추가.
+_JSON_LIST_COLUMNS = {
+    "characters": [
+        ("memorials", "JSON NOT NULL DEFAULT '[]'"),
+    ],
+}
+
+
+def _add_missing_columns() -> None:
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in _JSON_LIST_COLUMNS.items():
+            if not insp.has_table(table):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols:
+                if name in existing:
+                    continue
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))

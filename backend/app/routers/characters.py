@@ -53,6 +53,7 @@ def create_character(
         type=body.type,
         stats=body.stats,
         awak_stones=body.awak_stones,
+        memorials=body.memorials,
     )
     db.add(char)
     db.commit()
@@ -86,6 +87,7 @@ def update_character(
     char.type = body.type
     char.stats = body.stats
     char.awak_stones = body.awak_stones
+    char.memorials = body.memorials
     db.commit()
     db.refresh(char)
     return char

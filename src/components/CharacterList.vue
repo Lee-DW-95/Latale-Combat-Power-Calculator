@@ -24,6 +24,7 @@ function updatedLabel(c) {
 const props = defineProps({
   currentStats: { type: Object, required: true },
   currentAwakStones: { type: Array, default: () => [] },
+  currentMemorials: { type: Array, default: () => [] },
 });
 
 const { characters, activeId, saveCharacter, deleteCharacter, selectCharacter } =
@@ -37,7 +38,12 @@ async function onSave() {
   try {
     // saveCharacter 가 activeId 를 갱신 → App.vue 의 watch(activeCharacter) 가
     // stats/awakStones 동기화를 처리. 별도 emit 불필요.
-    await saveCharacter(newName.value, props.currentStats, props.currentAwakStones);
+    await saveCharacter(
+      newName.value,
+      props.currentStats,
+      props.currentAwakStones,
+      props.currentMemorials,
+    );
     newName.value = '';
   } catch (e) {
     errorMsg.value = e.message;

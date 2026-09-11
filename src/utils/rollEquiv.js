@@ -177,6 +177,26 @@ export function normalizeAwakeningCard(card) {
   }));
 }
 
+/**
+ * 저장된 각성석 1개 ({ options: [{ stat, unit, value }] }, EfficiencyPanel 입력 형식) → 정규화 줄 배열.
+ * 값이 비어 있는 옵션은 줄에서 뺀다 — 빈 줄이 없으면 "빈 슬롯" 으로 취급된다.
+ */
+export function normalizeAwakStoneLoadout(stone) {
+  const out = [];
+  for (const opt of stone?.options || []) {
+    const v = Number(opt.value);
+    if (!Number.isFinite(v) || v === 0) continue;
+    const equipKey = opt.unit === 'pct' ? `${opt.stat}_퍼` : opt.stat;
+    out.push({
+      key: `${opt.stat}__${opt.unit}`,
+      text: `${opt.stat} +${fmtV(v)}${opt.unit === 'pct' ? '%' : ''}`,
+      value: v,
+      equip: { [equipKey]: v },
+    });
+  }
+  return out;
+}
+
 /** 각성석 카드에 등장 가능한 전체 옵션 라벨 (보라 ∪ 신비) — 기록 조건 셀렉트용 */
 export function awakeningOptionKeys() {
   const seen = new Set();

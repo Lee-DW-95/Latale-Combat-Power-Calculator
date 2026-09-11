@@ -39,6 +39,8 @@ class Character(Base):
     stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # 각성석 10 stones × 4 options. [{options: [{stat, unit, value}, ...]}, ...]
     awak_stones: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # 보유 메모리얼 카드. [{key: 'CHOENPAM_SET', lines: [{label, value}, ...]}, ...]
+    memorials: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )

@@ -43,6 +43,7 @@ function fromServerCharacter(c) {
     // stats 안에 type 이 포함돼 있으나, 백엔드 스키마는 별도 컬럼이라 응답에도 별도로 옴 — 무시.
     stats: c.stats || createEmptyStats(c.type || 'P'),
     awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
+    memorials: Array.isArray(c.memorials) ? c.memorials : [],
     updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
   };
 }
@@ -97,8 +98,8 @@ function makeLocalId() {
 
 export function useCharacterStorage() {
   // saveCharacter — 동일 이름 캐릭터가 있으면 갱신, 없으면 신규 생성.
-  //   awakStones 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
-  async function saveCharacter(name, stats, awakStones = null) {
+  //   awakStones / memorials 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
+  async function saveCharacter(name, stats, awakStones = null, memorials = null) {
     const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('캐릭터 이름을 입력해주세요.');
 
@@ -110,6 +111,7 @@ export function useCharacterStorage() {
         type: stats.type || 'P',
         stats: { ...stats },
         awak_stones: awakStones ?? existing?.awak_stones ?? [],
+        memorials: memorials ?? existing?.memorials ?? [],
       };
       if (existing) {
         const updated = fromServerCharacter(await api.updateCharacter(existing.id, payload));
@@ -127,6 +129,7 @@ export function useCharacterStorage() {
     if (existing) {
       existing.stats = { ...stats };
       if (awakStones !== null) existing.awak_stones = awakStones;
+      if (memorials !== null) existing.memorials = memorials;
       existing.updatedAt = Date.now();
       activeId.value = existing.id;
       return existing;
@@ -136,6 +139,7 @@ export function useCharacterStorage() {
       name: trimmed,
       stats: { ...stats },
       awak_stones: awakStones ?? [],
+      memorials: memorials ?? [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -197,6 +201,7 @@ export function useCharacterStorage() {
             type: c.stats?.type || 'P',
             stats: c.stats || {},
             awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
+            memorials: Array.isArray(c.memorials) ? c.memorials : [],
           }),
         );
         characters.value = [created, ...characters.value];
