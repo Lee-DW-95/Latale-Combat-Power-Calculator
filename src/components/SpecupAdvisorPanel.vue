@@ -566,7 +566,7 @@ function setPriceMan(key, raw) {
               +{{ fmt1(best.gainAtBudget) }}<span class="text-sm font-medium ml-0.5">%급</span>
             </p>
             <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1 tabular-nums">
-              1억당 +{{ fmtPerEok(best.gainPer100M) }}
+              1억당 {{ fmtPerEok(best.gainPer100M) }}
             </p>
           </div>
         </div>
