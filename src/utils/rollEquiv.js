@@ -14,7 +14,7 @@
  */
 
 import { convertEquip, convertFinalOption, bpFor } from './statEquivalence.js';
-import { baseLabelOf, ALLSTAT_BASE } from '../data/memorialProbabilities.js';
+import { baseLabelOf, lineContributesTo } from '../data/memorialProbabilities.js';
 import { uniqueDisplayLabels } from '../data/awakeningData.js';
 import { RUNES, displayDesc } from '../data/runeWordData.js';
 
@@ -275,6 +275,9 @@ export function itemAwakeningOptionKeys(rows) {
 const MEMO_MAP = {
   '근력/마법력': { 주스탯: 1 },
   '올스탯': { 올스탯: 1 },
+  // 세트 메모리얼(무웬·흑월)의 근력/올스탯은 % 옵션 — 누적 +Npp
+  '근력/마법력%': { 주스탯_퍼: 1 },
+  '올스탯%': { 올스탯_퍼: 1 },
   '무기 공격력/속성력': { 공격력: 1 },
   '무기 공격력/속성력%': { 공격력_퍼: 1 },
   '고정 대미지': { 고댐: 1 },
@@ -383,6 +386,5 @@ export function normalizeRuneWordCard(rows) {
  * (게임 내 올스탯 = 전 스탯 상승). 목표 시뮬의 lineContributesTo 와 같은 규칙.
  */
 export function memorialOptionMatcher(lineKey, optionKey) {
-  if (lineKey === optionKey) return true;
-  return lineKey === ALLSTAT_BASE && optionKey !== ALLSTAT_BASE;
+  return lineContributesTo(lineKey, optionKey);
 }

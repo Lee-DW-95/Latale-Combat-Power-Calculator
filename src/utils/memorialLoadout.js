@@ -8,7 +8,7 @@
 //   label 은 티어 prefix 가 없는 베이스 라벨("근력/마법력", "최종 크리티컬 대미지")이다.
 //   rollEquiv.normalizeMemorialCard 가 baseLabelOf() 로 한 번 더 벗기므로 그대로 넘겨도 된다.
 
-import { ALL_MEMORIALS } from '../data/memorialProbabilities.js';
+import { ALL_MEMORIALS, uniqueBaseLabels } from '../data/memorialProbabilities.js';
 
 export const SET_CARD_LINES = 4;     // 세트 옵션 최대 줄 수
 export const NORMAL_CARD_SLOTS = 9;  // 일반(개별) 옵션 슬롯 수
@@ -81,6 +81,18 @@ export function memorialOf(card) {
   return ALL_MEMORIALS[card?.key] || null;
 }
 
+// 라벨 보정 — 무웬·흑월 세트의 근력/올스탯이 한때 고정값 라벨로 저장됐다 (% 옵션인데 % 가 없었음).
+//   해당 메모리얼에 옛 라벨이 없고 % 라벨이 있으면 바꿔 준다.
+function migrateLabel(key, label) {
+  if (!label) return label;
+  const m = ALL_MEMORIALS[key];
+  if (!m) return label;
+  const labels = uniqueBaseLabels(m);
+  if (labels.includes(label)) return label;
+  const pct = `${label}%`;
+  return labels.includes(pct) ? pct : label;
+}
+
 /** 저장 데이터 정규화 — 서버/로컬에서 온 배열이 형식에 어긋나도 UI 가 깨지지 않게 한다. */
 export function sanitizeMemorialCards(arr) {
   if (!Array.isArray(arr)) return [];
@@ -91,7 +103,7 @@ export function sanitizeMemorialCards(arr) {
       const n = memorialLineCount(c.key);
       const lines = Array.isArray(c.lines) ? c.lines : [];
       const fixed = Array.from({ length: n }, (_, i) => ({
-        label: typeof lines[i]?.label === 'string' ? lines[i].label : '',
+        label: migrateLabel(c.key, typeof lines[i]?.label === 'string' ? lines[i].label : ''),
         value: lines[i]?.value ?? '',
       }));
       const allowed = MEMORIAL_VARIANTS[c.key];

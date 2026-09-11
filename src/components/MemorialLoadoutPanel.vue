@@ -38,9 +38,20 @@ function isNormal(card) {
   return isNormalMemorialKey(card.key);
 }
 
+// 같은 메모리얼은 캐릭터당 한 장 — 이미 등록된 종류는 다른 카드에서 고를 수 없다.
+function isChoiceTaken(cIdx, value) {
+  return memorials.value.some((c, i) => i !== cIdx && choiceValueOf(c) === value);
+}
+
+const nextFreeChoice = computed(() =>
+  memorialOptions.find((o) => !isChoiceTaken(-1, o.value)) || null,
+);
+
 function addCard() {
   if (memorials.value.length >= MEMORIAL_CARD_MAX) return;
-  memorials.value = [...memorials.value, makeEmptyMemorialCard()];
+  const free = nextFreeChoice.value;
+  if (!free) return;
+  memorials.value = [...memorials.value, makeEmptyMemorialCard(free.key, free.variant)];
 }
 
 function removeCard(idx) {
@@ -94,7 +105,8 @@ const totalConv = computed(() =>
         <button
           type="button"
           @click="addCard"
-          :disabled="memorials.length >= MEMORIAL_CARD_MAX"
+          :disabled="memorials.length >= MEMORIAL_CARD_MAX || !nextFreeChoice"
+          :title="nextFreeChoice ? '' : '모든 메모리얼이 이미 등록되어 있습니다'"
           class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           + 카드 추가
@@ -138,7 +150,12 @@ const totalConv = computed(() =>
             @change="(e) => onChoiceChange(card, e.target.value)"
             class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
-            <option v-for="o in memorialOptions" :key="o.value" :value="o.value">{{ o.name }}</option>
+            <option
+              v-for="o in memorialOptions"
+              :key="o.value"
+              :value="o.value"
+              :disabled="isChoiceTaken(cIdx, o.value)"
+            >{{ o.name }}{{ isChoiceTaken(cIdx, o.value) ? ' (등록됨)' : '' }}</option>
           </select>
           <span class="ml-auto text-xs tabular-nums">
             <template v-if="cardConvs[cIdx]">
