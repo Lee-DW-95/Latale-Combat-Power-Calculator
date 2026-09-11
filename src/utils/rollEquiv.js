@@ -6,13 +6,14 @@
  *   { key,   // 옵션 식별자 — 기록 조건이 "특정 옵션" 일 때 매칭에 쓴다
  *     text,  // 표시 문자열 ("크댐 +112%")
  *     value, // 수치 (같은 옵션이 여러 줄 나오면 합산 대상)
- *     equip } // { equipKey: amount } — BP 영향이 없는 옵션이면 null
+ *     equip, // { equipKey: amount } — BP 영향이 없는 옵션이면 null
+ *     final } // { kind: 'crit'|'min'|'max', pct } — "최종 ~~ 대미지" 계열이면 지정 (equip 대신)
  *
  * 그 다음 evaluateLines() 가 줄마다 단독 ΔBP → 크댐 환산량을 구해 합산한다.
  * (= EfficiencyPanel 의 "각성석 종합 환산" 과 같은 계산)
  */
 
-import { convertEquip, bpFor } from './statEquivalence.js';
+import { convertEquip, convertFinalOption, bpFor } from './statEquivalence.js';
 import { baseLabelOf, ALLSTAT_BASE } from '../data/memorialProbabilities.js';
 import { uniqueDisplayLabels } from '../data/awakeningData.js';
 
@@ -29,6 +30,21 @@ import { uniqueDisplayLabels } from '../data/awakeningData.js';
  */
 function plainStats(stats) {
   return { ...stats };
+}
+
+/**
+ * 정규화 줄 1개 → { delta, refAmount }. 환산 대상이 아니면 null.
+ *
+ *   equip 줄 : 옵션을 스탯에 적용한 ΔBP 를 측정해 역산 (기존 경로)
+ *   final 줄 : "최종 ~~ 대미지" — BP 가 안 움직이므로 대미지 배율을 BP 비율로 부여해 역산
+ */
+function convertLine(stats, line, refKey, mode, baseBP) {
+  if (line.final) {
+    const r = convertFinalOption(stats, line.final.kind, line.final.pct, refKey, mode, baseBP);
+    return r.refAmount || r.delta ? r : null;
+  }
+  if (!line.equip) return null;
+  return convertEquip(stats, line.equip, refKey, mode, baseBP);
 }
 
 /**
@@ -49,12 +65,12 @@ export function evaluateLines(normLines, reactiveStats, opt = {}) {
   let convertibleCount = 0;
 
   const lines = normLines.map((l) => {
-    if (!l.equip) return { ...l, refAmount: 0, delta: 0, convertible: false };
-    const { delta, refAmount } = convertEquip(stats, l.equip, refKey, mode, baseBP);
-    total += refAmount;
-    totalDelta += delta;
+    const conv = convertLine(stats, l, refKey, mode, baseBP);
+    if (!conv) return { ...l, refAmount: 0, delta: 0, convertible: false };
+    total += conv.refAmount;
+    totalDelta += conv.delta;
     convertibleCount++;
-    return { ...l, refAmount, delta, convertible: true };
+    return { ...l, ...conv, convertible: true };
   });
 
   return { total, totalDelta, convertibleCount, lines, refKey, mode, baseBP };
@@ -80,11 +96,13 @@ export function createLineEvaluator(reactiveStats, opt = {}) {
 
   const cache = new Map();
 
-  function convertCached(equip) {
-    const key = Object.keys(equip).sort().map((k) => `${k}=${equip[k]}`).join('|');
+  function convertCached(line) {
+    const key = line.final
+      ? `final:${line.final.kind}:${line.final.pct}`
+      : Object.keys(line.equip).sort().map((k) => `${k}=${line.equip[k]}`).join('|');
     let hit = cache.get(key);
     if (!hit) {
-      hit = convertEquip(stats, equip, refKey, mode, baseBP);
+      hit = convertLine(stats, line, refKey, mode, baseBP);
       cache.set(key, hit);
     }
     return hit;
@@ -96,12 +114,13 @@ export function createLineEvaluator(reactiveStats, opt = {}) {
     let convertibleCount = 0;
 
     const lines = normLines.map((l) => {
-      if (!l.equip) return { ...l, refAmount: 0, delta: 0, convertible: false };
-      const { delta, refAmount } = convertCached(l.equip);
-      total += refAmount;
-      totalDelta += delta;
+      if (!l.equip && !l.final) return { ...l, refAmount: 0, delta: 0, convertible: false };
+      const conv = convertCached(l);
+      if (!conv) return { ...l, refAmount: 0, delta: 0, convertible: false };
+      total += conv.refAmount;
+      totalDelta += conv.delta;
       convertibleCount++;
-      return { ...l, refAmount, delta, convertible: true };
+      return { ...l, ...conv, convertible: true };
     });
 
     return { total, totalDelta, convertibleCount, lines, refKey, mode, baseBP };
@@ -246,18 +265,31 @@ const MEMO_MAP = {
   '일반 몬스터 지배력%': { 일몬지: 1 },
   '보스 몬스터 지배력%': { 보몬지: 1 },
   // 방어력/체력/행운/저항력/명중률%/크리티컬 확률%/스킬 쿨타임 감소% → BP 무관.
-  // 최종 최소·최대·크리티컬 대미지 → 최종 곱연산이라 T창 BP 식 밖 → 환산 제외.
+};
+
+/**
+ * "최종 ~~ 대미지" 계열 — 값 1 = +1% (사용자 확인).
+ * T창 BP 식 밖의 최종 곱연산이라 equip 이 아니라 대미지 배율로 환산한다
+ * (statEquivalence.convertFinalOption). 세트 메모리얼의 주력 옵션이 여기 몰려 있다.
+ */
+const MEMO_FINAL_MAP = {
+  '최종 크리티컬 대미지': 'crit',
+  '최종 최소 대미지': 'min',
+  '최종 최대 대미지': 'max',
 };
 
 /** 메모리얼 rollOnce() 카드(줄 배열) → 정규화 줄 배열 */
 export function normalizeMemorialCard(lines) {
   return lines.map((line) => {
     const base = baseLabelOf(line.label);
+    const finalKind = MEMO_FINAL_MAP[base];
+    const v = Number(line.value);
     return {
       key: base,
       text: `${line.label} +${fmtV(line.value)}`,
       value: line.value,
-      equip: equipFrom(MEMO_MAP, base, line.value),
+      equip: finalKind ? null : equipFrom(MEMO_MAP, base, line.value),
+      final: finalKind && Number.isFinite(v) && v !== 0 ? { kind: finalKind, pct: v } : null,
     };
   });
 }

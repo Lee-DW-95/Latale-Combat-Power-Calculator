@@ -18,6 +18,7 @@ import {
   calculateBPVsMonster,
   equipDelta,
   solveEquivalentAmount,
+  effectiveMinDmg,
   STAT_KEYS,
 } from './battlePower.js';
 
@@ -150,4 +151,67 @@ export function convertOption(baseStats, statKey, unit, value, refKey = '크댐'
   if (!Number.isFinite(v) || v === 0) return { delta: 0, refAmount: 0 };
   const equipKey = unit === 'pct' ? `${statKey}_퍼` : statKey;
   return convertEquip(baseStats, { [equipKey]: v }, refKey, mode, baseBP);
+}
+
+// ============================================================
+// "최종 ~~ 대미지" 계열 — T창 BP 식 밖의 최종 곱연산 옵션
+// ============================================================
+
+/**
+ * 최종 계열은 스탯을 올리는 게 아니라 대미지 결과에 곱해진다.
+ * 그래서 T창 BP 는 1 도 안 움직이고, ΔBP 측정 기반인 convertEquip() 은 항상 0 을 낸다.
+ * (메모리얼 "세트" 는 최종 최소/최대/크리티컬 대미지가 주력 옵션이라 카드 전체가 0 으로 보였다.)
+ *
+ * 대신 damagePredict.js 가 이미 쓰고 있는 전제 —
+ *   대미지 ≈ C × BP × 스킬계수   (즉 대미지 ∝ BP)
+ * — 를 그대로 쓰면 "대미지 배율 +r" 은 "BP 배율 +r" 과 같다.
+ * 따라서 ΔBP = baseBP × r 로 부여한 뒤 기존 솔버에 그대로 태우면 크댐 환산이 나온다.
+ *
+ * 배율 r 산출 (battlePower.js multiplierFor 구조 기준):
+ *   최종 크리티컬 대미지 +x%  → 크리 배율 전체에 곱 → r = x/100
+ *                               (직접 1+크댐/100, 소환 1+크댐×0.0148 양쪽에 동일 비율이라 모드 무관)
+ *   최종 최대/최소 대미지 +x% → 데미지항 (min_cap + 최대뎀) 중 해당 쪽만 곱
+ *                               → r = 새_데미지항 / 기존_데미지항 − 1
+ *                               min>max 역전 시 cap 규칙까지 그대로 반영된다.
+ *
+ * ⚠ 가정: 최종 크리티컬 대미지는 크리 적중에만 붙는다 → 크리확률 100% 기준.
+ *         미만이면 그만큼 과대평가된다.
+ */
+export const FINAL_KINDS = Object.freeze(['crit', 'min', 'max']);
+
+/** 데미지항 = min_cap + 최대뎀 (battlePower.js V_BIG29 확정 구조) */
+function dmgTerm(minDmg, maxDmg) {
+  return effectiveMinDmg(minDmg, maxDmg) + Number(maxDmg || 0);
+}
+
+/**
+ * "최종 X 대미지 +pct%" 가 전체 대미지(=BP)에 주는 배율 증가분 r.
+ * @returns {number} 0 이면 환산 불가 (스탯 미입력 등)
+ */
+export function finalOptionRatio(stats, kind, pct) {
+  const x = Number(pct);
+  if (!Number.isFinite(x) || x === 0) return 0;
+  if (kind === 'crit') return x / 100;
+
+  const mn = Number(stats?.최소뎀 || 0);
+  const mx = Number(stats?.최대뎀 || 0);
+  const basis = dmgTerm(mn, mx);
+  if (!(basis > 0)) return 0;
+  const scaled = kind === 'max'
+    ? dmgTerm(mn, mx * (1 + x / 100))
+    : dmgTerm(mn * (1 + x / 100), mx);
+  return scaled / basis - 1;
+}
+
+/**
+ * 최종 계열 옵션 1개의 "실효 ΔBP" 와 기준 스탯 환산량.
+ * convertEquip() 과 반환 형태를 맞춰 호출부가 분기 없이 쓸 수 있게 한다.
+ */
+export function convertFinalOption(baseStats, kind, pct, refKey = '크댐', mode = 'avg', baseBP = null) {
+  const base = baseBP ?? bpFor(baseStats, mode);
+  if (!(base > 0)) return { delta: 0, refAmount: 0 };
+  const r = finalOptionRatio(baseStats, kind, pct);
+  if (!r) return { delta: 0, refAmount: 0 };
+  const delta = base * r;
+  return { delta, refAmount: solveRefAmountForDelta(baseStats, refKey, delta, base, mode) };
 }

@@ -134,8 +134,9 @@ async function runSimulation() {
 
 // ============================================================
 // 굴림 기록 — 조건(크댐환산 합 / 특정 옵션 합)을 넘은 카드만 회차와 함께 누적.
-//   메모리얼은 "최종 크리티컬 대미지" 처럼 T창 BP 식 밖의 옵션이 있어
-//   특정 옵션 조건이 특히 유용하다 (환산 대상이 아니라 합계로 판정).
+//   "최종 크리티컬/최소/최대 대미지" 는 T창 BP 가 안 움직이지만 대미지 배율이라
+//   대미지 ∝ BP 전제로 크댐 환산에 포함된다 (statEquivalence.convertFinalOption).
+//   크리티컬 확률%/명중률% 등 BP·대미지 배율 어느 쪽도 아닌 옵션만 환산에서 빠진다.
 // ============================================================
 const {
   criterion: logCriterion,
@@ -498,9 +499,11 @@ const meanCost = computed(() => {
                     ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-stone-400 dark:text-stone-600',
                 ]"
-                :title="sampleConv.lines[i].convertible
-                  ? '이 옵션 단독 효과를 크댐으로 환산한 값'
-                  : '전투력 공식에 들어가지 않는 옵션 — 환산 제외 (최종 대미지 계열/방어 스탯 등)'"
+                :title="!sampleConv.lines[i].convertible
+                  ? '전투력·대미지 배율 어느 쪽에도 안 들어가는 옵션 — 환산 제외 (크리확률/명중률/방어 스탯 등)'
+                  : (sampleConv.lines[i].final
+                    ? '최종 곱연산 옵션 — 대미지 배율(+' + sampleConv.lines[i].value + '%)을 같은 크댐 값으로 환산 (크리확률 100% 기준)'
+                    : '이 옵션 단독 효과를 크댐으로 환산한 값')"
               >
                 {{ sampleConv.lines[i].convertible ? '≈크댐 ' + fmtRef(sampleConv.lines[i].refAmount) + '%' : '환산 제외' }}
               </span>
@@ -530,7 +533,7 @@ const meanCost = computed(() => {
         :option-keys="logOptionKeys"
         :has-stats="hasStats"
         title="📜 대박 굴림 기록"
-        equiv-note="최종 크리티컬/최소/최대 대미지는 최종 곱연산이라 T창 BP 식 밖 — 환산에서 빠집니다. 그쪽을 노린다면 특정 옵션 조건을 쓰세요."
+        equiv-note="최종 크리티컬/최소/최대 대미지는 T창 BP 는 안 움직이지만 대미지 배율이라 크댐 환산에 포함됩니다 (최종크는 크리확률 100% 기준). 크리티컬 확률%·명중률% 등은 환산에서 빠지니 그쪽을 노린다면 특정 옵션 조건을 쓰세요."
         @clear="clearRollLog"
       />
     </div>
