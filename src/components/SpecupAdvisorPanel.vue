@@ -41,6 +41,20 @@ const SAMPLE_CHOICES = [5000, DEFAULT_SAMPLES, 50000];
 const { prices, resetPrices, elyFor } = usePrices();
 
 const budgetEly = ref(DEFAULT_ELY_BUDGET);
+
+// 보기 필터 — 시스템별로만 순위를 보고 싶을 때 ("메모리얼 중 무엇부터")
+const SYSTEM_FILTERS = ['전체', '각성석', '메모리얼', '룬워드'];
+const systemFilter = ref('전체');
+
+// 정렬 기준 — 기본은 엘리 예산 기대 이득(재화가 다른 내실을 한 줄에 세우는 유일한 기준).
+//   나머지는 비용을 뺀 관점: 1회당 기대(확률×폭) / 개선 확률(가장 후진 카드) / 개선 시 폭(터졌을 때 상승).
+const SORT_KEYS = [
+  { key: 'budget', label: '엘리 예산 기대 이득', desc: '예산을 이 슬롯에 다 썼을 때 기대 상승 (비용 반영)' },
+  { key: 'perRoll', label: '1회당 기대 이득', desc: '한 번 굴렸을 때 평균 상승 = 개선 확률 × 폭 (비용 무시)' },
+  { key: 'pImprove', label: '개선 확률', desc: '굴려서 좋아질 확률이 높은 순 = 자기 분포에서 가장 후진 카드부터' },
+  { key: 'ifImprove', label: '개선 시 상승 폭', desc: '성공했을 때 평균 얼마나 오르나 (확률 무시)' },
+];
+const sortKey = ref('budget');
 const samples = ref(DEFAULT_SAMPLES);
 const includeEmpty = ref(false);
 const showPrices = ref(false);
@@ -251,7 +265,25 @@ const ranked = computed(() => {
       gainPer100M: costEly > 0 ? (s.gainPerRoll / costEly) * 1e8 : null,
     };
   });
-  return rows.sort((a, b) => b.gainAtBudget - a.gainAtBudget || (b.gainPer100M ?? 0) - (a.gainPer100M ?? 0));
+  const filtered = systemFilter.value === '전체' ? rows : rows.filter((r) => r.system === systemFilter.value);
+  const k = sortKey.value;
+  const metric = (r) => {
+    if (k === 'perRoll') return r.gainPerRoll;
+    if (k === 'pImprove') return r.pImprove;
+    if (k === 'ifImprove') return r.pImprove > 0 ? r.meanIfImprove - r.current : -Infinity;
+    return r.gainAtBudget;
+  };
+  return filtered.sort((a, b) => metric(b) - metric(a) || b.gainAtBudget - a.gainAtBudget || (b.gainPer100M ?? 0) - (a.gainPer100M ?? 0));
+});
+
+// 필터별 슬롯 수 — 칩에 표시
+const countBySystem = computed(() => {
+  const out = { 전체: 0, 각성석: 0, 메모리얼: 0, 룬워드: 0 };
+  for (const s of result.value?.slots || []) {
+    out.전체 += 1;
+    if (out[s.system] !== undefined) out[s.system] += 1;
+  }
+  return out;
 });
 
 function currentCostEly(slot) {
@@ -447,12 +479,46 @@ function setPriceMan(key, raw) {
           ⚠ 분석 후 스탯 또는 내실 입력이 바뀌었습니다. 아래 결과는 이전 입력 기준입니다 — "다시 분석" 을 눌러 주세요.
         </p>
 
+        <!-- 보기: 시스템 필터 + 정렬 기준 -->
+        <div class="flex items-center gap-x-3 gap-y-2 flex-wrap text-xs mb-3">
+          <div class="flex items-center gap-1">
+            <button
+              v-for="f in SYSTEM_FILTERS"
+              :key="f"
+              type="button"
+              @click="systemFilter = f"
+              :disabled="countBySystem[f] === 0"
+              class="px-2 py-1 rounded-full ring-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              :class="systemFilter === f
+                ? 'bg-cyan-600 text-white ring-cyan-600'
+                : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'"
+            >
+              {{ f }} <span class="tabular-nums opacity-70">{{ countBySystem[f] }}</span>
+            </button>
+          </div>
+          <label class="flex items-center gap-1.5 ml-auto">
+            <span class="text-stone-500 dark:text-stone-400">정렬</span>
+            <select
+              v-model="sortKey"
+              class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              :title="SORT_KEYS.find((k) => k.key === sortKey)?.desc"
+            >
+              <option v-for="k in SORT_KEYS" :key="k.key" :value="k.key" :title="k.desc">{{ k.label }}</option>
+            </select>
+          </label>
+        </div>
+        <p v-if="sortKey !== 'budget'" class="text-[11px] text-stone-500 dark:text-stone-400 mb-2">
+          ⓘ {{ SORT_KEYS.find((k) => k.key === sortKey)?.desc }} — 비용을 반영하지 않은 관점이라 재화가 다른 시스템끼리 비교에는 맞지 않습니다.
+        </p>
+
         <!-- 추천 요약 -->
         <div
           v-if="best"
           class="rounded-lg bg-cyan-50 dark:bg-cyan-900/20 ring-1 ring-cyan-200 dark:ring-cyan-800 px-3 py-2.5 mb-3 text-sm"
         >
-          <span class="text-cyan-800 dark:text-cyan-200 font-semibold">1순위: {{ best.label }}</span>
+          <span class="text-cyan-800 dark:text-cyan-200 font-semibold">
+            {{ systemFilter === '전체' ? '1순위' : systemFilter + ' 중 1순위' }}: {{ best.label }}
+          </span>
           <span class="text-stone-600 dark:text-stone-300">
             — {{ elyLabel(budgetEly) }} 예산이면 {{ fmt(best.rolls) }}회 굴릴 수 있고, 크댐환산 평균
             <strong class="text-cyan-700 dark:text-cyan-300 tabular-nums">+{{ fmt1(best.gainAtBudget) }}%급</strong>
