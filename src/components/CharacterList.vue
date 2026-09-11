@@ -25,6 +25,7 @@ const props = defineProps({
   currentStats: { type: Object, required: true },
   currentAwakStones: { type: Array, default: () => [] },
   currentMemorials: { type: Array, default: () => [] },
+  currentRuneword: { type: Array, default: () => [] },
 });
 
 const { characters, activeId, saveCharacter, deleteCharacter, selectCharacter } =
@@ -43,6 +44,7 @@ async function onSave() {
       props.currentStats,
       props.currentAwakStones,
       props.currentMemorials,
+      props.currentRuneword,
     );
     newName.value = '';
   } catch (e) {

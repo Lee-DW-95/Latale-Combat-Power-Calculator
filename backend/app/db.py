@@ -48,6 +48,7 @@ def init_db() -> None:
 _JSON_LIST_COLUMNS = {
     "characters": [
         ("memorials", "JSON NOT NULL DEFAULT '[]'"),
+        ("runeword", "JSON NOT NULL DEFAULT '[]'"),
     ],
 }
 

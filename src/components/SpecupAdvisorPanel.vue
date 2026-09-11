@@ -1,34 +1,42 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, markRaw, ref, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { rollOnce as rollAwakening } from '../utils/awakeningSim.js';
 import { rollOnce as rollMemorial } from '../utils/memorialSim.js';
-import { ROLL_COST as AWAK_ROLL_COST } from '../data/awakeningData.js';
+import { rollRuneWord } from '../utils/runeWordSim.js';
 import {
   normalizeAwakeningCard,
   normalizeAwakStoneLoadout,
   normalizeMemorialCard,
+  normalizeRuneWordCard,
 } from '../utils/rollEquiv.js';
 import { activeMemorialLines, memorialOf } from '../utils/memorialLoadout.js';
+import { runewordRows } from '../utils/runewordLoadout.js';
 import {
   analyzeSlots,
-  BUDGETS,
-  DEFAULT_BUDGET,
+  expectedAfterRolls,
+  ELY_BUDGETS,
+  DEFAULT_ELY_BUDGET,
   DEFAULT_SAMPLES,
 } from '../utils/specupAdvisor.js';
+import { usePrices, PRICE_DEFS } from '../composables/usePrices.js';
 import { fmt, fmt1, pct } from '../utils/format.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
   awakStones: { type: Array, default: () => [] },
   memorials: { type: Array, default: () => [] },
+  runeword: { type: Array, default: () => [] },
 });
 
 const SAMPLE_CHOICES = [5000, DEFAULT_SAMPLES, 50000];
 
-const budget = ref(DEFAULT_BUDGET);
+const { prices, resetPrices, elyFor } = usePrices();
+
+const budgetEly = ref(DEFAULT_ELY_BUDGET);
 const samples = ref(DEFAULT_SAMPLES);
 const includeEmpty = ref(false);
+const showPrices = ref(false);
 
 const running = ref(false);
 const progress = ref(null); // { group, groupIndex, groupCount, done, total }
@@ -39,9 +47,30 @@ let cancelFlag = false;
 const baseBP = computed(() => calculateBattlePower(props.stats));
 const hasStats = computed(() => baseBP.value > 0);
 
-// ── 슬롯 구성 — 저장된 내실을 분석 엔진 입력으로 ─────────────────────
-const awakCostText = `재료 ${AWAK_ROLL_COST.material} · 플래티넘 망치 ${AWAK_ROLL_COST.hammer}`;
+// ── 1회 비용 정의 — 재화 개수. 엘리 환산은 usePrices 시세로 한다 ─────────────
+// 각성석: 최종 인던 재료 2종 × 7개 = 14개 + 플래티넘 망치 1개 (사용자 확인 2026-09-11)
+const AWAK_COST_ITEMS = [
+  { key: 'awakMaterial', count: 14 },
+  { key: 'hammer', count: 1 },
+];
+const RUNE_COST_ITEMS = [{ key: 'runeScroll', count: 1 }];
 
+function memorialCostItems(m) {
+  return [
+    { key: 'memoFrag', count: m.cost.frag },
+    { key: 'memoCrystal', count: m.cost.crystal },
+  ];
+}
+
+// "억" 단위 표기 — 1.85억 / 21.2억 / 0.45억
+function elyLabel(ely) {
+  const eok = ely / 1e8;
+  if (eok >= 100) return `${fmt(Math.round(eok))}억`;
+  if (eok >= 10) return `${eok.toFixed(1)}억`;
+  return `${eok.toFixed(2)}억`;
+}
+
+// ── 슬롯 구성 — 저장된 내실을 분석 엔진 입력으로 ─────────────────────
 function buildSlots() {
   const slots = [];
 
@@ -54,7 +83,8 @@ function buildSlots() {
       lines: normalizeAwakStoneLoadout(stone),
       rollFn: rollAwakening,
       normalize: normalizeAwakeningCard,
-      cost: awakCostText,
+      cost: '재료 14 (2종×7) · 망치 1',
+      costEly: elyFor(AWAK_COST_ITEMS),
     });
   });
 
@@ -69,8 +99,22 @@ function buildSlots() {
       lines: normalizeMemorialCard(activeMemorialLines(card)),
       rollFn: () => rollMemorial(m),
       normalize: normalizeMemorialCard,
-      cost: `조각 ${m.cost.frag} · 결정 ${m.cost.crystal}`,
+      cost: `파편 ${m.cost.frag} · 결정 ${m.cost.crystal}`,
+      costEly: elyFor(memorialCostItems(m)),
     });
+  });
+
+  // 룬워드는 캐릭터당 1개 — 빈 칸만 있으면 빈 슬롯
+  slots.push({
+    id: 'runeword',
+    label: '룬워드',
+    system: '룬워드',
+    group: 'runeword',
+    lines: normalizeRuneWordCard(runewordRows(props.runeword)),
+    rollFn: rollRuneWord,
+    normalize: (r) => normalizeRuneWordCard(r.rows),
+    cost: '스크롤 1',
+    costEly: elyFor(RUNE_COST_ITEMS),
   });
 
   return includeEmpty.value ? slots : slots.filter((s) => s.lines.length > 0);
@@ -95,9 +139,10 @@ async function run() {
       shouldCancel: () => cancelFlag,
     });
     if (r && !r.cancelled) {
-      // 표시용 부가 정보(system)를 결과에 되돌려 붙인다.
+      // 표시용 부가 정보(system)를 결과에 되돌려 붙이고, 표본 배열은 반응형에서 뺀다 (수만 개 × 그룹).
       const bySlot = new Map(slots.map((s) => [s.id, s]));
       r.slots.forEach((s) => { s.system = bySlot.get(s.id)?.system || ''; });
+      r.dist = markRaw(r.dist);
       result.value = r;
       stale.value = false;
     }
@@ -111,19 +156,47 @@ function cancel() {
   cancelFlag = true;
 }
 
-// 입력(스탯·각성석·메모리얼)이 바뀌면 결과는 이전 상태 기준 — 다시 돌리라고 표시만 한다.
+// 입력(스탯·각성석·메모리얼·룬워드)이 바뀌면 결과는 이전 상태 기준 — 다시 돌리라고 표시만 한다.
+//   시세 변경은 분포와 무관하므로(비용만 바뀜) 재분석 없이 아래 computed 가 바로 반영한다.
 watch(
-  () => [props.stats, props.awakStones, props.memorials],
+  () => [props.stats, props.awakStones, props.memorials, props.runeword],
   () => { if (result.value) stale.value = true; },
   { deep: true },
 );
 
-// ── 정렬·요약 — 예산(N회) 기준 기대 이득 내림차순. 예산을 바꾸면 재계산 없이 다시 정렬한다.
+// ── 예산 기준 순위 — 슬롯마다 굴릴 수 있는 횟수 floor(예산 / 1회 비용) 로 기대 이득 ──
+//   시세·예산을 바꾸면 분포는 그대로이므로 재분석 없이 여기서만 다시 계산한다.
 const ranked = computed(() => {
-  if (!result.value) return [];
-  const N = budget.value;
-  return [...result.value.slots].sort((a, b) => b.gainAfter[N] - a.gainAfter[N]);
+  const r = result.value;
+  if (!r) return [];
+  const B = budgetEly.value;
+  const rows = r.slots.map((s) => {
+    // 시세가 바뀌었을 수 있으니 비용은 분석 시점 값이 아니라 지금 시세로 다시 구한다
+    const costEly = currentCostEly(s);
+    const rolls = costEly > 0 ? Math.floor(B / costEly) : 0;
+    const sorted = r.dist.get(s.group);
+    const expected = rolls > 0 ? expectedAfterRolls(sorted, s.current, rolls) : s.current;
+    return {
+      ...s,
+      costEly,
+      rolls,
+      expectedAtBudget: expected,
+      gainAtBudget: expected - s.current,
+      gainPer100M: costEly > 0 ? (s.gainPerRoll / costEly) * 1e8 : null,
+    };
+  });
+  return rows.sort((a, b) => b.gainAtBudget - a.gainAtBudget || (b.gainPer100M ?? 0) - (a.gainPer100M ?? 0));
 });
+
+function currentCostEly(slot) {
+  if (slot.group === 'awakening') return elyFor(AWAK_COST_ITEMS);
+  if (slot.group === 'runeword') return elyFor(RUNE_COST_ITEMS);
+  if (slot.group.startsWith('memorial:')) {
+    const m = memorialOf({ key: slot.group.slice('memorial:'.length) });
+    return m ? elyFor(memorialCostItems(m)) : 0;
+  }
+  return slot.costEly || 0;
+}
 
 const best = computed(() => ranked.value[0] || null);
 
@@ -148,18 +221,35 @@ function topPctLabel(p) {
   return `상위 ${top.toFixed(1)}%`;
 }
 
-function linesTitle(slot) {
-  if (slot.empty) return '빈 슬롯';
-  return slot.conv.lines.map((l) => `${l.text}${l.convertible ? ` (${fmt1(l.refAmount)})` : ' (환산 제외)'}`).join('\n');
+// 펼친 행의 "예산별 기대" 표 — 예산 후보 전체에 대해 즉석 계산
+function budgetCurve(slot) {
+  const sorted = result.value?.dist.get(slot.group);
+  if (!sorted) return [];
+  return ELY_BUDGETS.map((B) => {
+    const rolls = slot.costEly > 0 ? Math.floor(B / slot.costEly) : 0;
+    const e = rolls > 0 ? expectedAfterRolls(sorted, slot.current, rolls) : slot.current;
+    return { budget: B, rolls, expected: e, gain: e - slot.current };
+  });
+}
+
+// 시세 입력은 "만 엘리" 단위로 받는다 (250 → 250만)
+function priceMan(key) {
+  return Math.round((Number(prices.value[key]) || 0) / 1e4);
+}
+function setPriceMan(key, raw) {
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v < 0) return;
+  prices.value[key] = Math.round(v * 1e4);
 }
 </script>
 
 <template>
   <div>
     <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
-      저장된 각성석·메모리얼을 하나씩 "다시 굴렸을 때" 의 크댐환산 분포를 확률표로 표본 추출해,
-      현재 카드보다 좋아질 확률과 기대 이득을 비교합니다. 굴려서 나쁘면 이전 카드를 유지한다는 전제입니다.
-      순위는 <strong>같은 굴림 횟수</strong>를 쓴다고 했을 때의 기대 이득 기준이며, 재화 종류가 달라 비용은 따로 표기합니다.
+      저장된 각성석·메모리얼·룬워드를 하나씩 "다시 굴렸을 때" 의 크댐환산 분포를 확률표로 표본 추출해,
+      현재 옵션보다 좋아질 확률과 기대 이득을 구합니다. 재화가 다른 내실끼리 비교하기 위해 1회 비용을
+      시세로 <strong>엘리 환산</strong>하고, <strong>같은 엘리 예산</strong>을 어디에 쓰는 게 기대 이득이 큰지로 순위를 매깁니다.
+      굴려서 나쁘면 이전 옵션을 유지한다는 전제입니다.
     </p>
 
     <p
@@ -171,14 +261,14 @@ function linesTitle(slot) {
 
     <template v-else>
       <!-- 설정 줄 -->
-      <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mb-3">
+      <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mb-2">
         <label class="flex items-center gap-1.5">
-          <span class="text-stone-500 dark:text-stone-400">굴림 예산</span>
+          <span class="text-stone-500 dark:text-stone-400">엘리 예산</span>
           <select
-            v-model.number="budget"
+            v-model.number="budgetEly"
             class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
-            <option v-for="n in BUDGETS" :key="n" :value="n">{{ fmt(n) }}회</option>
+            <option v-for="b in ELY_BUDGETS" :key="b" :value="b">{{ elyLabel(b) }}</option>
           </select>
         </label>
         <label class="flex items-center gap-1.5">
@@ -195,6 +285,13 @@ function linesTitle(slot) {
           <input v-model="includeEmpty" type="checkbox" :disabled="running" class="rounded text-cyan-600 focus:ring-cyan-500" />
           <span class="text-stone-600 dark:text-stone-300">빈 슬롯 포함</span>
         </label>
+        <button
+          type="button"
+          @click="showPrices = !showPrices"
+          class="px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+        >
+          💰 시세 {{ showPrices ? '접기' : '설정' }}
+        </button>
         <span class="text-stone-400 dark:text-stone-500">분석 대상 {{ slotCount }}개</span>
         <div class="ml-auto flex items-center gap-1.5">
           <button
@@ -216,8 +313,37 @@ function linesTitle(slot) {
         </div>
       </div>
 
+      <!-- 시세 편집 — 만 엘리 단위 -->
+      <div
+        v-if="showPrices"
+        class="rounded-md ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2 mb-3 text-xs"
+      >
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="font-semibold text-stone-600 dark:text-stone-300">재화 시세 (만 엘리 단위, 브라우저에 저장)</span>
+          <button type="button" @click="resetPrices" class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition">기본값</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5">
+          <label v-for="d in PRICE_DEFS" :key="d.key" class="flex items-center gap-2">
+            <span class="flex-1 text-stone-600 dark:text-stone-300" :title="d.note || ''">{{ d.label }}</span>
+            <input
+              :value="priceMan(d.key)"
+              @input="(e) => setPriceMan(d.key, e.target.value)"
+              type="number"
+              min="0"
+              step="1"
+              class="w-24 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1.5 py-1 text-xs text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            />
+            <span class="text-stone-400 w-4">만</span>
+          </label>
+        </div>
+        <p class="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
+          1회 비용 → 각성석 {{ elyLabel(elyFor(AWAK_COST_ITEMS)) }} · 룬워드 {{ elyLabel(elyFor(RUNE_COST_ITEMS)) }} ·
+          메모리얼은 종류별 (세트 파편 20~40 + 결정 3, 일반 파편 0.5~4 + 결정 0.5~1)
+        </p>
+      </div>
+
       <p v-if="slotCount === 0" class="text-xs text-stone-400 dark:text-stone-500 italic mb-3">
-        분석할 내실이 없습니다. 위의 각성석·메모리얼 섹션에 현재 옵션을 입력하세요
+        분석할 내실이 없습니다. 위의 각성석·메모리얼·룬워드 섹션에 현재 옵션을 입력하세요
         (값이 하나도 없는 슬롯은 "빈 슬롯 포함" 을 켜야 들어갑니다).
       </p>
 
@@ -246,10 +372,11 @@ function linesTitle(slot) {
         >
           <span class="text-cyan-800 dark:text-cyan-200 font-semibold">1순위: {{ best.label }}</span>
           <span class="text-stone-600 dark:text-stone-300">
-            — {{ fmt(budget) }}회 굴리면 크댐환산 평균
-            <strong class="text-cyan-700 dark:text-cyan-300 tabular-nums">+{{ fmt1(best.gainAfter[budget]) }}%급</strong>
-            기대 (현재 {{ fmt1(best.current) }} → {{ fmt1(best.expectedAfter[budget]) }}).
-            1회 굴려 좋아질 확률 {{ pct(best.pImprove) }}, 1회 비용 {{ best.cost }}.
+            — {{ elyLabel(budgetEly) }} 예산이면 {{ fmt(best.rolls) }}회 굴릴 수 있고, 크댐환산 평균
+            <strong class="text-cyan-700 dark:text-cyan-300 tabular-nums">+{{ fmt1(best.gainAtBudget) }}%급</strong>
+            기대 (현재 {{ fmt1(best.current) }} → {{ fmt1(best.expectedAtBudget) }}).
+            1회 {{ elyLabel(best.costEly) }}, 1회 굴려 좋아질 확률 {{ pct(best.pImprove) }},
+            엘리 1억당 기대 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}.
           </span>
         </div>
 
@@ -262,10 +389,10 @@ function linesTitle(slot) {
                 <th class="px-2 py-1.5 text-left font-medium">슬롯</th>
                 <th class="px-2 py-1.5 text-right font-medium">현재</th>
                 <th class="px-2 py-1.5 text-right font-medium">분포 위치</th>
+                <th class="px-2 py-1.5 text-right font-medium">1회 비용</th>
                 <th class="px-2 py-1.5 text-right font-medium">1회 개선 확률</th>
-                <th class="px-2 py-1.5 text-right font-medium">1회당 기대</th>
-                <th class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300">{{ fmt(budget) }}회 기대 이득</th>
-                <th class="px-2 py-1.5 text-left font-medium">1회 비용</th>
+                <th class="px-2 py-1.5 text-right font-medium">1억당 기대</th>
+                <th class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300">{{ elyLabel(budgetEly) }} 예산 기대 이득</th>
               </tr>
             </thead>
             <tbody>
@@ -278,40 +405,47 @@ function linesTitle(slot) {
                   <td class="px-2 py-1.5 text-stone-500 dark:text-stone-400">{{ i + 1 }}</td>
                   <td class="px-2 py-1.5">
                     <span class="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 mr-1">{{ s.system }}</span>
-                    <span class="text-stone-800 dark:text-stone-100" :title="linesTitle(s)">{{ s.label }}</span>
+                    <span class="text-stone-800 dark:text-stone-100">{{ s.label }}</span>
                     <span v-if="s.empty" class="ml-1 text-[10px] text-orange-600 dark:text-orange-400">빈 슬롯</span>
                   </td>
                   <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ fmt1(s.current) }}</td>
                   <td class="px-2 py-1.5 text-right text-stone-500 dark:text-stone-400">{{ s.empty ? '—' : topPctLabel(s.percentile) }}</td>
+                  <td class="px-2 py-1.5 text-right text-stone-500 dark:text-stone-400 whitespace-nowrap" :title="s.cost">{{ elyLabel(s.costEly) }}</td>
                   <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ pct(s.pImprove) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">+{{ s.gainPerRoll.toFixed(2) }}</td>
-                  <td class="px-2 py-1.5 text-right font-semibold text-cyan-700 dark:text-cyan-300">+{{ fmt1(s.gainAfter[budget]) }}</td>
-                  <td class="px-2 py-1.5 text-left text-stone-500 dark:text-stone-400 whitespace-nowrap">{{ s.cost }}</td>
+                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}</td>
+                  <td class="px-2 py-1.5 text-right font-semibold text-cyan-700 dark:text-cyan-300">
+                    +{{ fmt1(s.gainAtBudget) }}
+                    <span class="font-normal text-stone-400 dark:text-stone-500">({{ fmt(s.rolls) }}회)</span>
+                  </td>
                 </tr>
                 <tr v-if="expanded.has(s.id)" class="border-b border-stone-100 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/30">
                   <td colspan="8" class="px-3 py-2">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
                       <div>
-                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">현재 카드</p>
+                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">현재 옵션</p>
                         <p v-if="s.empty" class="text-stone-400 italic">빈 슬롯 — 무엇이 나와도 이득입니다.</p>
                         <ul v-else class="space-y-0.5">
                           <li v-for="(l, li) in s.conv.lines" :key="li" class="flex justify-between gap-3">
                             <span class="text-stone-700 dark:text-stone-200">{{ l.text }}</span>
-                            <span class="text-stone-500 dark:text-stone-400">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '환산 제외' }}</span>
+                            <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '환산 제외' }}</span>
                           </li>
                         </ul>
                         <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                          개선 성공 시 평균 {{ fmt1(s.meanIfImprove) }} · 개선까지 평균 {{ Number.isFinite(s.expectedRollsToImprove) ? fmt(Math.round(s.expectedRollsToImprove)) + '회' : '표본 내 없음' }}
+                          1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} · 개선 성공 시 평균 {{ fmt1(s.meanIfImprove) }} ·
+                          개선까지 평균 {{ Number.isFinite(s.expectedRollsToImprove) ? fmt(Math.round(s.expectedRollsToImprove)) + '회 (' + elyLabel(s.expectedRollsToImprove * s.costEly) + ')' : '표본 내 없음' }}
+                        </p>
+                        <p class="mt-1 text-stone-500 dark:text-stone-400">
+                          1회 비용 {{ s.cost }} = {{ elyLabel(s.costEly) }}
                         </p>
                       </div>
                       <div>
-                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">굴림 횟수별 기대 환산 (현재 유지 포함)</p>
+                        <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">예산별 기대 환산 (현재 유지 포함)</p>
                         <ul class="space-y-0.5">
-                          <li v-for="n in result.budgets" :key="n" class="flex justify-between gap-3">
-                            <span class="text-stone-500 dark:text-stone-400">{{ fmt(n) }}회</span>
+                          <li v-for="row in budgetCurve(s)" :key="row.budget" class="flex justify-between gap-3">
+                            <span class="text-stone-500 dark:text-stone-400">{{ elyLabel(row.budget) }} <span class="text-stone-400">({{ fmt(row.rolls) }}회)</span></span>
                             <span class="text-stone-700 dark:text-stone-200">
-                              {{ fmt1(s.expectedAfter[n]) }}
-                              <span class="text-cyan-700 dark:text-cyan-300">(+{{ fmt1(s.gainAfter[n]) }})</span>
+                              {{ fmt1(row.expected) }}
+                              <span class="text-cyan-700 dark:text-cyan-300">(+{{ fmt1(row.gain) }})</span>
                             </span>
                           </li>
                         </ul>
@@ -329,8 +463,9 @@ function linesTitle(slot) {
 
         <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
           ⓘ 표본 {{ fmt(result.samples) }}장 기준 몬테카를로 — 1% 미만 확률은 오차가 큽니다 (표본 수를 늘리면 정밀해집니다).
+          예산 기대 이득은 예산 전부를 그 슬롯 하나에 쓴다고 가정한 값이고, "1억당 기대" 는 1회 기준 한계 효율입니다.
           환산은 현재 스탯에 옵션을 단독 적용한 ΔBP 기준이라, 한 슬롯을 크게 올린 뒤에는 다른 슬롯의 수치가 조금 달라집니다.
-          "최종 ~ 대미지" 는 크리 확률 100% 가정, 크리확률·명중률·방어력 등 BP 무관 옵션은 0 으로 칩니다.
+          "최종 ~ 대미지" 는 크리 확률 100% 가정, 크리확률·명중률·방어력·체력 등 BP 무관 옵션은 0 으로 칩니다.
         </p>
       </template>
     </template>

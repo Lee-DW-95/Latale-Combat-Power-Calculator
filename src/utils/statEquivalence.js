@@ -58,6 +58,9 @@ export function applyEquipToStats(baseStats, equip) {
   for (const k of STAT_KEYS) {
     out[k] = (Number(baseStats[k]) || 0) + (delta[k] || 0);
   }
+  // 관통은 게임 하드 캡 99 — 이미 캡인 캐릭터에 관통 옵션(룬워드 통찰 등)을 얹어도 BP 가 안 오른다.
+  //   bpWithOption 의 관통 분기와 같은 규칙. 캡을 안 걸면 99→109 로 계산돼 수백 %급으로 과대평가된다.
+  if (delta.관통) out.관통 = Math.max(0, Math.min(PEN_CAP, out.관통));
   return out;
 }
 

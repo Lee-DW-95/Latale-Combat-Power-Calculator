@@ -16,6 +16,7 @@
 import { convertEquip, convertFinalOption, bpFor } from './statEquivalence.js';
 import { baseLabelOf, ALLSTAT_BASE } from '../data/memorialProbabilities.js';
 import { uniqueDisplayLabels } from '../data/awakeningData.js';
+import { RUNES, displayDesc } from '../data/runeWordData.js';
 
 // ============================================================
 // 공통 — 정규화 줄 배열 환산
@@ -312,6 +313,69 @@ export function normalizeMemorialCard(lines) {
       final: finalKind && Number.isFinite(v) && v !== 0 ? { kind: finalKind, pct: v } : null,
     };
   });
+}
+
+// ============================================================
+// (4) 룬워드 — data/runeWordData.js 의 룬 id 기준
+// ============================================================
+
+/**
+ * 룬 1개의 BP 효과 (일반 룬 기준 수치, 왕룬은 ×2).
+ * 한 룬이 여러 스탯을 올리면 equip 여러 개로 나눠 줄을 만든다 — 일몬지/보몬지는
+ * BP 식 floor plateau 때문에 단독 측정(배수 환산)이 필요해서 반드시 분리한다.
+ * 최소/최대뎀 조합(헌신 & 파괴)은 cap 상호작용이 있어 한 equip 에 같이 둔다.
+ * 체력/행운/명중률/이속/드랍 등 BP 무관 룬은 매핑이 없다 (환산 0).
+ */
+const RUNE_EQUIPS = {
+  0: [{ 주스탯: 1500 }],
+  4: [{ 공격력: 70 }],
+  6: [{ 최소뎀: 50 }],
+  8: [{ 최대뎀: 50 }],
+  10: [{ 크댐: 50 }],
+  12: [{ 고댐: 1500 }],
+  14: [{ 공격력_퍼: 5 }],
+  15: [{ 고댐_퍼: 8 }],
+  17: [{ 올스탯: 1500 }],
+  18: [{ 올스탯_퍼: 5 }],
+  19: [{ 관통: 10 }],
+  20: [{ 올스탯: 1500 }, { 올스탯_퍼: 5 }],
+  21: [{ 고댐: 1500 }, { 공격력: 70 }],
+  24: [{ 고댐_퍼: 8 }, { 공격력_퍼: 5 }],
+  25: [{ 최소뎀: 50, 최대뎀: 50 }],
+  27: [{ 일몬추: 6000 }, { 일몬지: 3 }],
+  28: [{ 보몬추: 10000 }, { 보몬지: 5 }],
+  29: [{ 크댐: 50 }], // 크리티컬 확률 +1% 는 BP 무관
+};
+
+/**
+ * 룬워드 rows ([{ runeId, isKing }], runeWordSim.buildResult().rows 또는 runewordLoadout.runewordRows())
+ * → 정규화 줄 배열. 왕룬은 수치 2배.
+ */
+export function normalizeRuneWordCard(rows) {
+  const out = [];
+  for (const row of rows || []) {
+    const rune = RUNES[row.runeId];
+    if (!rune) continue;
+    const mult = row.isKing ? 2 : 1;
+    const equips = RUNE_EQUIPS[row.runeId];
+    const text = `${row.isKing ? '👑 ' : ''}${rune.name} (${displayDesc(rune, !!row.isKing)})`;
+    if (!equips) {
+      out.push({ key: `rune:${rune.id}`, text, value: 0, equip: null });
+      continue;
+    }
+    equips.forEach((eq, i) => {
+      const scaled = {};
+      for (const k of Object.keys(eq)) scaled[k] = eq[k] * mult;
+      out.push({
+        key: `rune:${rune.id}`,
+        // 같은 룬에서 나온 두 번째 줄부터는 표시 문자열을 비워 카드에 한 번만 보이게 한다
+        text: i === 0 ? text : `  └ ${rune.name} (추가 효과)`,
+        value: mult,
+        equip: scaled,
+      });
+    });
+  }
+  return out;
 }
 
 /**

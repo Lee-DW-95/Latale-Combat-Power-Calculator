@@ -44,6 +44,7 @@ function fromServerCharacter(c) {
     stats: c.stats || createEmptyStats(c.type || 'P'),
     awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
     memorials: Array.isArray(c.memorials) ? c.memorials : [],
+    runeword: Array.isArray(c.runeword) ? c.runeword : [],
     updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
   };
 }
@@ -98,8 +99,8 @@ function makeLocalId() {
 
 export function useCharacterStorage() {
   // saveCharacter — 동일 이름 캐릭터가 있으면 갱신, 없으면 신규 생성.
-  //   awakStones / memorials 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
-  async function saveCharacter(name, stats, awakStones = null, memorials = null) {
+  //   awakStones / memorials / runeword 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
+  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null) {
     const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('캐릭터 이름을 입력해주세요.');
 
@@ -112,6 +113,7 @@ export function useCharacterStorage() {
         stats: { ...stats },
         awak_stones: awakStones ?? existing?.awak_stones ?? [],
         memorials: memorials ?? existing?.memorials ?? [],
+        runeword: runeword ?? existing?.runeword ?? [],
       };
       if (existing) {
         const updated = fromServerCharacter(await api.updateCharacter(existing.id, payload));
@@ -130,6 +132,7 @@ export function useCharacterStorage() {
       existing.stats = { ...stats };
       if (awakStones !== null) existing.awak_stones = awakStones;
       if (memorials !== null) existing.memorials = memorials;
+      if (runeword !== null) existing.runeword = runeword;
       existing.updatedAt = Date.now();
       activeId.value = existing.id;
       return existing;
@@ -140,6 +143,7 @@ export function useCharacterStorage() {
       stats: { ...stats },
       awak_stones: awakStones ?? [],
       memorials: memorials ?? [],
+      runeword: runeword ?? [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -202,6 +206,7 @@ export function useCharacterStorage() {
             stats: c.stats || {},
             awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
             memorials: Array.isArray(c.memorials) ? c.memorials : [],
+            runeword: Array.isArray(c.runeword) ? c.runeword : [],
           }),
         );
         characters.value = [created, ...characters.value];

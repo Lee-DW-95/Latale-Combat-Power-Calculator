@@ -41,6 +41,8 @@ class Character(Base):
     awak_stones: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # 보유 메모리얼 카드. [{key: 'CHOENPAM_SET', lines: [{label, value}, ...]}, ...]
     memorials: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # 장착 룬워드 — 룬 id 8개 (마지막이 왕룬), 빈 칸은 null. 예: [10, 19, null, ..., 28]
+    runeword: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )

@@ -14,6 +14,7 @@ import BpSummaryBar from './components/BpSummaryBar.vue';
 import EfficiencyPanel from './components/EfficiencyPanel.vue';
 import MemorialLoadoutPanel from './components/MemorialLoadoutPanel.vue';
 import SpecupAdvisorPanel from './components/SpecupAdvisorPanel.vue';
+import RuneWordLoadoutPanel from './components/RuneWordLoadoutPanel.vue';
 import RelicActivePanel from './components/RelicActivePanel.vue';
 import EquipmentCompare from './components/EquipmentCompare.vue';
 import ResultDisplay from './components/ResultDisplay.vue';
@@ -35,6 +36,7 @@ import { useAuth } from './composables/useAuth.js';
 import { useCharacterStorage } from './composables/useCharacterStorage.js';
 import { createSampleStats } from './data/sampleStats.js';
 import { sanitizeMemorialCards } from './utils/memorialLoadout.js';
+import { sanitizeRuneword } from './utils/runewordLoadout.js';
 
 // ============================================================
 // 인증 상태 + 모달 트리거
@@ -164,6 +166,7 @@ watch(
 const stats = ref(createEmptyStats('P'));
 const awakStones = ref([]); // 활성 캐릭터의 각성석 옵션 — EfficiencyPanel 과 v-model 양방향.
 const memorials = ref([]);  // 활성 캐릭터의 보유 메모리얼 카드 — MemorialLoadoutPanel 과 v-model 양방향.
+const runeword = ref(sanitizeRuneword([])); // 활성 캐릭터의 장착 룬워드 (룬 id 8개) — RuneWordLoadoutPanel 과 양방향.
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
 
@@ -191,7 +194,7 @@ function loadSampleStats() {
 }
 
 // ============================================================
-// 활성 캐릭터 ↔ 작업영역 (stats / awakStones / memorials) 양방향 동기화 + 자동 저장
+// 활성 캐릭터 ↔ 작업영역 (stats / awakStones / memorials / runeword) 양방향 동기화 + 자동 저장
 // ============================================================
 // 활성 캐릭터 변경 시 작업영역을 그 캐릭터 데이터로 교체. 이 변경은 자동 저장
 // 디바운스를 트리거해선 안 되므로 applying 플래그로 1틱 차단한다.
@@ -205,6 +208,7 @@ watch(
       stats.value = { ...createEmptyStats(c.stats?.type || 'P'), ...c.stats };
       awakStones.value = Array.isArray(c.awak_stones) ? [...c.awak_stones] : [];
       memorials.value = sanitizeMemorialCards(c.memorials);
+      runeword.value = sanitizeRuneword(c.runeword);
     }
     await nextTick();
     applyingFromCharacter = false;
@@ -226,7 +230,7 @@ let saveTimer = null;
 const SAVE_DEBOUNCE_MS = 2000;
 
 watch(
-  [stats, awakStones, memorials],
+  [stats, awakStones, memorials, runeword],
   () => {
     if (applyingFromCharacter) return;
     if (!activeCharacter.value) return; // 활성 캐릭터 없으면 자동 저장 X.
@@ -238,7 +242,7 @@ watch(
       saveStatus.value = 'saving';
       saveError.value = '';
       try {
-        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value);
+        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value);
         saveStatus.value = 'saved';
         lastSavedAt.value = Date.now();
       } catch (err) {
@@ -391,8 +395,12 @@ const savedTimeLabel = computed(() => {
               <MemorialLoadoutPanel :stats="stats" v-model:memorials="memorials" />
             </CollapsibleSection>
 
+            <CollapsibleSection v-if="canSeeRestricted" id="runewordLoadout" title="🔮 룬워드 장착 현황" :default-open="false">
+              <RuneWordLoadoutPanel :stats="stats" v-model:runeword="runeword" />
+            </CollapsibleSection>
+
             <CollapsibleSection v-if="canSeeRestricted" id="specupAdvisor" title="📈 스펙업 방향 — 어떤 내실부터 굴릴까" :default-open="false">
-              <SpecupAdvisorPanel :stats="stats" :awak-stones="awakStones" :memorials="memorials" />
+              <SpecupAdvisorPanel :stats="stats" :awak-stones="awakStones" :memorials="memorials" :runeword="runeword" />
             </CollapsibleSection>
 
             <CollapsibleSection id="relicActive" title="🗿 성물 발동 시뮬" :default-open="false">
@@ -419,6 +427,7 @@ const savedTimeLabel = computed(() => {
                 :current-stats="stats"
                 :current-awak-stones="awakStones"
                 :current-memorials="memorials"
+                :current-runeword="runeword"
               />
             </CollapsibleSection>
           </aside>
