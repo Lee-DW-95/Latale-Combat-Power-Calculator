@@ -71,7 +71,7 @@ const MEMORIAL_CASES = [
   ['CHOENPAM_SET', [{ base: '최종 크리티컬 대미지', value: 2 }, { base: '최종 최대 대미지', value: 2 }]],
   ['LEVI_SET', [{ base: '무기 공격력/속성력%', value: 3 }, { base: '크리티컬 확률%', value: 2 }]],
   // 올스탯 라인이 다른 스탯 목표에도 기여하는 케이스 (목표들이 서로 얽힘)
-  ['MUWEN_SET', [{ base: '올스탯', value: 2 }, { base: '근력/마법력', value: 4 }]],
+  ['MUWEN_SET', [{ base: '올스탯%', value: 2 }, { base: '근력/마법력%', value: 4 }]],
   ['HEUKWOL_SET', [{ base: '방어력', value: 5 }, { base: '체력', value: 3 }]],
   // 0.1 단위 step 이 섞인 메모리얼
   ['GENEPE_SET', [{ base: '보스 몬스터 지배력%', value: 1.5 }, { base: '최소/최대 대미지%', value: 20 }]],
@@ -121,7 +121,7 @@ const IMPOSSIBLE = [
   // 최종 크리티컬 대미지 최대 4 × 4줄 = 16
   ['CHOENPAM_SET', [{ base: '최종 크리티컬 대미지', value: 17 }]],
   // 올스탯 최대 5 × 4줄 = 20
-  ['MUWEN_SET', [{ base: '올스탯', value: 21 }]],
+  ['MUWEN_SET', [{ base: '올스탯%', value: 21 }]],
   // 존재하지 않는 옵션
   ['CHOENPAM_SET', [{ base: '없는 옵션', value: 1 }]],
   // 줄이 4개뿐인데 3개 목표가 각각 최대치를 요구
