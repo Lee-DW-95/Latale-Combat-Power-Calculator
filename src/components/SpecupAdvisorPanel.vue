@@ -382,6 +382,15 @@ function budgetCurve(slot) {
   });
 }
 
+// "1억당 기대" 표기 — 값이 작아도 차이가 보이게 유효숫자 2자리 (0.0085 와 0.009 가 둘 다 0.01 로 뭉개지지 않게)
+function fmtPerEok(v) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
+  if (v === 0) return '+0';
+  const abs = Math.abs(v);
+  const digits = abs >= 10 ? 1 : abs >= 1 ? 2 : abs >= 0.1 ? 3 : 4;
+  return (v > 0 ? '+' : '') + v.toFixed(digits);
+}
+
 // 시세 입력은 "만 엘리" 단위로 받는다 (250 → 250만)
 function priceMan(key) {
   return Math.round((Number(prices.value[key]) || 0) / 1e4);
@@ -557,7 +566,7 @@ function setPriceMan(key, raw) {
               +{{ fmt1(best.gainAtBudget) }}<span class="text-sm font-medium ml-0.5">%급</span>
             </p>
             <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1 tabular-nums">
-              1억당 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}
+              1억당 +{{ fmtPerEok(best.gainPer100M) }}
             </p>
           </div>
         </div>
@@ -652,7 +661,7 @@ function setPriceMan(key, raw) {
                   <p class="text-base font-semibold tracking-tight text-cyan-700 dark:text-cyan-300 leading-tight">
                     +{{ fmt1(s.gainAtBudget) }}
                   </p>
-                  <p class="text-[11px] text-stone-400 dark:text-stone-500">{{ fmt(s.rolls) }}회 · 1억당 {{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}</p>
+                  <p class="text-[11px] text-stone-400 dark:text-stone-500">{{ fmt(s.rolls) }}회 · 1억당 {{ fmtPerEok(s.gainPer100M) }}</p>
                   <p v-if="s.group === 'runeword' && result.runeScore && runeScoreAtBudget(s.rolls)" class="text-[11px] text-stone-400 dark:text-stone-500">
                     점수 +{{ Math.round(runeScoreAtBudget(s.rolls).gain) }} → {{ Math.round(runeScoreAtBudget(s.rolls).expected) }}점
                   </p>
