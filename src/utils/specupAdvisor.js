@@ -32,6 +32,25 @@ export const DEFAULT_ELY_BUDGET = 1e10;
 
 const CHUNK = 1000; // 청크마다 이벤트 루프를 놔줘 진행률 갱신 + 취소가 먹히게 한다
 
+// 카드 예시 보관 — 표본 전체를 들고 있으면 무거우니, 균등 무작위 표본(reservoir)과 상위 K 장만 남긴다.
+//   reservoir: "성공 카드가 보통 어떻게 생겼나" (분포를 대표) / top: 개선 확률이 아주 낮은 슬롯도 예시가 있게
+const KEEP_RESERVOIR = 2000;
+const KEEP_TOP = 300;
+
+/** 평가 결과 → 보관용 카드 (표시 문자열 + 환산량만) */
+function compactCard(conv) {
+  return {
+    total: conv.total,
+    lines: conv.lines.map((l) => ({
+      key: l.key,
+      text: l.text,
+      value: l.value,
+      refAmount: l.refAmount,
+      convertible: !!l.convertible,
+    })),
+  };
+}
+
 /**
  * 굴림 표본 분포 — rollFn 을 samples 회 돌려 크댐환산 합을 오름차순 Float64Array 로 돌려준다.
  * 같은 stats 기준으로 여러 슬롯이 분포를 공유할 수 있게 evaluate 는 밖에서 만들어 넘긴다.
@@ -43,7 +62,8 @@ const CHUNK = 1000; // 청크마다 이벤트 루프를 놔줘 진행률 갱신 
  * @param {number} p.samples
  * @param {(done:number)=>void} [p.onProgress]
  * @param {()=>boolean} [p.shouldCancel]
- * @returns {Promise<null|Float64Array>}       취소되면 null
+ * @returns {Promise<null|{ sorted: Float64Array, reservoir: Array, top: Array }>}  취소되면 null
+ *          reservoir 는 균등 무작위 표본 카드, top 은 환산 상위 카드(내림차순)
  */
 export async function sampleEquivDistribution({
   evaluate,
@@ -55,18 +75,93 @@ export async function sampleEquivDistribution({
 }) {
   const n = Math.max(100, Math.min(MAX_SAMPLES, Math.floor(Number(samples) || 0)));
   const out = new Float64Array(n);
+  const reservoir = [];
+  let top = [];
+  let topMin = -Infinity;
   let done = 0;
   while (done < n) {
     if (shouldCancel && shouldCancel()) return null;
     const end = Math.min(n, done + CHUNK);
     for (; done < end; done += 1) {
-      out[done] = evaluate(normalize(rollFn())).total;
+      const conv = evaluate(normalize(rollFn()));
+      out[done] = conv.total;
+      // reservoir sampling — 모든 카드가 같은 확률로 남는다
+      if (reservoir.length < KEEP_RESERVOIR) reservoir.push(compactCard(conv));
+      else {
+        const j = Math.floor(Math.random() * (done + 1));
+        if (j < KEEP_RESERVOIR) reservoir[j] = compactCard(conv);
+      }
+      // 상위 K — 청크 끝에 정리하므로 여기서는 후보만 모은다
+      if (top.length < KEEP_TOP || conv.total > topMin) {
+        top.push(compactCard(conv));
+        if (top.length >= KEEP_TOP * 2) {
+          top.sort((a, b) => b.total - a.total);
+          top.length = KEEP_TOP;
+          topMin = top[top.length - 1].total;
+        }
+      }
     }
     if (onProgress) onProgress(done);
     await new Promise((r) => setTimeout(r, 0));
   }
   out.sort();
-  return out;
+  top.sort((a, b) => b.total - a.total);
+  if (top.length > KEEP_TOP) top.length = KEEP_TOP;
+  return { sorted: out, reservoir, top };
+}
+
+/**
+ * "성공하면 어떤 카드인가" — 지금보다 좋은 카드 예시와, 성공 카드에 자주 나오는 옵션 통계.
+ *
+ * 예시는 reservoir(대표 표본)의 성공 카드에서 고르되, 성공이 드물어 reservoir 에 없으면 top 에서 고른다.
+ * 대표성을 위해 "성공 카드 평균(meanIfImprove)에 가까운 카드" 부터 보여준다.
+ *
+ * @returns {{ examples: Array, options: Array, basis: 'reservoir'|'top', winnerCount: number }}
+ */
+export function winnerProfile(store, current, meanIfImprove, exampleCount = 3) {
+  const cur = Number(current) || 0;
+  let winners = (store?.reservoir || []).filter((c) => c.total > cur);
+  let basis = 'reservoir';
+  if (winners.length < exampleCount) {
+    winners = (store?.top || []).filter((c) => c.total > cur);
+    basis = 'top';
+  }
+  const target = Number.isFinite(meanIfImprove) ? meanIfImprove : cur;
+  const examples = [...winners]
+    .sort((a, b) => Math.abs(a.total - target) - Math.abs(b.total - target))
+    .slice(0, exampleCount)
+    .sort((a, b) => b.total - a.total);
+
+  // 옵션 통계 — 성공 카드 중 그 옵션이 든 비율과, 들었을 때 평균 수치·환산
+  const stat = new Map();
+  for (const c of winners) {
+    const seen = new Set();
+    for (const l of c.lines) {
+      if (!l.convertible) continue;
+      if (seen.has(l.key)) continue; // 같은 옵션 두 줄이면 카드당 1회로 센다 (값은 합산)
+      seen.add(l.key);
+      const sumValue = c.lines.filter((x) => x.key === l.key).reduce((a, x) => a + (Number(x.value) || 0), 0);
+      const sumRef = c.lines.filter((x) => x.key === l.key).reduce((a, x) => a + (Number(x.refAmount) || 0), 0);
+      // 라벨: 메모리얼/각성석은 key 가 곧 옵션 이름(티어 prefix 없음), 룬은 "이름 (효과)" 에서 이름만
+      const label = String(l.key).startsWith('rune:') ? l.text.replace(/^👑\s*/, '').replace(/\s*\(.*$/, '') : l.key;
+      const e = stat.get(l.key) || { key: l.key, label, count: 0, value: 0, ref: 0 };
+      e.count += 1;
+      e.value += sumValue;
+      e.ref += sumRef;
+      stat.set(l.key, e);
+    }
+  }
+  const options = [...stat.values()]
+    .map((e) => ({
+      key: e.key,
+      label: e.label,
+      share: winners.length ? e.count / winners.length : 0,
+      avgValue: e.count ? e.value / e.count : 0,
+      avgRef: e.count ? e.ref / e.count : 0,
+    }))
+    .sort((a, b) => b.share * b.avgRef - a.share * a.avgRef);
+
+  return { examples, options, basis, winnerCount: winners.length };
 }
 
 /** 오름차순 배열에서 value 이하인 원소 개수 (upper bound). */
@@ -162,8 +257,8 @@ export function slotOutlook(sorted, current, budgets = BUDGETS) {
  *
  * 같은 group 의 슬롯은 표본 분포를 한 번만 만든다.
  *
- * @returns {Promise<null|{ slots:Array, dist:Map<string,Float64Array>, budgets:number[], samples:number, cancelled:boolean }>}
- *          stats 가 비어 BP 가 0 이면 null. dist 는 group → 정렬 표본 (예산별 재계산용).
+ * @returns {Promise<null|{ slots:Array, dist:Map<string,Float64Array>, cards:Map<string,object>, budgets:number[], samples:number, cancelled:boolean }>}
+ *          stats 가 비어 BP 가 0 이면 null. dist 는 group → 정렬 표본 (예산별 재계산용), cards 는 group → 예시 카드 보관.
  */
 export async function analyzeSlots({
   stats,
@@ -183,12 +278,13 @@ export async function analyzeSlots({
   }
   const groupKeys = Array.from(groups.keys());
   const dist = new Map();
+  const cards = new Map(); // group → { reservoir, top }
   let cancelled = false;
 
   for (let gi = 0; gi < groupKeys.length; gi += 1) {
     const g = groupKeys[gi];
     const { rollFn, normalize } = groups.get(g);
-    const sorted = await sampleEquivDistribution({
+    const sampled = await sampleEquivDistribution({
       evaluate,
       rollFn,
       normalize,
@@ -198,13 +294,14 @@ export async function analyzeSlots({
         ? (done) => onProgress({ group: g, groupIndex: gi, groupCount: groupKeys.length, done, total: samples })
         : undefined,
     });
-    if (!sorted) {
+    if (!sampled) {
       cancelled = true;
       break;
     }
-    dist.set(g, sorted);
+    dist.set(g, sampled.sorted);
+    cards.set(g, { reservoir: sampled.reservoir, top: sampled.top });
   }
-  if (cancelled) return { slots: [], dist, budgets, samples, cancelled: true };
+  if (cancelled) return { slots: [], dist, cards, budgets, samples, cancelled: true };
 
   const out = slots.map((s) => {
     const conv = evaluate(s.lines || []);
@@ -224,5 +321,5 @@ export async function analyzeSlots({
     };
   });
 
-  return { slots: out, dist, budgets, samples, cancelled: false };
+  return { slots: out, dist, cards, budgets, samples, cancelled: false };
 }

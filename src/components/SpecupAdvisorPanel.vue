@@ -22,6 +22,7 @@ import {
   analyzeSlots,
   expectedAfterRolls,
   slotOutlook,
+  winnerProfile,
   ELY_BUDGETS,
   DEFAULT_ELY_BUDGET,
   DEFAULT_SAMPLES,
@@ -195,6 +196,7 @@ async function run() {
       const bySlot = new Map(slots.map((s) => [s.id, s]));
       r.slots.forEach((s) => { s.system = bySlot.get(s.id)?.system || ''; });
       r.dist = markRaw(r.dist);
+      r.cards = markRaw(r.cards);
       // 룬워드 점수 기준(info 사이트 점수) 분포 — 환산 순위와 별개로 룬워드 행에 병기한다.
       //   점수는 BP 계산이 없어 빠르므로 여기서 바로 표본을 만든다.
       if (r.slots.some((s) => s.group === 'runeword')) {
@@ -234,6 +236,13 @@ function runeScoreAtBudget(rolls) {
   if (!rs) return null;
   const e = rolls > 0 ? expectedAfterRolls(rs.sorted, rs.current, rolls) : rs.current;
   return { expected: e, gain: e - rs.current };
+}
+
+// 펼침 행 — "성공하면 어떤 카드인가" 예시·옵션 통계 (표본 카드 보관분에서)
+function winnerInfo(slot) {
+  const store = result.value?.cards?.get(slot.group);
+  if (!store) return null;
+  return winnerProfile(store, slot.current, slot.meanIfImprove, 3);
 }
 
 function runeScoreCurve() {
@@ -646,6 +655,51 @@ function setPriceMan(key, raw) {
                           {{ s.empty ? '' : rarityTitle(s.pImprove) + ' · ' }}1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} ·
                           1회 비용 {{ s.cost }} = {{ elyLabel(s.costEly) }}
                         </p>
+
+                        <!-- 성공 카드 예시 — "성공" = 크댐환산 합이 지금 카드보다 높은 카드 -->
+                        <template v-if="winnerInfo(s) && winnerInfo(s).examples.length">
+                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-3 mb-1">
+                            성공하면 이런 카드
+                            <span class="font-normal text-stone-400 dark:text-stone-500">
+                              — 성공 = 크댐환산 합이 지금({{ fmt1(s.current) }})보다 높은 카드.
+                              {{ winnerInfo(s).basis === 'top' ? '드물어서 상위 표본에서 뽑음' : '성공 카드 평균에 가까운 예시' }}
+                            </span>
+                          </p>
+                          <div class="space-y-1.5">
+                            <div
+                              v-for="(ex, ei) in winnerInfo(s).examples"
+                              :key="ei"
+                              class="rounded-md ring-1 ring-stone-200 dark:ring-stone-700 px-2 py-1.5"
+                            >
+                              <div class="flex justify-between gap-2 mb-0.5">
+                                <span class="text-stone-500 dark:text-stone-400">예시 {{ ei + 1 }}</span>
+                                <span class="font-semibold text-cyan-700 dark:text-cyan-300 tabular-nums">{{ fmt1(ex.total) }}%급</span>
+                              </div>
+                              <ul class="space-y-0.5">
+                                <li v-for="(l, li) in ex.lines" :key="li" class="flex justify-between gap-3">
+                                  <span :class="l.convertible ? 'text-stone-700 dark:text-stone-200' : 'text-stone-400 dark:text-stone-500'">{{ l.text }}</span>
+                                  <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">{{ l.convertible ? `${fmt1(l.refAmount)}%급` : '—' }}</span>
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                          <p class="font-semibold text-stone-600 dark:text-stone-300 mt-2 mb-1">
+                            성공 카드에 든 옵션
+                            <span class="font-normal text-stone-400 dark:text-stone-500">— 성공 카드 {{ fmt(winnerInfo(s).winnerCount) }}장 중 포함 비율 · 들었을 때 평균값</span>
+                          </p>
+                          <ul class="space-y-0.5">
+                            <li
+                              v-for="o in winnerInfo(s).options.slice(0, 6)"
+                              :key="o.key"
+                              class="flex justify-between gap-3"
+                            >
+                              <span class="text-stone-700 dark:text-stone-200">{{ o.label }}</span>
+                              <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap tabular-nums">
+                                {{ (o.share * 100).toFixed(0) }}% · 평균 +{{ fmt1(o.avgValue) }} ({{ fmt1(o.avgRef) }}%급)
+                              </span>
+                            </li>
+                          </ul>
+                        </template>
                       </div>
                       <div>
                         <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">예산별 기대 환산 (현재 유지 포함)</p>
