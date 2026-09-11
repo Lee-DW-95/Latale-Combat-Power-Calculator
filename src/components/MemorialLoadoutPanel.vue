@@ -1,13 +1,17 @@
 <script setup>
 import { computed } from 'vue';
-import { ALL_MEMORIALS, uniqueBaseLabels } from '../data/memorialProbabilities.js';
+import { uniqueBaseLabels } from '../data/memorialProbabilities.js';
 import { evaluateLines, normalizeMemorialCard } from '../utils/rollEquiv.js';
 import {
   MEMORIAL_CARD_MAX,
-  MEMORIAL_CARD_LINES,
   makeEmptyMemorialCard,
   activeMemorialLines,
   memorialOf,
+  memorialChoices,
+  choiceValueOf,
+  parseChoiceValue,
+  memorialLineCount,
+  isNormalMemorialKey,
 } from '../utils/memorialLoadout.js';
 import { fmt1 } from '../utils/format.js';
 
@@ -19,17 +23,19 @@ const props = defineProps({
 // 보유 메모리얼 카드 — 부모(App.vue)의 활성 캐릭터 memorials 와 v-model 양방향.
 const memorials = defineModel('memorials', { type: Array, default: () => [] });
 
-const memorialOptions = Object.entries(ALL_MEMORIALS).map(([key, m]) => ({ key, name: m.name }));
+const memorialOptions = memorialChoices();
 
 function labelsFor(card) {
   const m = memorialOf(card);
   return m ? uniqueBaseLabels(m) : [];
 }
 
-// 일반 메모리얼은 1줄 고정, 세트는 최대 4줄 — 입력 줄 수를 종류에 맞춘다.
+// 일반 메모리얼은 개별 슬롯 9개(각각 따로 굴림), 세트는 최대 4줄(한 번에 굴림).
 function lineCountFor(card) {
-  const m = memorialOf(card);
-  return m?.type === 'normal' ? 1 : MEMORIAL_CARD_LINES;
+  return memorialLineCount(card.key);
+}
+function isNormal(card) {
+  return isNormalMemorialKey(card.key);
 }
 
 function addCard() {
@@ -45,16 +51,21 @@ function resetAll() {
   memorials.value = [];
 }
 
-// 메모리얼 종류가 바뀌면 그 메모리얼에 없는 옵션 줄과, 줄 수를 넘는 줄(세트→일반)은 비운다.
-function onKeyChange(card) {
+// 메모리얼 종류가 바뀌면 줄 수(일반 9 / 세트 4)를 다시 맞추고, 그 메모리얼에 없는 옵션 줄은 비운다.
+function onChoiceChange(card, value) {
+  const { key, variant } = parseChoiceValue(value);
+  card.key = key;
+  card.variant = variant;
   const labels = labelsFor(card);
   const n = lineCountFor(card);
-  card.lines.forEach((line, i) => {
-    if (i >= n || (line.label && !labels.includes(line.label))) {
+  while (card.lines.length < n) card.lines.push({ label: '', value: '' });
+  if (card.lines.length > n) card.lines.splice(n);
+  for (const line of card.lines) {
+    if (line.label && !labels.includes(line.label)) {
       line.label = '';
       line.value = '';
     }
-  });
+  }
 }
 
 // 같은 카드 안에서 같은 옵션을 두 줄에 고르는 것은 허용한다 — 실제 게임에서도 같은 옵션이
@@ -99,8 +110,9 @@ const totalConv = computed(() =>
       </div>
     </div>
     <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
-      지금 장착 중인 메모리얼 카드의 옵션을 그대로 적어 두면 캐릭터와 함께 저장되고,
-      아래 <strong>스펙업 방향</strong> 분석에서 "이 카드를 다시 굴릴 가치" 를 계산하는 기준이 됩니다.
+      지금 장착 중인 메모리얼 옵션을 그대로 적어 두면 캐릭터와 함께 저장되고,
+      아래 <strong>스펙업 방향</strong> 분석에서 "다시 굴릴 가치" 를 계산하는 기준이 됩니다.
+      <strong>일반</strong>은 개별 옵션 슬롯 9개(슬롯마다 따로 굴림), <strong>세트</strong>는 한 번에 굴려지는 옵션 최대 4줄입니다.
       "최종 ~ 대미지" 는 대미지 배율을 BP 비율로 환산합니다.
     </p>
 
@@ -122,11 +134,11 @@ const totalConv = computed(() =>
             {{ cIdx + 1 }}.
           </span>
           <select
-            v-model="card.key"
-            @change="onKeyChange(card)"
+            :value="choiceValueOf(card)"
+            @change="(e) => onChoiceChange(card, e.target.value)"
             class="rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
           >
-            <option v-for="o in memorialOptions" :key="o.key" :value="o.key">{{ o.name }}</option>
+            <option v-for="o in memorialOptions" :key="o.value" :value="o.value">{{ o.name }}</option>
           </select>
           <span class="ml-auto text-xs tabular-nums">
             <template v-if="cardConvs[cIdx]">
@@ -151,6 +163,10 @@ const totalConv = computed(() =>
             :key="lIdx"
             class="flex items-center gap-1"
           >
+            <span
+              v-if="isNormal(card)"
+              class="text-[10px] text-stone-400 dark:text-stone-500 w-8 shrink-0 tabular-nums"
+            >슬롯{{ lIdx + 1 }}</span>
             <select
               v-model="line.label"
               class="flex-1 min-w-0 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-1.5 py-1 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"

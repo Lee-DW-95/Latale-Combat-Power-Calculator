@@ -10,7 +10,12 @@ import {
   normalizeMemorialCard,
   normalizeRuneWordCard,
 } from '../utils/rollEquiv.js';
-import { activeMemorialLines, memorialOf } from '../utils/memorialLoadout.js';
+import {
+  activeMemorialLines,
+  memorialOf,
+  memorialDisplayName,
+  isNormalMemorialKey,
+} from '../utils/memorialLoadout.js';
 import { runewordRows } from '../utils/runewordLoadout.js';
 import {
   analyzeSlots,
@@ -91,16 +96,36 @@ function buildSlots() {
   props.memorials.forEach((card, i) => {
     const m = memorialOf(card);
     if (!m) return;
-    slots.push({
-      id: `memo-${i}`,
-      label: `${m.name} #${i + 1}`,
+    const name = memorialDisplayName(card.key, card.variant);
+    const common = {
       system: '메모리얼',
       group: `memorial:${card.key}`,
-      lines: normalizeMemorialCard(activeMemorialLines(card)),
       rollFn: () => rollMemorial(m),
       normalize: normalizeMemorialCard,
       cost: `파편 ${m.cost.frag} · 결정 ${m.cost.crystal}`,
       costEly: elyFor(memorialCostItems(m)),
+    };
+    if (isNormalMemorialKey(card.key)) {
+      // 일반: 슬롯 9개가 각각 따로 굴려진다 → 슬롯마다 독립 분석 대상
+      card.lines.forEach((line, j) => {
+        const active = line.label && Number(line.value) > 0
+          ? [{ label: line.label, value: Number(line.value) }]
+          : [];
+        slots.push({
+          ...common,
+          id: `memo-${i}-${j}`,
+          label: `${name} 슬롯 ${j + 1}`,
+          lines: normalizeMemorialCard(active),
+        });
+      });
+      return;
+    }
+    // 세트: 카드 1장(최대 4줄)이 한 번에 굴려진다
+    slots.push({
+      ...common,
+      id: `memo-${i}`,
+      label: `${name} #${i + 1}`,
+      lines: normalizeMemorialCard(activeMemorialLines(card)),
     });
   });
 
