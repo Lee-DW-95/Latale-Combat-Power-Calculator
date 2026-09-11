@@ -92,7 +92,7 @@ function elyLabel(ely) {
 }
 
 // ── 슬롯 구성 — 저장된 내실을 분석 엔진 입력으로 ─────────────────────
-function buildSlots() {
+function buildSlots(scope = systemFilter.value) {
   const slots = [];
 
   props.awakStones.forEach((stone, i) => {
@@ -158,8 +158,19 @@ function buildSlots() {
     costEly: elyFor(RUNE_COST_ITEMS),
   });
 
-  return includeEmpty.value ? slots : slots.filter((s) => s.lines.length > 0);
+  const scoped = scope === '전체' ? slots : slots.filter((s) => s.system === scope);
+  return includeEmpty.value ? scoped : scoped.filter((s) => s.lines.length > 0);
 }
+
+// 시스템별 후보 수 (빈 슬롯 포함 여부 반영) — 분석 대상 칩에 표시
+const candidateCounts = computed(() => {
+  const out = { 전체: 0, 각성석: 0, 메모리얼: 0, 룬워드: 0 };
+  for (const s of buildSlots('전체')) {
+    out.전체 += 1;
+    if (out[s.system] !== undefined) out[s.system] += 1;
+  }
+  return out;
+});
 
 const slotCount = computed(() => buildSlots().length);
 
@@ -243,6 +254,13 @@ watch(
   () => { if (result.value) stale.value = true; },
   { deep: true },
 );
+// 분석 대상을 바꾸면 결과 표는 즉시 그 시스템만 남기고(재정렬), 누락된 시스템이 있을 수 있으니 재분석을 권한다.
+watch(systemFilter, (f) => {
+  if (!result.value) return;
+  const have = new Set(result.value.slots.map((s) => s.system));
+  const need = f === '전체' ? ['각성석', '메모리얼', '룬워드'].filter((k) => candidateCounts.value[k] > 0) : [f];
+  if (need.some((k) => !have.has(k))) stale.value = true;
+});
 
 // ── 예산 기준 순위 — 슬롯마다 굴릴 수 있는 횟수 floor(예산 / 1회 비용) 로 기대 이득 ──
 //   시세·예산을 바꾸면 분포는 그대로이므로 재분석 없이 여기서만 다시 계산한다.
@@ -276,15 +294,6 @@ const ranked = computed(() => {
   return filtered.sort((a, b) => metric(b) - metric(a) || b.gainAtBudget - a.gainAtBudget || (b.gainPer100M ?? 0) - (a.gainPer100M ?? 0));
 });
 
-// 필터별 슬롯 수 — 칩에 표시
-const countBySystem = computed(() => {
-  const out = { 전체: 0, 각성석: 0, 메모리얼: 0, 룬워드: 0 };
-  for (const s of result.value?.slots || []) {
-    out.전체 += 1;
-    if (out[s.system] !== undefined) out[s.system] += 1;
-  }
-  return out;
-});
 
 function currentCostEly(slot) {
   if (slot.group === 'awakening') return elyFor(AWAK_COST_ITEMS);
@@ -374,6 +383,26 @@ function setPriceMan(key, raw) {
     </p>
 
     <template v-else>
+      <!-- 분석 대상 — 전체, 또는 한 시스템만 ("메모리얼 중 무엇부터") -->
+      <div class="flex items-center gap-2 flex-wrap text-xs mb-2">
+        <span class="text-stone-500 dark:text-stone-400">분석 대상</span>
+        <div class="flex items-center gap-1">
+          <button
+            v-for="f in SYSTEM_FILTERS"
+            :key="f"
+            type="button"
+            @click="systemFilter = f"
+            :disabled="running || (f !== '전체' && candidateCounts[f] === 0)"
+            class="px-2.5 py-1 rounded-full ring-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            :class="systemFilter === f
+              ? 'bg-cyan-600 text-white ring-cyan-600'
+              : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'"
+          >
+            {{ f }} <span class="tabular-nums opacity-70">{{ candidateCounts[f] }}</span>
+          </button>
+        </div>
+      </div>
+
       <!-- 설정 줄 -->
       <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mb-2">
         <label class="flex items-center gap-1.5">
@@ -476,26 +505,14 @@ function setPriceMan(key, raw) {
           v-if="stale"
           class="text-[11px] text-orange-600 dark:text-orange-400 mb-2"
         >
-          ⚠ 분석 후 스탯 또는 내실 입력이 바뀌었습니다. 아래 결과는 이전 입력 기준입니다 — "다시 분석" 을 눌러 주세요.
+          ⚠ 분석 후 입력(스탯·내실) 또는 분석 대상이 바뀌었습니다. 아래 결과는 이전 분석 기준입니다 — "다시 분석" 을 눌러 주세요.
         </p>
 
-        <!-- 보기: 시스템 필터 + 정렬 기준 -->
+        <!-- 정렬 기준 -->
         <div class="flex items-center gap-x-3 gap-y-2 flex-wrap text-xs mb-3">
-          <div class="flex items-center gap-1">
-            <button
-              v-for="f in SYSTEM_FILTERS"
-              :key="f"
-              type="button"
-              @click="systemFilter = f"
-              :disabled="countBySystem[f] === 0"
-              class="px-2 py-1 rounded-full ring-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
-              :class="systemFilter === f
-                ? 'bg-cyan-600 text-white ring-cyan-600'
-                : 'ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'"
-            >
-              {{ f }} <span class="tabular-nums opacity-70">{{ countBySystem[f] }}</span>
-            </button>
-          </div>
+          <span class="text-stone-500 dark:text-stone-400">
+            {{ systemFilter === '전체' ? '전체 내실' : systemFilter + '만' }} {{ ranked.length }}개
+          </span>
           <label class="flex items-center gap-1.5 ml-auto">
             <span class="text-stone-500 dark:text-stone-400">정렬</span>
             <select
