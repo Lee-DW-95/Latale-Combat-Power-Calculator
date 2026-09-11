@@ -25,7 +25,7 @@ import {
   DEFAULT_SAMPLES,
 } from '../utils/specupAdvisor.js';
 import { usePrices, PRICE_DEFS } from '../composables/usePrices.js';
-import { fmt, fmt1, pct } from '../utils/format.js';
+import { fmt, fmt1 } from '../utils/format.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -239,11 +239,27 @@ function toggle(id) {
   expanded.value = s;
 }
 
-function topPctLabel(p) {
-  // percentile = 현재 이하 누적 비율. 0.977 → "상위 2.3%"
-  const top = (1 - p) * 100;
-  if (top < 0.1) return '상위 0.1% 이내';
-  return `상위 ${top.toFixed(1)}%`;
+// ── 희귀도 — "굴렸을 때 지금보다 좋은 카드가 나올 확률" p 를 사람이 읽는 말로 ─────
+//   확률표 기준이라 다른 유저와 무관하게 "지금 카드가 얼마나 귀한가" 를 뜻한다.
+//   체력/방어력처럼 환산 0 인 옵션은 값이 아무리 커도 잡옵으로 취급된다.
+function rarityLabel(p) {
+  if (!(p > 0)) return '표본 내 최고';
+  const top = p * 100;
+  const oneIn = Math.round(1 / p);
+  if (top < 0.1) return `상위 0.1% 이내 · ${fmt(oneIn)}장 중 1장급`;
+  if (top < 1) return `상위 ${top.toFixed(2)}% · ${fmt(oneIn)}장 중 1장급`;
+  if (top < 20) return `상위 ${top.toFixed(1)}% · ${fmt(oneIn)}장 중 1장급`;
+  return `상위 ${top.toFixed(0)}% · 흔함`;
+}
+function rarityTitle(p) {
+  if (!(p > 0)) return `표본 ${fmt(result.value?.samples || 0)}장 중 지금보다 좋은 카드가 한 장도 없음`;
+  return `이 슬롯을 다시 굴리면 ${(p * 100).toFixed(2)}% 확률로만 지금보다 좋은 카드가 나온다 (평균 ${fmt(Math.round(1 / p))}회에 1장)`;
+}
+function rarityClass(p) {
+  if (!(p > 0) || p < 0.001) return 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300';
+  if (p < 0.01) return 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300';
+  if (p < 0.2) return 'bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-300';
+  return 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500';
 }
 
 // 펼친 행의 "예산별 기대" 표 — 예산 후보 전체에 대해 즉석 계산
@@ -400,57 +416,80 @@ function setPriceMan(key, raw) {
             — {{ elyLabel(budgetEly) }} 예산이면 {{ fmt(best.rolls) }}회 굴릴 수 있고, 크댐환산 평균
             <strong class="text-cyan-700 dark:text-cyan-300 tabular-nums">+{{ fmt1(best.gainAtBudget) }}%급</strong>
             기대 (현재 {{ fmt1(best.current) }} → {{ fmt1(best.expectedAtBudget) }}).
-            1회 {{ elyLabel(best.costEly) }}, 1회 굴려 좋아질 확률 {{ pct(best.pImprove) }},
-            엘리 1억당 기대 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}.
+            지금 카드는 {{ best.empty ? '빈 슬롯' : rarityLabel(best.pImprove) }}이고, 1회 {{ elyLabel(best.costEly) }}로
+            개선까지 평균 {{ Number.isFinite(best.expectedRollsToImprove) ? fmt(Math.round(best.expectedRollsToImprove)) + '회' : '—' }}
+            (엘리 1억당 기대 +{{ best.gainPer100M !== null ? best.gainPer100M.toFixed(2) : '—' }}).
           </span>
         </div>
 
-        <!-- 순위표 -->
+        <!-- 순위표 — 슬롯마다 "지금 카드가 얼마나 귀한가 / 굴리면 어떻게 되나 / 예산을 쓰면" 세 칸 -->
         <div class="overflow-x-auto -mx-1">
-          <table class="min-w-full text-xs tabular-nums">
+          <table class="min-w-full text-xs">
             <thead>
               <tr class="text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
                 <th class="px-2 py-1.5 text-left font-medium w-8">#</th>
                 <th class="px-2 py-1.5 text-left font-medium">슬롯</th>
-                <th class="px-2 py-1.5 text-right font-medium">현재</th>
-                <th class="px-2 py-1.5 text-right font-medium">1회 비용</th>
                 <th
-                  class="px-2 py-1.5 text-right font-medium cursor-help underline decoration-dotted"
-                  title="다시 굴린 카드 표본 중 지금보다 좋은 카드의 비율 — 곧 지금 카드의 분포 위치 (5% = 상위 5%)"
-                >1회 개선 확률</th>
+                  class="px-2 py-1.5 text-left font-medium cursor-help underline decoration-dotted"
+                  title="크댐환산과, 이 슬롯을 다시 굴렸을 때 나오는 카드들 사이에서의 위치. '상위 5%' = 굴린 카드 100장 중 5장만 지금보다 좋다 = 20장 중 1장급. 다른 유저와 비교한 값이 아니라 확률표 기준 희귀도"
+                >현재 카드</th>
                 <th
-                  class="px-2 py-1.5 text-right font-medium cursor-help underline decoration-dotted"
-                  title="지금보다 좋게 나온 카드들의 평균 크댐환산 — 개선에 성공하면 대략 이 정도가 된다"
-                >개선 시 평균</th>
-                <th class="px-2 py-1.5 text-right font-medium">1억당 기대</th>
-                <th class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300">{{ elyLabel(budgetEly) }} 예산 기대 이득</th>
+                  class="px-2 py-1.5 text-left font-medium cursor-help underline decoration-dotted"
+                  title="지금보다 좋은 카드가 나올 때까지 평균 몇 회(얼마)가 드는지, 그리고 그때 카드의 평균 크댐환산"
+                >굴리면</th>
+                <th
+                  class="px-2 py-1.5 text-right font-medium text-cyan-700 dark:text-cyan-300 cursor-help underline decoration-dotted whitespace-nowrap"
+                  title="예산 전부를 이 슬롯에 썼을 때 기대되는 크댐환산 상승. 아래 작은 글씨는 지금 상태에서 1회 굴렸을 때 엘리 1억당 기대 상승 (한계 효율)"
+                >{{ elyLabel(budgetEly) }} 예산 기대 이득</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="(s, i) in ranked" :key="s.id">
                 <tr
                   @click="toggle(s.id)"
-                  class="border-b border-stone-100 dark:border-stone-800 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/40 transition"
+                  class="border-b border-stone-100 dark:border-stone-800 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-900/40 transition align-top"
                   :class="i === 0 ? 'bg-cyan-50/60 dark:bg-cyan-900/10' : ''"
                 >
-                  <td class="px-2 py-1.5 text-stone-500 dark:text-stone-400">{{ i + 1 }}</td>
-                  <td class="px-2 py-1.5">
+                  <td class="px-2 py-2 text-stone-500 dark:text-stone-400 tabular-nums">{{ i + 1 }}</td>
+                  <td class="px-2 py-2 whitespace-nowrap">
                     <span class="text-[10px] px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 mr-1">{{ s.system }}</span>
                     <span class="text-stone-800 dark:text-stone-100">{{ s.label }}</span>
-                    <span v-if="s.empty" class="ml-1 text-[10px] text-orange-600 dark:text-orange-400">빈 슬롯</span>
+                    <span class="ml-1 text-[10px] text-stone-400 dark:text-stone-500">1회 {{ elyLabel(s.costEly) }}</span>
                   </td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ fmt1(s.current) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-500 dark:text-stone-400 whitespace-nowrap" :title="s.cost">{{ elyLabel(s.costEly) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200" :title="s.empty ? '' : topPctLabel(s.percentile)">{{ pct(s.pImprove) }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ s.pImprove > 0 ? fmt1(s.meanIfImprove) : '—' }}</td>
-                  <td class="px-2 py-1.5 text-right text-stone-700 dark:text-stone-200">{{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}</td>
-                  <td class="px-2 py-1.5 text-right font-semibold text-cyan-700 dark:text-cyan-300">
-                    +{{ fmt1(s.gainAtBudget) }}
-                    <span class="font-normal text-stone-400 dark:text-stone-500">({{ fmt(s.rolls) }}회)</span>
+                  <td class="px-2 py-2 whitespace-nowrap">
+                    <template v-if="s.empty">
+                      <span class="text-orange-600 dark:text-orange-400 font-semibold">빈 슬롯</span>
+                    </template>
+                    <template v-else>
+                      <span class="font-semibold text-stone-800 dark:text-stone-100 tabular-nums">{{ fmt1(s.current) }}%급</span>
+                      <span
+                        class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
+                        :class="rarityClass(s.pImprove)"
+                        :title="rarityTitle(s.pImprove)"
+                      >{{ rarityLabel(s.pImprove) }}</span>
+                    </template>
+                  </td>
+                  <td class="px-2 py-2 text-stone-600 dark:text-stone-300 whitespace-nowrap tabular-nums">
+                    <template v-if="s.pImprove > 0">
+                      개선까지 평균 <strong class="text-stone-800 dark:text-stone-100">{{ fmt(Math.round(s.expectedRollsToImprove)) }}회</strong>
+                      <span class="text-stone-400 dark:text-stone-500">≈ {{ elyLabel(s.expectedRollsToImprove * s.costEly) }}</span>
+                      <span class="text-stone-400 dark:text-stone-500 mx-1">·</span>
+                      성공하면 평균 <strong class="text-stone-800 dark:text-stone-100">{{ fmt1(s.meanIfImprove) }}%급</strong>
+                    </template>
+                    <span v-else class="text-stone-400 dark:text-stone-500 italic">표본 {{ fmt(result.samples) }}장 중 더 좋은 카드 없음</span>
+                  </td>
+                  <td class="px-2 py-2 text-right whitespace-nowrap tabular-nums">
+                    <div class="font-semibold text-cyan-700 dark:text-cyan-300">
+                      +{{ fmt1(s.gainAtBudget) }}
+                      <span class="font-normal text-stone-400 dark:text-stone-500">({{ fmt(s.rolls) }}회)</span>
+                    </div>
+                    <div class="text-[10px] text-stone-400 dark:text-stone-500">
+                      1억당 {{ s.gainPer100M !== null ? '+' + s.gainPer100M.toFixed(2) : '—' }}
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="expanded.has(s.id)" class="border-b border-stone-100 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/30">
-                  <td colspan="8" class="px-3 py-2">
+                  <td colspan="5" class="px-3 py-2">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
                       <div>
                         <p class="font-semibold text-stone-600 dark:text-stone-300 mb-1">현재 옵션</p>
@@ -462,10 +501,7 @@ function setPriceMan(key, raw) {
                           </li>
                         </ul>
                         <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                          1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} · 개선 성공 시 평균 {{ fmt1(s.meanIfImprove) }} ·
-                          개선까지 평균 {{ Number.isFinite(s.expectedRollsToImprove) ? fmt(Math.round(s.expectedRollsToImprove)) + '회 (' + elyLabel(s.expectedRollsToImprove * s.costEly) + ')' : '표본 내 없음' }}
-                        </p>
-                        <p class="mt-1 text-stone-500 dark:text-stone-400">
+                          {{ s.empty ? '' : rarityTitle(s.pImprove) + ' · ' }}1회당 기대 +{{ s.gainPerRoll.toFixed(2) }} ·
                           1회 비용 {{ s.cost }} = {{ elyLabel(s.costEly) }}
                         </p>
                       </div>
@@ -481,7 +517,7 @@ function setPriceMan(key, raw) {
                           </li>
                         </ul>
                         <p class="mt-1.5 text-stone-500 dark:text-stone-400">
-                          표본 평균 {{ fmt1(s.sampleMean) }} · 중앙값 {{ fmt1(s.sampleMedian) }} · 표본 최고 {{ fmt1(s.sampleMax) }}
+                          굴린 카드 표본: 평균 {{ fmt1(s.sampleMean) }} · 중앙값 {{ fmt1(s.sampleMedian) }} · 최고 {{ fmt1(s.sampleMax) }}
                         </p>
                       </div>
                     </div>
@@ -491,7 +527,6 @@ function setPriceMan(key, raw) {
             </tbody>
           </table>
         </div>
-
         <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
           ⓘ 표본 {{ fmt(result.samples) }}장 기준 몬테카를로 — 1% 미만 확률은 오차가 큽니다 (표본 수를 늘리면 정밀해집니다).
           예산 기대 이득은 예산 전부를 그 슬롯 하나에 쓴다고 가정한 값이라 순서를 정하는 용도이고, 배분 계획은 아닙니다 —
