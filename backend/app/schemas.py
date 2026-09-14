@@ -53,7 +53,9 @@ class CharacterCreate(CharacterBase):
 
 
 class CharacterUpdate(CharacterBase):
-    pass
+    # 낙관적 잠금 — 클라이언트가 마지막으로 본 updated_at. 보내면 서버 값과 초 단위로
+    # 비교해 다르면 409 (다른 기기에서 먼저 저장). 생략하면 기존과 동일하게 무조건 덮어씀.
+    expected_updated_at: datetime | None = None
 
 
 class CharacterRead(CharacterBase):

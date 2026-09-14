@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import get_settings
@@ -10,28 +11,43 @@ class Base(DeclarativeBase):
 
 settings = get_settings()
 
-# SQLite 는 단일 connection 만 같은 스레드에서 안전 — FastAPI 의존성 패턴에선
-# 요청마다 새 세션을 받으므로 check_same_thread=False 가 필요.
-_connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 
-engine = create_engine(
-    settings.database_url,
-    connect_args=_connect_args,
-    pool_pre_ping=True,
-)
+def _make_engine(url: str) -> Engine:
+    # SQLite 는 단일 connection 만 같은 스레드에서 안전 — FastAPI 의존성 패턴에선
+    # 요청마다 새 세션을 받으므로 check_same_thread=False 가 필요.
+    is_sqlite = url.startswith("sqlite")
+    eng = create_engine(
+        url,
+        connect_args={"check_same_thread": False} if is_sqlite else {},
+        pool_pre_ping=True,
+    )
 
-# SQLite 동시성 향상 — WAL 모드 + foreign key 활성화. 연결마다 1회 실행.
-if settings.database_url.startswith("sqlite"):
+    # SQLite 동시성 향상 — WAL 모드 + foreign key 활성화. 연결마다 1회 실행.
+    if is_sqlite:
 
-    @event.listens_for(engine, "connect")
-    def _sqlite_pragma(dbapi_connection, _record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+        @event.listens_for(eng, "connect")
+        def _sqlite_pragma(dbapi_connection, _record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
+    return eng
+
+
+engine = _make_engine(settings.database_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def configure_engine(url: str) -> Engine:
+    # 엔진 교체 훅 — 테스트에서 임시 SQLite 파일을 쓰기 위함. SessionLocal 은
+    # in-place 로 재바인딩되므로 deps.py 등이 이미 import 한 참조도 새 엔진을 쓴다.
+    global engine
+    engine.dispose()
+    engine = _make_engine(url)
+    SessionLocal.configure(bind=engine)
+    return engine
 
 
 def init_db() -> None:

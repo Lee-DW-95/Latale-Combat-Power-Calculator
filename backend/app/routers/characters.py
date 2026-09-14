@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,14 @@ def _own_character_or_404(db: Session, user: User, character_id: int) -> Charact
         # 타인의 캐릭터 존재 여부를 노출하지 않기 위해 동일 에러.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "캐릭터를 찾을 수 없습니다.")
     return char
+
+
+def _to_utc_seconds(dt: datetime) -> datetime:
+    # SQLite 는 tz 를 보존하지 않아 naive 로 돌아옴 (_now 가 UTC 이므로 UTC 로 간주).
+    # 클라이언트는 임의 오프셋으로 보낼 수 있으니 UTC 로 맞추고, 초 단위로 비교.
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(microsecond=0)
 
 
 @router.get("", response_model=list[schemas.CharacterRead])
@@ -73,6 +83,19 @@ def update_character(
     new_name = body.name.strip()
     if not new_name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "캐릭터 이름이 비어 있습니다.")
+
+    # 낙관적 잠금 — 클라이언트가 본 updated_at 이 서버와 다르면 덮어쓰지 않고 409.
+    # detail 에 현재 서버 캐릭터를 실어 보내 클라이언트가 병합/재선택할 수 있게 한다.
+    if body.expected_updated_at is not None and _to_utc_seconds(
+        body.expected_updated_at
+    ) != _to_utc_seconds(char.updated_at):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "message": "다른 기기에서 먼저 저장되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.",
+                "character": schemas.CharacterRead.model_validate(char).model_dump(mode="json"),
+            },
+        )
 
     # 이름 변경 시 같은 유저의 다른 캐릭터와 충돌하면 409.
     if new_name != char.name:

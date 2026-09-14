@@ -403,26 +403,46 @@ sudo journalctl -u latale-api -n 100 --no-pager
 
 ### DB 백업
 
+DB 는 SQLite WAL 모드라 `latale.db` 파일만 복사하면 `-wal` 에 쌓인 최근 변경이 빠진다.
+반드시 sqlite3 backup API 로 스냅샷을 떠야 한다. 저장소의 `backend/scripts/backup_db.sh` 가 그 역할을 하며, VM 에는
+`/home/ubuntu/latale/backend/scripts/backup_db.sh` (chmod 755) 로 올려져 있다.
+
+스크립트 동작:
+1. `python3` 의 `sqlite3.Connection.backup()` 으로 `backups/latale-YYYYmmdd-HHMM.db` 생성 (원본은 읽기 전용으로 열어 서비스 무중단)
+2. `PRAGMA integrity_check` 통과 확인
+3. gzip → `backups/latale-YYYYmmdd-HHMM.db.gz` 만 남김
+4. 30일 지난 `latale-*.db.gz` 삭제
+5. 어느 단계든 실패하면 non-zero exit (불완전한 산출물은 지움)
+
 수동 즉시:
 ```bash
-mkdir -p /home/ubuntu/latale/backend/backups
-sqlite3 /home/ubuntu/latale/backend/latale.db ".backup /home/ubuntu/latale/backend/backups/latale-$(date +%Y%m%d).db"
+/home/ubuntu/latale/backend/scripts/backup_db.sh
 ```
 
-cron 자동 (매일 03:00):
+cron 자동 — 서버 시간대는 `Asia/Seoul` (KST) 이며 매일 03:00 KST 에 실행, 로그는 `backups/backup.log` 에 append.
+현재 등록된 crontab (`crontab -l`):
+```
+# latale.db 일일 백업 (서버 시간대 Asia/Seoul, 매일 03:00 KST)
+0 3 * * * /home/ubuntu/latale/backend/scripts/backup_db.sh >> /home/ubuntu/latale/backend/backups/backup.log 2>&1
+```
+
+새 VM 에서 다시 등록할 때:
 ```bash
-crontab -e
-# 마지막 줄에 추가:
-0 3 * * * sqlite3 /home/ubuntu/latale/backend/latale.db ".backup /home/ubuntu/latale/backend/backups/latale-$(date +\%Y\%m\%d).db" && find /home/ubuntu/latale/backend/backups -name 'latale-*.db' -mtime +30 -delete
+chmod 755 /home/ubuntu/latale/backend/scripts/backup_db.sh
+( crontab -l 2>/dev/null; echo "0 3 * * * /home/ubuntu/latale/backend/scripts/backup_db.sh >> /home/ubuntu/latale/backend/backups/backup.log 2>&1" ) | crontab -
 ```
 
-30일 지난 백업은 자동 삭제.
+백업 검증 (행 수 비교):
+```bash
+gunzip -c /home/ubuntu/latale/backend/backups/latale-YYYYmmdd-HHMM.db.gz > /tmp/chk.db
+python3 -c "import sqlite3; print(sqlite3.connect('/tmp/chk.db').execute('select count(*) from characters').fetchone())"
+```
 
 ### 백업 파일을 로컬로 복사
 
 ```powershell
 # Windows 로컬에서
-scp -i <your-key.pem> ubuntu@<vm-ip>:/home/ubuntu/latale/backend/backups/latale-YYYYMMDD.db .
+scp -i <your-key.pem> ubuntu@<vm-ip>:/home/ubuntu/latale/backend/backups/latale-YYYYmmdd-HHMM.db.gz .
 ```
 
 ### DuckDNS IP 자동 갱신 (선택)
