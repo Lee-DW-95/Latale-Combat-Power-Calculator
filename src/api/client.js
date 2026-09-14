@@ -56,10 +56,14 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
 
   if (!response.ok) {
     if (response.status === 401 && auth) _onUnauthorized();
+    // detail 은 문자열이 보통이지만, 낙관적 잠금 409 처럼 { message, character } 객체로 올 수 있다.
+    //   객체면 message 만 오류 문구로 쓰고 나머지는 body 로 넘겨 호출부가 꺼내 쓰게 한다.
+    const detail = payload && (payload.detail ?? payload.message);
     const msg =
-      (payload && (payload.detail || payload.message)) ||
-      `요청 실패 (${response.status})`;
-    throw new ApiError(typeof msg === 'string' ? msg : JSON.stringify(msg), {
+      (typeof detail === 'string' && detail) ||
+      (detail && typeof detail === 'object' && typeof detail.message === 'string' && detail.message) ||
+      (detail ? JSON.stringify(detail) : `요청 실패 (${response.status})`);
+    throw new ApiError(msg, {
       status: response.status,
       body: payload,
     });

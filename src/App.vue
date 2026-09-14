@@ -66,6 +66,8 @@ function openAuth(step = 'login') {
 const {
   activeCharacter,
   saveCharacter,
+  conflict: saveConflict,
+  adoptServerCharacter,
   getLocalCharacterPreview,
   migrateLocalToServer,
 } = useCharacterStorage();
@@ -210,28 +212,28 @@ function loadSampleStats() {
 // 디바운스를 트리거해선 안 되므로 applying 플래그로 1틱 차단한다.
 let applyingFromCharacter = false;
 
-watch(
-  activeCharacter,
-  async (c) => {
-    applyingFromCharacter = true;
-    if (c) {
-      stats.value = { ...createEmptyStats(c.stats?.type || 'P'), ...c.stats };
-      awakStones.value = Array.isArray(c.awak_stones) ? [...c.awak_stones] : [];
-      memorials.value = sanitizeMemorialCards(c.memorials);
-      runeword.value = sanitizeRuneword(c.runeword);
-    }
-    await nextTick();
-    applyingFromCharacter = false;
-  },
-  { immediate: true },
-);
+// 캐릭터 데이터 → 작업영역. 활성 캐릭터 전환과 "서버 저장본 불러오기" 가 같이 쓴다.
+async function applyCharacterToWorkspace(c) {
+  applyingFromCharacter = true;
+  if (c) {
+    stats.value = { ...createEmptyStats(c.stats?.type || 'P'), ...c.stats };
+    awakStones.value = Array.isArray(c.awak_stones) ? [...c.awak_stones] : [];
+    memorials.value = sanitizeMemorialCards(c.memorials);
+    runeword.value = sanitizeRuneword(c.runeword);
+  }
+  await nextTick();
+  applyingFromCharacter = false;
+}
+
+watch(activeCharacter, (c) => applyCharacterToWorkspace(c), { immediate: true });
 
 // 자동 저장 상태 — 헤더 인디케이터에 표시.
-//   'idle'   : 변경 없음 (또는 활성 캐릭터 없음)
-//   'pending': 변경 감지, 디바운스 대기 중
-//   'saving' : 실제 API/localStorage 저장 진행
-//   'saved'  : 마지막 저장 성공
-//   'error'  : 마지막 저장 실패
+//   'idle'    : 변경 없음 (또는 활성 캐릭터 없음)
+//   'pending' : 변경 감지, 디바운스 대기 중
+//   'saving'  : 실제 API/localStorage 저장 진행
+//   'saved'   : 마지막 저장 성공
+//   'error'   : 마지막 저장 실패
+//   'conflict': 다른 기기가 먼저 저장 (409) — 배너에서 사용자가 고를 때까지 자동 저장 보류
 const saveStatus = ref('idle');
 const lastSavedAt = ref(null);
 const saveError = ref('');
@@ -244,6 +246,8 @@ watch(
   () => {
     if (applyingFromCharacter) return;
     if (!activeCharacter.value) return; // 활성 캐릭터 없으면 자동 저장 X.
+    // 충돌이 떠 있는 동안은 자동 저장을 보류한다 — 매번 409 만 반복되고, 사용자가 배너에서 골라야 풀린다.
+    if (saveConflict.value) return;
     saveStatus.value = 'pending';
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
@@ -256,6 +260,11 @@ watch(
         saveStatus.value = 'saved';
         lastSavedAt.value = Date.now();
       } catch (err) {
+        if (err?.conflict) {
+          saveStatus.value = 'conflict';
+          saveError.value = err.message;
+          return;
+        }
         saveStatus.value = 'error';
         saveError.value = err?.message || '저장 실패';
       }
@@ -263,6 +272,45 @@ watch(
   },
   { deep: true },
 );
+
+// 캐릭터 목록의 "저장" 버튼 등 다른 경로에서 충돌이 나도 배너 상태를 맞춘다.
+watch(saveConflict, (c) => {
+  if (c) saveStatus.value = 'conflict';
+});
+
+// ── 충돌 배너 동작 ──
+const conflictBusy = ref(false);
+
+// 서버 저장본으로 화면을 바꾼다 (내 미저장 변경은 버림).
+async function onConflictAdopt() {
+  const c = adoptServerCharacter();
+  if (c) await applyCharacterToWorkspace(c);
+  saveStatus.value = 'saved';
+  lastSavedAt.value = Date.now();
+}
+
+// 내 화면 내용으로 서버를 덮어쓴다 (expected_updated_at 없이 저장).
+async function onConflictOverwrite() {
+  const target = activeCharacter.value;
+  if (!target) return;
+  conflictBusy.value = true;
+  saveStatus.value = 'saving';
+  try {
+    await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, { force: true });
+    saveStatus.value = 'saved';
+    lastSavedAt.value = Date.now();
+  } catch (err) {
+    saveStatus.value = 'error';
+    saveError.value = err?.message || '저장 실패';
+  } finally {
+    conflictBusy.value = false;
+  }
+}
+
+const conflictServerTime = computed(() => {
+  const t = saveConflict.value?.serverCharacter?.updatedAt;
+  return t ? new Date(t).toLocaleString() : '';
+});
 
 const savedTimeLabel = computed(() => {
   if (!lastSavedAt.value) return '';
@@ -303,18 +351,19 @@ const savedTimeLabel = computed(() => {
             v-if="activeCharacter"
             :class="[
               'hidden sm:inline text-[11px] tabular-nums whitespace-nowrap',
-              saveStatus === 'error'
+              saveStatus === 'error' || saveStatus === 'conflict'
                 ? 'text-rose-600 dark:text-rose-400'
                 : saveStatus === 'saving' || saveStatus === 'pending'
                 ? 'text-amber-600 dark:text-amber-400'
                 : 'text-stone-500 dark:text-stone-400',
             ]"
-            :title="saveStatus === 'error' ? saveError : (lastSavedAt ? `마지막 저장 ${new Date(lastSavedAt).toLocaleString()}` : '')"
+            :title="saveStatus === 'error' || saveStatus === 'conflict' ? saveError : (lastSavedAt ? `마지막 저장 ${new Date(lastSavedAt).toLocaleString()}` : '')"
           >
             <template v-if="saveStatus === 'pending'">⏳ 변경됨</template>
             <template v-else-if="saveStatus === 'saving'">💾 저장 중...</template>
             <template v-else-if="saveStatus === 'saved'">💾 저장됨 {{ savedTimeLabel }}</template>
             <template v-else-if="saveStatus === 'error'">⚠ 저장 실패</template>
+            <template v-else-if="saveStatus === 'conflict'">⚠ 다른 기기에서 저장됨</template>
           </span>
 
           <template v-if="isLoggedIn">
@@ -362,6 +411,70 @@ const savedTimeLabel = computed(() => {
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-5">
+
+      <!-- 낙관적 잠금 충돌 배너 — 다른 기기가 먼저 저장했을 때 사용자가 고른다 -->
+
+      <div
+
+        v-if="saveConflict"
+
+        class="mb-4 rounded-xl ring-1 ring-orange-300 dark:ring-orange-700/70 bg-orange-50 dark:bg-orange-900/20 px-4 py-3 flex items-start gap-3 flex-wrap"
+
+        role="alert"
+
+      >
+
+        <div class="min-w-0 flex-1">
+
+          <p class="text-sm font-semibold text-stone-900 dark:text-stone-50">다른 기기에서 먼저 저장되었습니다</p>
+
+          <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5 leading-relaxed">
+
+            "{{ saveConflict.serverCharacter.name }}" 의 서버 저장본({{ conflictServerTime }})이 이 화면보다 새롭습니다.
+
+            지금 화면의 변경은 아직 저장되지 않았습니다. 어느 쪽을 남길지 골라 주세요.
+
+          </p>
+
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+
+          <button
+
+            type="button"
+
+            @click="onConflictAdopt"
+
+            :disabled="conflictBusy"
+
+            class="h-9 px-3 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm disabled:opacity-40 transition"
+
+          >
+
+            서버 저장본 불러오기
+
+          </button>
+
+          <button
+
+            type="button"
+
+            @click="onConflictOverwrite"
+
+            :disabled="conflictBusy"
+
+            class="h-9 px-3 rounded-lg text-sm ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-white dark:hover:bg-stone-800 disabled:opacity-40 transition"
+
+          >
+
+            내 변경으로 덮어쓰기
+
+          </button>
+
+        </div>
+
+      </div>
       <!-- ───── 탭 1: 전투력 계산 ───── -->
       <template v-if="activeTab === 'calc'">
         <!-- 빈 상태 온보딩 — 예시 데이터 체험 -->

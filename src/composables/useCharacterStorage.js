@@ -17,6 +17,11 @@ const activeId = ref(null);
 const isLoading = ref(false);
 const lastError = ref(null);
 
+// 낙관적 잠금 충돌 — 서버가 409 로 "다른 기기가 먼저 저장했다" 고 알린 상태.
+//   { id, serverCharacter(프론트 형식), message } — App.vue 가 배너를 띄우고 사용자가 고르면 비운다.
+//   자동 저장과 캐릭터 목록의 "저장" 양쪽에서 같은 경로로 들어오므로 모듈 전역에 둔다.
+const conflict = ref(null);
+
 // 활성 캐릭터 객체 — id 매칭. 없으면 null.
 const activeCharacter = computed(
   () => characters.value.find((c) => c.id === activeId.value) || null,
@@ -46,7 +51,17 @@ function fromServerCharacter(c) {
     memorials: Array.isArray(c.memorials) ? c.memorials : [],
     runeword: Array.isArray(c.runeword) ? c.runeword : [],
     updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
+    // 서버가 준 updated_at 원문 — 저장 때 expected_updated_at 으로 그대로 돌려보내 낙관적 잠금에 쓴다.
+    //   (ms 로 변환한 updatedAt 을 다시 문자열로 만들면 마이크로초·tz 표기가 달라질 수 있어 원문을 보관)
+    serverUpdatedAt: c.updated_at || null,
   };
+}
+
+/** 409 응답이 낙관적 잠금 충돌인지 (이름 중복 409 와 구분 — detail 에 character 가 실려 온다) */
+function conflictFrom(err) {
+  const d = err?.body?.detail;
+  if (err?.status !== 409 || !d || typeof d !== 'object' || !d.character) return null;
+  return { serverCharacter: fromServerCharacter(d.character), message: d.message || err.message };
 }
 
 async function refreshFromServer() {
@@ -100,7 +115,9 @@ function makeLocalId() {
 export function useCharacterStorage() {
   // saveCharacter — 동일 이름 캐릭터가 있으면 갱신, 없으면 신규 생성.
   //   awakStones / memorials / runeword 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
-  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null) {
+  //   opts.force: 낙관적 잠금을 건너뛰고 덮어쓴다 (충돌 배너에서 "내 변경으로 덮어쓰기" 를 골랐을 때).
+  //   서버 모드에서 다른 기기가 먼저 저장해 409 가 오면 conflict 를 채우고 ConflictError 를 던진다.
+  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null, opts = {}) {
     const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('캐릭터 이름을 입력해주세요.');
 
@@ -116,9 +133,25 @@ export function useCharacterStorage() {
         runeword: runeword ?? existing?.runeword ?? [],
       };
       if (existing) {
-        const updated = fromServerCharacter(await api.updateCharacter(existing.id, payload));
-        Object.assign(existing, updated);
+        // 내가 마지막으로 받은 서버 버전을 함께 보낸다 — 그 사이 다른 기기가 저장했으면 서버가 409.
+        if (!opts.force && existing.serverUpdatedAt) payload.expected_updated_at = existing.serverUpdatedAt;
+        let res;
+        try {
+          res = await api.updateCharacter(existing.id, payload);
+        } catch (err) {
+          const c = conflictFrom(err);
+          if (c) {
+            conflict.value = { id: existing.id, ...c };
+            const e = new Error(c.message);
+            e.conflict = true;
+            e.serverCharacter = c.serverCharacter;
+            throw e;
+          }
+          throw err;
+        }
+        Object.assign(existing, fromServerCharacter(res));
         activeId.value = existing.id;
+        conflict.value = null;
         return existing;
       }
       const created = fromServerCharacter(await api.createCharacter(payload));
@@ -150,6 +183,21 @@ export function useCharacterStorage() {
     characters.value = [created, ...characters.value];
     activeId.value = created.id;
     return created;
+  }
+
+  // 충돌 배너에서 "서버 저장본 불러오기" — 목록의 캐릭터를 서버 버전으로 바꾼다.
+  //   화면(작업영역) 반영은 App.vue 가 반환값으로 한다 (Object.assign 은 activeCharacter 참조가 안 바뀌어 watch 가 안 돈다).
+  function adoptServerCharacter() {
+    const c = conflict.value;
+    if (!c) return null;
+    const existing = characters.value.find((x) => x.id === c.id);
+    if (existing) Object.assign(existing, c.serverCharacter);
+    conflict.value = null;
+    return existing || null;
+  }
+
+  function dismissConflict() {
+    conflict.value = null;
   }
 
   async function deleteCharacter(id) {
@@ -227,7 +275,10 @@ export function useCharacterStorage() {
     activeCharacter,
     isLoading,
     lastError,
+    conflict,
     saveCharacter,
+    adoptServerCharacter,
+    dismissConflict,
     deleteCharacter,
     selectCharacter,
     loadDefault,
