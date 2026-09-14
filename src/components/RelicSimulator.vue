@@ -2,9 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import {
   RELICS,
-  RELIC_KEYS,
   COMMON_STONE_OPTIONS,
-  COMMON_STONE_SLOTS,
   relicMultiplier,
   createDefaultRelicSet,
 } from '../data/relics.js';
@@ -116,7 +114,7 @@ function fmtVal(v, option) {
     <!-- 5개 성물 카드 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <section
-        v-for="(relic, i) in relicSet"
+        v-for="relic in relicSet"
         :key="relic.key"
         class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >

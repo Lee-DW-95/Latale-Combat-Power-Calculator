@@ -21,7 +21,6 @@ import { ITEM_AWAKENING_SIM } from '../utils/simConstants.js';
 import {
   normalizeItemAwakeningCard,
   itemAwakeningOptionKeys,
-  evaluateLines,
 } from '../utils/rollEquiv.js';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { useRollLog } from '../composables/useRollLog.js';

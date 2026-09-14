@@ -85,3 +85,11 @@ Claude Code가 물어봅니다.
 - Tailwind CSS
 - LocalStorage (Phase 1)
 - 무료 호스팅 (Vercel 또는 Netlify)
+
+## 🧰 개발 스크립트 · PWA
+
+- `npm run lint` — ESLint 9(flat config, `eslint:recommended` + `vue/essential`) · 포맷은 Prettier(`.prettierrc`)
+- `npm test` — `tests/*.test.js` 전부 실행
+- `npm run build` — 웹 빌드. PWA(vite-plugin-pwa, `manifest.webmanifest` + `sw.js`) 포함 — 앱 셸만 오프라인 캐시, API 는 캐시하지 않음, 새 배포 시 자동 갱신
+- `npm run build:desktop` — Tauri 용 빌드. PWA 플러그인이 꺼져 서비스워커가 생성되지 않음
+- CI: `.github/workflows/frontend.yml` (lint → test → build), `backend/**` 만 바뀐 푸시는 건너뜀

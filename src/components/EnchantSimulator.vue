@@ -1,14 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import {
-  NORMAL_ENCHANT_CATEGORIES,
   NORMAL_ENCHANT_TYPES,
-  ENCHANT_STAGES,
   SPECIAL_ENCHANT_OPTIONS,
   SPECIAL_ENCHANT_COSTS,
   SPECIAL_ENCHANT_MAX_SLOTS,
   SPECIAL_ENCHANT_MAX_LEVEL,
-  ENCHANT_BINDINGS,
   MYTHIC_MIN_PCT,
   categoryKeys,
   partKeys,

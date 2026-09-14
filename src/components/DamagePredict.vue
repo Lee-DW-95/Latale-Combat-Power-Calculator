@@ -17,7 +17,6 @@ import {
   calculateBattlePower,
   calculateDirectBP,
   calculateSummonBP,
-  conditionalMultiplier,
   conditionalMultiplierWith,
   expectedConditionalMultiplier,
 } from '../utils/battlePower.js';
@@ -162,8 +161,6 @@ const normalBP = computed(() => calculateBattlePower(props.stats, 'normal'));
 const bossBP = computed(() => calculateBattlePower(props.stats, 'boss'));
 
 // 직접/소환 분리 BP — 환산 시각화용
-const directBPBase = computed(() => calculateDirectBP(props.stats, 'base'));
-const directBPNormal = computed(() => calculateDirectBP(props.stats, 'normal'));
 const directBPBoss = computed(() => calculateDirectBP(props.stats, 'boss'));
 const summonBP = computed(() => calculateSummonBP(props.stats));
 const predicted = computed(() => {
@@ -599,7 +596,7 @@ const allSkillPredictions = computed(() => {
           </thead>
           <tbody>
             <tr
-              v-for="(r, i) in allSkillPredictions"
+              v-for="r in allSkillPredictions"
               :key="r.name"
               :class="[
                 'border-t border-stone-200 dark:border-stone-700',

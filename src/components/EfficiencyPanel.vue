@@ -202,16 +202,8 @@ function awakUnitsFor(statKey) {
   return AWAK_STAT_OPTIONS.find((o) => o.key === statKey)?.units || ['raw'];
 }
 
-// 각성석 표기 단위 라벨 — 크댐/최소뎀/최대뎀/일몬지/보몬지 raw 는 게임상 "%" 로 표시
-function awakUnitLabel(statKey, unit) {
-  if (unit === 'pct') return '%';
-  if (['크댐', '최소뎀', '최대뎀', '일몬지', '보몬지'].includes(statKey)) return '%';
-  return '';
-}
-
 // 각성석 — 인게임에서 최대 10 개 장착, 각 각성석은 4 옵션 슬롯. 시작은 1 행.
 const AWAK_STONE_MAX = 10;
-const AWAK_OPTIONS_PER_STONE = 4;
 
 // 각성석은 한 각성석 내 같은 옵션이 중복 출현하지 않으므로,
 // 신규 각성석 기본값은 서로 다른 옵션 4종으로 시작 — 정의는 utils/awakening.js 공유.

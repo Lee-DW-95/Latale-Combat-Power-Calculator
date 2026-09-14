@@ -9,17 +9,25 @@
     "build:desktop": "vite build --mode desktop",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "node tests/formula.test.js && node tests/equivalence.test.js && node tests/relicActive.test.js && node tests/simAnalytic.test.js"
+    "test": "node tests/formula.test.js && node tests/equivalence.test.js && node tests/relicActive.test.js && node tests/simAnalytic.test.js && node tests/specupSlots.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@tauri-apps/cli": "^2.11.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.11.0",
+    "globals": "^17.12.0",
     "postcss": "^8.4.38",
+    "prettier": "^3.9.6",
     "tailwindcss": "^3.4.3",
-    "vite": "^5.2.8"
+    "vite": "^5.2.8",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

@@ -75,14 +75,6 @@ const TIER_CHIP = {
 };
 const TIER_LABEL = { major: '주요', mid: '준주요', minor: '', none: '' };
 
-// 옵션은 "이 옵션을 가진 룬 중 최고 점수" 로 등급을 매긴다
-function tierOfScore(score) {
-  if (score >= 30) return 'major';
-  if (score >= 20) return 'mid';
-  if (score > 0) return 'minor';
-  return 'none';
-}
-
 // 왕룬 자리 점수 (통찰만 120 고정)
 function scoreAsKing(rune) {
   return rune.id === INSIGHT_ID ? 120 : rune.score * 2;
