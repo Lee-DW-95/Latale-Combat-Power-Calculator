@@ -1,12 +1,8 @@
 <script setup>
-import { computed, markRaw, ref, watch } from 'vue';
+import { computed, markRaw, ref, toRaw, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
-import { rollOnce as rollAwakening } from '../utils/awakeningSim.js';
-import { rollOnce as rollMemorial } from '../utils/memorialSim.js';
-import { rollRuneWord } from '../utils/runeWordSim.js';
 import { RUNES, RUNE_SLOTS, scoreOf, gradeOf } from '../data/runeWordData.js';
 import {
-  normalizeAwakeningCard,
   normalizeAwakStoneLoadout,
   normalizeMemorialCard,
   normalizeRuneWordCard,
@@ -19,14 +15,14 @@ import {
 } from '../utils/memorialLoadout.js';
 import { runewordRows } from '../utils/runewordLoadout.js';
 import {
-  analyzeSlots,
   expectedAfterRolls,
-  slotOutlook,
   winnerProfile,
   ELY_BUDGETS,
   DEFAULT_ELY_BUDGET,
   DEFAULT_SAMPLES,
 } from '../utils/specupAdvisor.js';
+import { pickLines } from '../utils/specupSlots.js';
+import { runSpecupAnalysis } from '../utils/specupAdvisorRunner.js';
 import { usePrices, PRICE_DEFS } from '../composables/usePrices.js';
 import { fmt, fmt1 } from '../utils/format.js';
 
@@ -92,7 +88,8 @@ function elyLabel(ely) {
   return `${eok.toFixed(2)}억`;
 }
 
-// ── 슬롯 구성 — 저장된 내실을 분석 엔진 입력으로 ─────────────────────
+// ── 슬롯 구성 — 저장된 내실을 분석 엔진 입력(직렬화 가능한 설명자)으로 ─────────
+//   함수(rollFn/normalize)는 워커로 못 보내므로 kind 만 적고, 계산하는 쪽이 specupSlots.resolveSlot 으로 복원한다.
 function buildSlots(scope = systemFilter.value) {
   const slots = [];
 
@@ -102,9 +99,8 @@ function buildSlots(scope = systemFilter.value) {
       label: `각성석 ${i + 1}`,
       system: '각성석',
       group: 'awakening',
-      lines: normalizeAwakStoneLoadout(stone),
-      rollFn: rollAwakening,
-      normalize: normalizeAwakeningCard,
+      kind: 'awakening',
+      lines: pickLines(normalizeAwakStoneLoadout(stone)),
       cost: '재료 14 (2종×7) · 망치 1',
       costEly: elyFor(AWAK_COST_ITEMS),
     });
@@ -117,8 +113,8 @@ function buildSlots(scope = systemFilter.value) {
     const common = {
       system: '메모리얼',
       group: `memorial:${card.key}`,
-      rollFn: () => rollMemorial(m),
-      normalize: normalizeMemorialCard,
+      kind: 'memorial',
+      memorialKey: card.key,
       cost: `파편 ${m.cost.frag} · 결정 ${m.cost.crystal}`,
       costEly: elyFor(memorialCostItems(m)),
     };
@@ -132,7 +128,7 @@ function buildSlots(scope = systemFilter.value) {
           ...common,
           id: `memo-${i}-${j}`,
           label: `${name} 슬롯 ${j + 1}`,
-          lines: normalizeMemorialCard(active),
+          lines: pickLines(normalizeMemorialCard(active)),
         });
       });
       return;
@@ -142,7 +138,7 @@ function buildSlots(scope = systemFilter.value) {
       ...common,
       id: `memo-${i}`,
       label: `${name} #${i + 1}`,
-      lines: normalizeMemorialCard(activeMemorialLines(card)),
+      lines: pickLines(normalizeMemorialCard(activeMemorialLines(card))),
     });
   });
 
@@ -152,9 +148,8 @@ function buildSlots(scope = systemFilter.value) {
     label: '룬워드',
     system: '룬워드',
     group: 'runeword',
-    lines: normalizeRuneWordCard(runewordRows(props.runeword)),
-    rollFn: rollRuneWord,
-    normalize: (r) => normalizeRuneWordCard(r.rows),
+    kind: 'runeword',
+    lines: pickLines(normalizeRuneWordCard(runewordRows(props.runeword))),
     cost: '스크롤 1',
     costEly: elyFor(RUNE_COST_ITEMS),
   });
@@ -184,10 +179,13 @@ async function run() {
   cancelFlag = false;
   progress.value = null;
   try {
-    const r = await analyzeSlots({
-      stats: props.stats,
+    // 워커(없으면 메인 스레드)에서 표본 추출. stats 는 반응형 프록시라 평범한 객체로 복사해 넘긴다.
+    //   룬워드 점수 기준(info 사이트 점수) 분포도 같이 낸다 — 환산 순위와 별개로 룬워드 행에 병기.
+    const r = await runSpecupAnalysis({
+      stats: JSON.parse(JSON.stringify(toRaw(props.stats))),
       slots,
       samples: samples.value,
+      runeScoreCurrent: currentRuneScore(),
       onProgress: (p) => { progress.value = p; },
       shouldCancel: () => cancelFlag,
     });
@@ -197,16 +195,7 @@ async function run() {
       r.slots.forEach((s) => { s.system = bySlot.get(s.id)?.system || ''; });
       r.dist = markRaw(r.dist);
       r.cards = markRaw(r.cards);
-      // 룬워드 점수 기준(info 사이트 점수) 분포 — 환산 순위와 별개로 룬워드 행에 병기한다.
-      //   점수는 BP 계산이 없어 빠르므로 여기서 바로 표본을 만든다.
-      if (r.slots.some((s) => s.group === 'runeword')) {
-        const n = samples.value;
-        const scores = new Float64Array(n);
-        for (let i = 0; i < n; i += 1) scores[i] = rollRuneWord().total;
-        scores.sort();
-        const cur = currentRuneScore();
-        r.runeScore = markRaw({ sorted: scores, current: cur, ...slotOutlook(scores, cur, r.budgets) });
-      }
+      if (r.runeScore) r.runeScore = markRaw(r.runeScore);
       result.value = r;
       stale.value = false;
     }

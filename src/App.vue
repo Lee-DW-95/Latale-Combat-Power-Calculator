@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue';
 import {
   calculateBattlePower,
   compareEquipment,
@@ -20,16 +20,9 @@ import EquipmentCompare from './components/EquipmentCompare.vue';
 import ResultDisplay from './components/ResultDisplay.vue';
 import CharacterList from './components/CharacterList.vue';
 import DarkModeToggle from './components/DarkModeToggle.vue';
-import MemorialSimulator from './components/MemorialSimulator.vue';
-import EnchantSimulator from './components/EnchantSimulator.vue';
+import TabLoading from './components/TabLoading.vue';
 // import DamagePredict from './components/DamagePredict.vue'; // 대미지 예측 탭 — DB 작업 보류로 일시 숨김
 // import RelicSimulator from './components/RelicSimulator.vue'; // 기존 성물 환산기 (전용석/공용석 합산) — 보존, 추후 부활용
-import AwakeningSimulator from './components/AwakeningSimulator.vue';
-import ItemAwakeningSimulator from './components/ItemAwakeningSimulator.vue';
-import RuneWordSimulator from './components/RuneWordSimulator.vue';
-import RelicGachaSimulator from './components/RelicGachaSimulator.vue';
-import AdventureView from './components/AdventureView.vue';
-import AdventureQuickView from './components/AdventureQuickView.vue';
 import AuthModal from './components/AuthModal.vue';
 import MigrationModal from './components/MigrationModal.vue';
 import { useAuth } from './composables/useAuth.js';
@@ -37,6 +30,23 @@ import { useCharacterStorage } from './composables/useCharacterStorage.js';
 import { createSampleStats } from './data/sampleStats.js';
 import { sanitizeMemorialCards } from './utils/memorialLoadout.js';
 import { sanitizeRuneword } from './utils/runewordLoadout.js';
+
+// ============================================================
+// 탭 컴포넌트 지연 로딩 — 기본 탭(전투력 계산)이 아닌 탭은 처음 누를 때 청크를 받는다.
+//   각 시뮬은 확률표·룬 데이터 등 큰 데이터 모듈을 끌고 오므로 메인 청크에서 분리해
+//   첫 진입 다운로드를 줄인다. 로딩 중에는 단순 텍스트만 보여준다.
+// ============================================================
+function lazyTab(loader) {
+  return defineAsyncComponent({ loader, loadingComponent: TabLoading, delay: 0 });
+}
+const MemorialSimulator = lazyTab(() => import('./components/MemorialSimulator.vue'));
+const EnchantSimulator = lazyTab(() => import('./components/EnchantSimulator.vue'));
+const RelicGachaSimulator = lazyTab(() => import('./components/RelicGachaSimulator.vue'));
+const AwakeningSimulator = lazyTab(() => import('./components/AwakeningSimulator.vue'));
+const ItemAwakeningSimulator = lazyTab(() => import('./components/ItemAwakeningSimulator.vue'));
+const RuneWordSimulator = lazyTab(() => import('./components/RuneWordSimulator.vue'));
+const AdventureView = lazyTab(() => import('./components/AdventureView.vue'));
+const AdventureQuickView = lazyTab(() => import('./components/AdventureQuickView.vue'));
 
 // ============================================================
 // 인증 상태 + 모달 트리거
