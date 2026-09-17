@@ -116,7 +116,7 @@ const activeTab = ref('calc');
 //   ⚠ 이건 프론트엔드 클라이언트 게이팅 — 번들 JS/localStorage 를 파면 우회 가능하다.
 //   민감 데이터 완전 은닉이 목적이 아니라 "일반 사용자에게 노출하지 않는" 소프트 게이트.
 //   토큰 기반 로그인(isLoggedIn)을 전제로 하되, 진짜 보호가 필요하면 서버측 검증 필요.
-const PRIVILEGED_NICKNAMES = ['선봉', '백르', '독주', 'Spammayo', '워나'];
+const PRIVILEGED_NICKNAMES = ['선봉', '백르', '독주', 'Spammayo', '워나', '혀나'];
 
 // 로컬 개발 환경(vite dev / localhost 프리뷰)에서는 로그인 없이 모든 탭을 연다.
 //   로컬은 백엔드(localhost:8000)를 안 띄우면 로그인 자체가 안 돼서 제한 탭을 볼 수 없다.
