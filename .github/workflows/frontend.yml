@@ -28,6 +28,8 @@ jobs:
 
       - name: Lint
         run: npm run lint
+      - name: Typecheck (ts-check 파일만)
+        run: npm run typecheck
 
       - name: Test
         run: npm test

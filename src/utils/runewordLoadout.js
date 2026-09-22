@@ -1,3 +1,4 @@
+// @ts-check
 // 장착 룬워드 데이터 헬퍼 — App.vue / RuneWordLoadoutPanel / 스펙업 방향 분석이 공유.
 //
 // 저장 형식: 룬 id 8개 배열 (index 7 = 왕룬), 빈 칸은 null. 예: [10, 19, null, …, 28]

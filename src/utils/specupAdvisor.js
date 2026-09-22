@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * 스펙업 방향 분석 — "지금 어느 내실을 굴리는 게 기대 이득이 가장 큰가".
  *
@@ -37,7 +38,16 @@ const CHUNK = 1000; // 청크마다 이벤트 루프를 놔줘 진행률 갱신 
 const KEEP_RESERVOIR = 2000;
 const KEEP_TOP = 300;
 
-/** 평가 결과 → 보관용 카드 (표시 문자열 + 환산량만) */
+/**
+ * @typedef {{ key: string, text: string, value: number, refAmount: number, convertible: boolean }} CardLine
+ * @typedef {{ total: number, lines: CardLine[] }} Card
+ * @typedef {{ reservoir: Card[], top: Card[] }} CardStore
+ */
+
+/**
+ * 평가 결과 → 보관용 카드 (표시 문자열 + 환산량만)
+ * @returns {Card}
+ */
 function compactCard(conv) {
   return {
     total: conv.total,
@@ -56,13 +66,13 @@ function compactCard(conv) {
  * 같은 stats 기준으로 여러 슬롯이 분포를 공유할 수 있게 evaluate 는 밖에서 만들어 넘긴다.
  *
  * @param {object} p
- * @param {(lines:Array)=>object} p.evaluate   createLineEvaluator(stats) 결과
+ * @param {(lines:Array)=>{ total: number, lines: any[] }} p.evaluate   createLineEvaluator(stats) 결과
  * @param {()=>any} p.rollFn                   굴림 1회
  * @param {(card:any)=>Array} p.normalize      굴림 결과 → 정규화 줄 배열
  * @param {number} p.samples
  * @param {(done:number)=>void} [p.onProgress]
  * @param {()=>boolean} [p.shouldCancel]
- * @returns {Promise<null|{ sorted: Float64Array, reservoir: Array, top: Array }>}  취소되면 null
+ * @returns {Promise<null|{ sorted: Float64Array, reservoir: Card[], top: Card[] }>}  취소되면 null
  *          reservoir 는 균등 무작위 표본 카드, top 은 환산 상위 카드(내림차순)
  */
 export async function sampleEquivDistribution({
@@ -75,7 +85,9 @@ export async function sampleEquivDistribution({
 }) {
   const n = Math.max(100, Math.min(MAX_SAMPLES, Math.floor(Number(samples) || 0)));
   const out = new Float64Array(n);
+  /** @type {Card[]} */
   const reservoir = [];
+  /** @type {Card[]} */
   let top = [];
   let topMin = -Infinity;
   let done = 0;
@@ -116,11 +128,16 @@ export async function sampleEquivDistribution({
  * 예시는 reservoir(대표 표본)의 성공 카드에서 고르되, 성공이 드물어 reservoir 에 없으면 top 에서 고른다.
  * 대표성을 위해 "성공 카드 평균(meanIfImprove)에 가까운 카드" 부터 보여준다.
  *
- * @returns {{ examples: Array, options: Array, basis: 'reservoir'|'top', winnerCount: number }}
+ * @param {CardStore|null|undefined} store
+ * @param {number} current
+ * @param {number} meanIfImprove
+ * @param {number} [exampleCount]
+ * @returns {{ examples: Card[], options: Array, basis: 'reservoir'|'top', winnerCount: number }}
  */
 export function winnerProfile(store, current, meanIfImprove, exampleCount = 3) {
   const cur = Number(current) || 0;
   let winners = (store?.reservoir || []).filter((c) => c.total > cur);
+  /** @type {'reservoir'|'top'} */
   let basis = 'reservoir';
   if (winners.length < exampleCount) {
     winners = (store?.top || []).filter((c) => c.total > cur);
@@ -200,7 +217,7 @@ export function expectedAfterRolls(sorted, current, N) {
  *
  * @param {Float64Array} sorted   오름차순 표본
  * @param {number} current        현재 카드의 크댐환산 합
- * @param {number[]} budgets      "N 회 굴리면" 의 N 목록
+ * @param {readonly number[]} budgets      "N 회 굴리면" 의 N 목록
  * @returns {{
  *   current, percentile, pImprove, gainPerRoll, meanIfImprove,
  *   expectedRollsToImprove, sampleMax, sampleMean, sampleMedian,
@@ -257,7 +274,7 @@ export function slotOutlook(sorted, current, budgets = BUDGETS) {
  *
  * 같은 group 의 슬롯은 표본 분포를 한 번만 만든다.
  *
- * @returns {Promise<null|{ slots:Array, dist:Map<string,Float64Array>, cards:Map<string,object>, budgets:number[], samples:number, cancelled:boolean }>}
+ * @returns {Promise<null|{ slots:Array, dist:Map<string,Float64Array>, cards:Map<string,CardStore>, budgets:readonly number[], samples:number, cancelled:boolean, runeScore?: object }>}
  *          stats 가 비어 BP 가 0 이면 null. dist 는 group → 정렬 표본 (예산별 재계산용), cards 는 group → 예시 카드 보관.
  */
 export async function analyzeSlots({
@@ -277,7 +294,9 @@ export async function analyzeSlots({
     if (!groups.has(s.group)) groups.set(s.group, { rollFn: s.rollFn, normalize: s.normalize });
   }
   const groupKeys = Array.from(groups.keys());
+  /** @type {Map<string, Float64Array>} */
   const dist = new Map();
+  /** @type {Map<string, CardStore>} */
   const cards = new Map(); // group → { reservoir, top }
   let cancelled = false;
 
@@ -304,6 +323,7 @@ export async function analyzeSlots({
   if (cancelled) return { slots: [], dist, cards, budgets, samples, cancelled: true };
 
   const out = slots.map((s) => {
+    /** @type {{ total: number, lines: any[] }} */
     const conv = evaluate(s.lines || []);
     const sorted = dist.get(s.group);
     const outlook = slotOutlook(sorted, conv.total, budgets);

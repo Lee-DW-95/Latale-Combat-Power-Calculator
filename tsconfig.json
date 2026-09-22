@@ -1,0 +1,18 @@
+{
+  // 점진적 타입 도입 — 파일 머리에 `// @ts-check` 를 붙인 JS 만 검사한다 (checkJs: false).
+  //   새 유틸부터 JSDoc 타입을 붙이고, 기존 파일은 손댈 때 하나씩 켠다. `npm run typecheck`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.js", "tests/**/*.js", "vite.config.js"]
+}

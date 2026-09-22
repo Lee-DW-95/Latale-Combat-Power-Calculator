@@ -1,3 +1,4 @@
+// @ts-check
 // 보유 메모리얼 카드 데이터 헬퍼 — App.vue / MemorialLoadoutPanel / 스펙업 방향 분석이 공유.
 //
 // 카드 1장 = { key: ALL_MEMORIALS 의 키, variant: 표시 이름 구분(없으면 null), lines: [{ label, value }, ...] }

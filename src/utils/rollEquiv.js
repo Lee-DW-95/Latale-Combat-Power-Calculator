@@ -84,7 +84,7 @@ export function evaluateLines(normLines, reactiveStats, opt = {}) {
  * 이분법 역산 결과를 equip 시그니처로 캐싱하면 1만 회 굴림도 순식간에 끝난다.
  * evaluateLines() 와 결과가 동일해야 하므로 계산식은 공유한다.
  *
- * @returns {null | (normLines:Array)=>object}  stats 가 없거나 BP 가 0 이면 null
+ * @returns {null | ((normLines:Array)=>{ total:number, totalDelta:number, convertibleCount:number, lines:any[], refKey:string, mode:string, baseBP:number })}  stats 가 없거나 BP 가 0 이면 null
  */
 export function createLineEvaluator(reactiveStats, opt = {}) {
   const refKey = opt.refKey ?? '크댐';

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * 스펙업 방향 분석 — 슬롯 "설명자" ↔ 분석 엔진 입력 변환.
  *
@@ -77,7 +78,7 @@ export function runeScoreSamples(n) {
  * @param {object} p.stats                 평범한 객체(반응형 아님)
  * @param {Array}  p.slots                 설명자 배열
  * @param {number} p.samples
- * @param {number[]} [p.budgets]
+ * @param {readonly number[]} [p.budgets]
  * @param {number|null} [p.runeScoreCurrent]  지금 장착 룬워드의 점수 — 룬워드 슬롯이 있으면 점수 분포도 낸다
  * @param {(p:object)=>void} [p.onProgress]
  * @param {()=>boolean} [p.shouldCancel]
