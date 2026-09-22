@@ -23,7 +23,7 @@ import {
 } from '../utils/specupAdvisor.js';
 import { pickLines } from '../utils/specupSlots.js';
 import { runSpecupAnalysis } from '../utils/specupAdvisorRunner.js';
-import { usePrices, PRICE_DEFS } from '../composables/usePrices.js';
+import { usePrices, PRICE_DEFS, PRICE_DEFAULTS_DATE } from '../composables/usePrices.js';
 import { fmt, fmt1 } from '../utils/format.js';
 
 const props = defineProps({
@@ -487,8 +487,11 @@ function setPriceMan(key, raw) {
         <!-- 시세 -->
         <div v-if="showPrices" class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-3">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">재화 시세 · 만 엘리</span>
-            <button type="button" @click="resetPrices" class="text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition">기본값으로</button>
+            <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
+              재화 시세 · 만 엘리
+              <span class="normal-case tracking-normal font-normal">— 기본값은 {{ PRICE_DEFAULTS_DATE }} 시세, 바꾸면 이 브라우저에 저장</span>
+            </span>
+            <button type="button" @click="resetPrices" class="text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition">기본값({{ PRICE_DEFAULTS_DATE }})으로</button>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
             <label v-for="d in PRICE_DEFS" :key="d.key" class="flex items-center justify-between gap-3 text-sm">

@@ -200,6 +200,61 @@ export function useCharacterStorage() {
     conflict.value = null;
   }
 
+  // ── JSON 내보내기 / 가져오기 — 비로그인 사용자 백업, 기기 간 수동 이동용 ──
+  //   형식: { format: 'latale-characters', version: 1, exportedAt, characters: [{ name, stats, awak_stones, memorials, runeword }] }
+  const EXPORT_FORMAT = 'latale-characters';
+
+  function exportCharacters() {
+    return {
+      format: EXPORT_FORMAT,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      characters: characters.value.map((c) => ({
+        name: c.name,
+        stats: c.stats,
+        awak_stones: c.awak_stones || [],
+        memorials: c.memorials || [],
+        runeword: c.runeword || [],
+      })),
+    };
+  }
+
+  /**
+   * 가져오기 — 같은 이름은 덮어쓰고(낙관적 잠금 무시), 없는 이름은 새로 만든다.
+   * @returns {{ created:number, updated:number, failed:number, errors:string[] }}
+   */
+  async function importCharacters(data) {
+    if (!data || data.format !== EXPORT_FORMAT || !Array.isArray(data.characters)) {
+      throw new Error('라테일 유틸리티 캐릭터 파일이 아닙니다.');
+    }
+    const result = { created: 0, updated: 0, failed: 0, errors: [] };
+    for (const c of data.characters) {
+      const name = String(c?.name || '').trim();
+      if (!name || !c.stats || typeof c.stats !== 'object') {
+        result.failed += 1;
+        result.errors.push(`${name || '(이름 없음)'}: 형식 오류`);
+        continue;
+      }
+      const existed = characters.value.some((x) => x.name === name);
+      try {
+        await saveCharacter(
+          name,
+          { ...createEmptyStats(c.stats.type || 'P'), ...c.stats },
+          Array.isArray(c.awak_stones) ? c.awak_stones : [],
+          Array.isArray(c.memorials) ? c.memorials : [],
+          Array.isArray(c.runeword) ? c.runeword : [],
+          { force: true },
+        );
+        if (existed) result.updated += 1;
+        else result.created += 1;
+      } catch (err) {
+        result.failed += 1;
+        result.errors.push(`${name}: ${err?.message || '저장 실패'}`);
+      }
+    }
+    return result;
+  }
+
   async function deleteCharacter(id) {
     if (isLoggedIn.value) {
       await api.deleteCharacter(id);
@@ -279,6 +334,8 @@ export function useCharacterStorage() {
     saveCharacter,
     adoptServerCharacter,
     dismissConflict,
+    exportCharacters,
+    importCharacters,
     deleteCharacter,
     selectCharacter,
     loadDefault,

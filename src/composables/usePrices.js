@@ -7,6 +7,9 @@ import { ref, watch } from 'vue';
 
 const STORAGE_KEY = 'latale.prices.v1';
 
+/** 기본 시세의 기준일 — 화면에 표시해 "언제 시세인지" 를 알린다 */
+export const PRICE_DEFAULTS_DATE = '2026-09-11';
+
 export const PRICE_DEFS = Object.freeze([
   { key: 'awakMaterial', label: '최종 인던 재료 (1개)', unit: '개', defaultEly: 2_500_000, note: '2,000개당 50억 기준' },
   { key: 'hammer',       label: '플래티넘 망치 (1개)',  unit: '개', defaultEly: 150_000_000 },

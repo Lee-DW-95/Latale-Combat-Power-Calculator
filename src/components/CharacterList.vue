@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useCharacterStorage } from '../composables/useCharacterStorage.js';
+import { useAuth } from '../composables/useAuth.js';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { fmtRound } from '../utils/format.js';
 
@@ -28,8 +29,52 @@ const props = defineProps({
   currentRuneword: { type: Array, default: () => [] },
 });
 
-const { characters, activeId, saveCharacter, deleteCharacter, selectCharacter } =
-  useCharacterStorage();
+const {
+  characters,
+  activeId,
+  saveCharacter,
+  deleteCharacter,
+  selectCharacter,
+  exportCharacters,
+  importCharacters,
+} = useCharacterStorage();
+const { isLoggedIn } = useAuth();
+
+// ── JSON 내보내기 / 가져오기 ──
+const fileInput = ref(null);
+const ioMsg = ref('');
+
+function onExport() {
+  const data = exportCharacters();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  a.href = url;
+  a.download = `latale-characters-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  ioMsg.value = `${data.characters.length}개 캐릭터를 내보냈습니다.`;
+}
+
+async function onImportFile(e) {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  ioMsg.value = '';
+  errorMsg.value = '';
+  try {
+    const data = JSON.parse(await file.text());
+    const r = await importCharacters(data);
+    ioMsg.value = `가져오기 완료 — 새로 ${r.created}개, 덮어씀 ${r.updated}개${r.failed ? `, 실패 ${r.failed}개` : ''}`;
+    if (r.errors.length) errorMsg.value = r.errors.slice(0, 3).join(' / ');
+  } catch (err) {
+    errorMsg.value = err?.message || '가져오기 실패';
+  }
+}
 
 const newName = ref('');
 const errorMsg = ref('');
@@ -88,6 +133,7 @@ async function onDelete(id) {
       </button>
     </div>
     <p v-if="errorMsg" class="text-xs text-rose-500 mb-2">{{ errorMsg }}</p>
+    <p v-if="ioMsg" class="text-xs text-stone-500 dark:text-stone-400 mb-2">{{ ioMsg }}</p>
 
     <ul v-if="characters.length > 0" class="space-y-1">
       <li
@@ -137,5 +183,38 @@ async function onDelete(id) {
     <p v-else class="text-sm text-stone-500 dark:text-stone-400">
       저장된 캐릭터가 없습니다. 위에서 이름을 입력하고 저장하세요.
     </p>
+
+    <!-- 저장 위치 안내 + 백업 -->
+    <div class="mt-3 pt-3 border-t border-stone-100 dark:border-stone-700/70 flex items-start justify-between gap-3 flex-wrap">
+      <p class="text-[11px] leading-relaxed text-stone-500 dark:text-stone-400 min-w-0 flex-1">
+        <template v-if="isLoggedIn">
+          서버에 저장되어 다른 기기에서도 같은 캐릭터를 이어 씁니다.
+        </template>
+        <template v-else>
+          지금은 <span class="text-stone-700 dark:text-stone-200">이 브라우저에만</span> 저장됩니다. 로그인하면 서버에 저장되어
+          다른 기기에서도 이어 쓸 수 있고, 아래 파일로 백업·이동할 수도 있습니다.
+        </template>
+      </p>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          @click="onExport"
+          :disabled="characters.length === 0"
+          class="h-7 px-2.5 rounded-md text-[11px] ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-40 transition"
+          title="모든 캐릭터를 JSON 파일로 내려받기"
+        >
+          내보내기
+        </button>
+        <button
+          type="button"
+          @click="fileInput?.click()"
+          class="h-7 px-2.5 rounded-md text-[11px] ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+          title="내보낸 JSON 파일에서 캐릭터 불러오기 (같은 이름은 덮어씀)"
+        >
+          가져오기
+        </button>
+        <input ref="fileInput" type="file" accept="application/json,.json" class="hidden" @change="onImportFile" />
+      </div>
+    </div>
   </section>
 </template>
