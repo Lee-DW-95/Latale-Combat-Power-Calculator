@@ -27,6 +27,7 @@ import { fmt, fmt1, pct, pctSmart } from '../utils/format.js';
 import { ENCHANT_SIM } from '../utils/simConstants.js';
 import { gradeBarColor } from '../utils/enchantUi.js';
 import EnchantLookup from './EnchantLookup.vue';
+import InfoNote from './InfoNote.vue';
 
 // ============================================================
 // 모드
@@ -459,19 +460,14 @@ function rollPctClass(p) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-      <strong>🔨 인챈트 시뮬레이터</strong> · 장비 인챈트(실패 시 파괴) / 특수장비 인챈트(레벨 강화) 두 가지 모드.
-      <br />
-      <strong>장비 인챈트</strong>: 일반(50%) / 슈퍼(60%) 시도 → 성공 시 옵션 1슬롯 부여, 실패 시 장비 파괴.
-      한 장비 5슬롯 채우면 풀강.
-      <br />
-      <strong>캔서 배찌</strong>: 같은 파괴형이지만 성공률이 낮다 — 일반(40%) / 슈퍼(50%).
-      노강/풀강 구분 없이 5슬롯이 곧 완성.
-      <br />
-      <strong>특수장비 인챈트</strong>: 옵션 슬롯 5개, 각 옵션을 Lv.1 → Lv.5 단계 강화. 레벨별 재료/Ely 비용.
-      <br />
-      <strong class="text-xs">⚠️</strong> 비공식 시뮬레이터 — 실제 게임 확률·메커니즘과 다를 수 있음.
-    </div>
+    <InfoNote>
+      <template #summary>
+        장비 인챈트(실패 시 파괴)와 특수장비 인챈트(레벨 강화)를 시뮬합니다. 비공식 확률이라 실제와 다를 수 있습니다.
+      </template>
+      <p>장비 인챈트: 일반 50% / 슈퍼 60%. 성공 시 옵션 1슬롯, 실패 시 파괴. 5슬롯이면 풀강.</p>
+      <p>캔서 배찌: 일반 40% / 슈퍼 50%. 노강·풀강 구분 없이 5슬롯이 완성.</p>
+      <p>특수장비: 옵션 슬롯 5개, 각각 Lv.1 → Lv.5. 레벨별 재료·Ely 비용.</p>
+    </InfoNote>
 
     <!-- 모드 선택 -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">

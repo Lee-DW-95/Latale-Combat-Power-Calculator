@@ -28,6 +28,7 @@ import { fmt, fmtInf, pctSmart } from '../utils/format.js';
 import CollapsibleSection from './CollapsibleSection.vue';
 import RollLogPanel from './RollLogPanel.vue';
 import RollBulkRun from './RollBulkRun.vue';
+import InfoNote from './InfoNote.vue';
 
 const props = defineProps({
   // 활성 캐릭터 T창 스탯 — 굴림 결과의 "크댐 환산" 계산 기준 (없으면 환산 생략).
@@ -367,34 +368,23 @@ function cardStyle(roll) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div
-      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
-    >
-      <strong>💠 아이템 각성 시뮬레이터</strong> · 장비/파츠 종류별 각성 옵션을 실제 확률표대로
-      돌려보고, <strong>원하는 옵션이 나올 때까지 몇 번 각성해야 하는지</strong>를 분석한다.
-      <br />
-      <strong>옵션 수</strong>: 기본 2줄 확정 → 50% 로 3줄 → 3줄이 떴을 때만 30% 로 4줄. 한 카드
-      안에서 같은 등급·같은 옵션은 중복되지 않는다.
-      <br />
-      <strong>강조</strong>:
-      <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> = 유효옵 (챙길 값어치가
-      있는 주력 옵션 — 이 세트 기준:
-      <template v-if="vitalNamesInSet.length">{{ vitalNamesInSet.join(', ') }}</template>
-      <template v-else>없음</template>). 유효옵만 등급 색으로 칠하고, 나머지 줄은
-      <span :class="MUTED_TEXT">회색</span>으로 눌러둔다.
-      <br />
-      <strong>유효옵 등급 색</strong>:
-      <span :class="tierChip(1)">[1]</span> <span :class="`${TIER_TEXT[1]} font-bold`">초록</span> ·
-      <span :class="tierChip(2)">[2]</span> <span :class="`${TIER_TEXT[2]} font-bold`">노랑</span> ·
-      <span :class="tierChip(3)">[3]</span> <span :class="`${TIER_TEXT[3]} font-bold`">빨강</span> ·
-      <span :class="tierChip('S')">[S]</span>
-      <span :class="`${TIER_TEXT.S} font-bold`">보라</span> — 숫자가 클수록 같은 옵션이라도 수치
-      범위가 높다 (S 는 스킬 레벨 옵션).
-      <span class="font-bold underline decoration-2 underline-offset-2">밑줄</span> = S등급 18 이상.
-      <br />
-      <strong class="text-xs">⚠️</strong> 비공식 시뮬레이터 — 공개 자료 기반이라 실제 게임 확률과
-      다를 수 있음.
-    </div>
+    <InfoNote>
+      <template #summary>
+        장비·파츠별 각성 옵션을 확률표대로 돌려, 원하는 옵션이 나올 때까지 평균 몇 번 각성해야 하는지 계산합니다.
+      </template>
+      <p>옵션 수: 기본 2줄 → 50% 로 3줄 → 3줄일 때만 30% 로 4줄. 같은 등급·같은 옵션은 한 카드에 중복되지 않습니다.</p>
+      <p>
+        <span class="text-amber-500 dark:text-amber-400 font-bold">◆</span> 유효옵(이 세트:
+        <template v-if="vitalNamesInSet.length">{{ vitalNamesInSet.join(', ') }}</template><template v-else>없음</template>)만
+        등급 색으로 표시 —
+        <span :class="tierChip(1)">[1]</span><span :class="`${TIER_TEXT[1]} font-bold`"> 초록</span> ·
+        <span :class="tierChip(2)">[2]</span><span :class="`${TIER_TEXT[2]} font-bold`"> 노랑</span> ·
+        <span :class="tierChip(3)">[3]</span><span :class="`${TIER_TEXT[3]} font-bold`"> 빨강</span> ·
+        <span :class="tierChip('S')">[S]</span><span :class="`${TIER_TEXT.S} font-bold`"> 보라</span>(스킬 레벨).
+        <span class="font-bold underline decoration-2 underline-offset-2">밑줄</span>은 S등급 18 이상.
+      </p>
+      <p>비공식 시뮬레이터 — 공개 자료 기반이라 실제 확률과 다를 수 있습니다.</p>
+    </InfoNote>
 
     <!-- 각성 대상 선택 -->
     <section

@@ -29,6 +29,7 @@ import {
   scoreAsKing,
 } from '../utils/runeWordUi.js';
 import RuneWordOptionTable from './RuneWordOptionTable.vue';
+import InfoNote from './InfoNote.vue';
 
 
 // ============================================================
@@ -412,17 +413,18 @@ watch(subTab, (tab) => {
 <template>
   <div class="space-y-5">
     <!-- 개요 -->
-    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-      <strong>🔮 룬 워드 시뮬레이터</strong> · 룬 30종 중 8개가 박히고, 마지막 8번째 룬이
-      <strong>왕룬</strong>이 되어 옵션 수치와 점수가 2배가 됩니다 (통찰 왕룬만 120점 고정).
-      <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-cyan-700/90 dark:text-cyan-300/80">
+    <InfoNote>
+      <template #summary>
+        룬 30종 중 8개가 박히고, 8번째 룬은 왕룬이 되어 수치와 점수가 2배입니다 (통찰 왕룬만 120점 고정).
+      </template>
+      <p class="flex flex-wrap gap-x-4 gap-y-0.5">
         <span>스크롤 1개 = {{ fmt(ELY_PER_ROLL) }} Ely</span>
         <span>등급 컷 240 / 380 / 470</span>
         <span>이론 최대 {{ MAX_TOTAL }}점</span>
         <span>옵션 {{ RUNES.length }}종</span>
         <span>점수 체계 latale.info 동일</span>
-      </div>
-    </div>
+      </p>
+    </InfoNote>
 
     <!-- 서브 탭 (세그먼트 컨트롤) -->
     <div class="overflow-x-auto -mx-1 px-1">

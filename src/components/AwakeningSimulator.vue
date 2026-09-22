@@ -21,6 +21,7 @@ import { calculateBattlePower } from '../utils/battlePower.js';
 import { useRollLog } from '../composables/useRollLog.js';
 import RollLogPanel from './RollLogPanel.vue';
 import RollBulkRun from './RollBulkRun.vue';
+import InfoNote from './InfoNote.vue';
 import { fmtInf as fmt, pctSmart } from '../utils/format.js';
 
 const props = defineProps({
@@ -332,19 +333,13 @@ function fmtVal(v) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div
-      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
-    >
-      <strong>💎 (기간제) 상급 각성석 시뮬레이터</strong> ·
-      원하는 옵션 + 수치를 설정하면 <strong>한 카드 안에서 모두 동시에 만족</strong>하는 카드를
-      만나기까지 <strong>몇 회 돌려야 하는지</strong>를 분석합니다.
-      <br />
-      <strong class="text-xs">메커니즘</strong>: 각성석 종류 추첨 (보라 95% / 신비 5%) → 라인 수
-      추첨 (1줄 40% · 2줄 40% · 3줄 15% · 4줄 5%) → 각 라인마다 옵션 무중복 균등 추첨 → 5개 티어 중
-      균등 추첨 → [최소,최대] 균등 분포로 값 결정.
-      <br />
-      비용 1회당 <strong>최종 인던 재료 2종 × 7개</strong> + <strong>플래티넘 망치 1개</strong>.
-    </div>
+    <InfoNote>
+      <template #summary>
+        원하는 옵션과 수치를 정하면, 한 카드 안에서 모두 만족하는 각성석을 만나기까지 평균 몇 회 돌려야 하는지 계산합니다.
+      </template>
+      <p>추첨 순서: 각성석 종류(보라 95% / 신비 5%) → 줄 수(1줄 40% · 2줄 40% · 3줄 15% · 4줄 5%) → 줄마다 옵션 무중복 균등 → 5개 티어 균등 → [최소, 최대] 균등.</p>
+      <p>비용 1회: 최종 인던 재료 2종 × 7개 + 플래티넘 망치 1개.</p>
+    </InfoNote>
 
     <!-- 입력 -->
     <section

@@ -21,6 +21,7 @@ import {
   COST_EXCLUSIVE,
 } from '../utils/relicGachaSim.js';
 import { fmtInf as fmt, pctSmart } from '../utils/format.js';
+import InfoNote from './InfoNote.vue';
 
 // ============================================================
 // 서브 탭
@@ -233,12 +234,9 @@ function fmtEly(n) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div
-      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
-    >
-      <strong>🌟 성물 뽑기 시뮬레이터</strong> · 원하는 성물 옵션이 나올 때까지 평균 몇 회 뽑아야 하는지 분석합니다.
-      <br />
-    </div>
+    <InfoNote>
+      <template #summary>원하는 성물 옵션이 나올 때까지 평균 몇 회 뽑아야 하는지 계산합니다.</template>
+    </InfoNote>
 
     <!-- 서브 탭 -->
     <div class="flex gap-1 border-b border-stone-200 dark:border-stone-700">

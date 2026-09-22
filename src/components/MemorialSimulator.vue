@@ -21,6 +21,7 @@ import { calculateBattlePower } from '../utils/battlePower.js';
 import { useRollLog } from '../composables/useRollLog.js';
 import RollLogPanel from './RollLogPanel.vue';
 import RollBulkRun from './RollBulkRun.vue';
+import InfoNote from './InfoNote.vue';
 import { fmtInf as fmt, pctSmart } from '../utils/format.js';
 
 const props = defineProps({
@@ -314,16 +315,13 @@ const meanCost = computed(() => {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-      <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 설정한 모든 목표를
-      <strong>동시에</strong> 만족하는 카드를 만나기까지 <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
-      <br />
-      예: 목표 "최종 크리 대미지 3" + "최종 최대 대미지 2" → 한 카드에서 두 조건이 모두 충족돼야 성공.
-      같은 옵션의 모든 티어가 합산되며, <strong>올스탯 라인은 다른 스탯 목표에도 기여</strong>하고
-      한 줄이 여러 목표에 동시에 기여할 수 있습니다 (예: 올스탯 +2 → 근력·방어력 두 목표 동시 +2).
-      <br />
-      <strong class="text-xs">메커니즘</strong>: 한 카드 = 1~4줄 (세트 평균 2.2줄), 각 줄마다 옵션 풀에서 weight 비율로 선택 → [lo, hi] 정수 균등 분포.
-    </div>
+    <InfoNote>
+      <template #summary>
+        한 카드 안에서 설정한 목표를 모두 만족하는 메모리얼을 만나기까지 평균 몇 회 굴려야 하는지 계산합니다.
+      </template>
+      <p>같은 옵션의 모든 티어가 합산되고, 올스탯 줄은 다른 스탯 목표에도 기여합니다 (올스탯 +2 → 근력·방어력 목표에 동시 +2).</p>
+      <p>추첨: 한 카드 1~4줄(세트 평균 2.2줄), 줄마다 옵션 풀에서 가중치대로 선택 → [lo, hi] 정수 균등.</p>
+    </InfoNote>
 
     <!-- 입력 -->
     <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
