@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { getStatLabel, pctPool } from '../utils/battlePower.js';
+import { getStatLabel, pctPool, equipDelta } from '../utils/battlePower.js';
 import { EQUIP_ROW_DEFS } from '../data/statLabels.js';
 import NumInput from './NumInput.vue';
 
@@ -50,6 +50,20 @@ function pctPoolFor(def) {
   if (!props.stats?.[baseKey]) return null;
   const ratio = pctPool(props.stats, displayKey, baseKey);
   return ratio * 100;
+}
+
+// 가산값 → 실제 표시값 변화 (누적% 곱 반영). 값이 다를 때만 힌트로 보여준다.
+function displayGainOf(equip, def) {
+  const v = Number(equip?.[def.addKey]);
+  if (!Number.isFinite(v) || v === 0) return null;
+  const { displayKey } = poolKeysFor(def);
+  const d = equipDelta(props.stats, { [def.addKey]: v });
+  const gain = d[displayKey];
+  if (!Number.isFinite(gain) || Math.abs(gain - v) < 0.005) return null;
+  return gain;
+}
+function fmtGain(g) {
+  return (g >= 0 ? '+' : '') + (Math.abs(g) >= 100 ? Math.round(g).toLocaleString('ko-KR') : g.toFixed(2));
 }
 
 function formatPct(p) {
@@ -182,6 +196,9 @@ function needsFallbackWarning(def) {
                 @update:model-value="setOld(def.addKey, $event)"
                 class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
               />
+              <span v-if="displayGainOf(oldEquip, def) != null" class="block mt-0.5 text-[10px] text-stone-400 dark:text-stone-500 tabular-nums" title="누적% 반영 표시값 변화">
+                → 표시 {{ fmtGain(displayGainOf(oldEquip, def)) }}
+              </span>
             </td>
             <!-- 현재 장비 % -->
             <td class="py-2 px-2">
@@ -203,6 +220,9 @@ function needsFallbackWarning(def) {
                 @update:model-value="setNew(def.addKey, $event)"
                 class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
               />
+              <span v-if="displayGainOf(newEquip, def) != null" class="block mt-0.5 text-[10px] text-stone-400 dark:text-stone-500 tabular-nums" title="누적% 반영 표시값 변화">
+                → 표시 {{ fmtGain(displayGainOf(newEquip, def)) }}
+              </span>
             </td>
             <!-- 새 장비 % -->
             <td class="py-2 px-2">

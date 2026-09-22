@@ -84,10 +84,16 @@ const efficiencies = computed(() => {
     .map(({ key, label, unitNote }) => {
       const newBP = bpWithOption(props.stats, key, 1, 'avg');
       const delta = newBP - baseBP.value;
+      // 가산형(크댐/최소/최대뎀)은 기본값에 더해진 뒤 누적%가 곱해져 표시값은 1보다 크게 오른다.
+      //   장비 비교의 "가산값" 과 같은 규칙 — 이걸 안 보여주면 "가산 1 = 표시 1" 로 오해한다.
+      const displayGain = ['크댐', '최소뎀', '최대뎀'].includes(key)
+        ? applyEquipToStats(props.stats, { [key]: 1 })[key] - (Number(props.stats[key]) || 0)
+        : null;
       return {
         key,
         stepLabel: label,
         unitNote,
+        displayGain,
         label: getStatLabel(props.stats.type, key),
         delta,
         deltaPct: (delta / baseBP.value) * 100,
@@ -534,6 +540,11 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
               </span>
               <span class="text-[10px] tabular-nums">
                 <span class="text-stone-400 dark:text-stone-500">{{ e.stepLabel }}</span>
+                <span
+                  v-if="e.displayGain != null && Math.abs(e.displayGain - 1) > 0.005"
+                  class="text-stone-400 dark:text-stone-500"
+                  title="가산값은 기본값에 더해진 뒤 누적%가 곱해집니다 (장비 비교의 가산값과 같은 규칙)"
+                >→ 표시 +{{ e.displayGain.toFixed(2) }}</span>
                 <span
                   :class="[
                     'ml-1',
