@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useCharacterStorage } from '../composables/useCharacterStorage.js';
 import { useAuth } from '../composables/useAuth.js';
+import { buildSharePayload, encodeShare, shareUrlFor } from '../utils/shareLink.js';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { fmtRound } from '../utils/format.js';
 
@@ -28,6 +29,29 @@ const props = defineProps({
   currentMemorials: { type: Array, default: () => [] },
   currentRuneword: { type: Array, default: () => [] },
 });
+
+// ── 공유 링크 — 지금 화면의 캐릭터를 ?c=… 로 담아 클립보드에 복사 ──
+const shareMsg = ref('');
+async function onShare() {
+  shareMsg.value = '';
+  try {
+    const active = characters.value.find((c) => c.id === activeId.value);
+    const encoded = await encodeShare(
+      buildSharePayload({
+        name: active?.name || '',
+        stats: props.currentStats,
+        awakStones: props.currentAwakStones,
+        memorials: props.currentMemorials,
+        runeword: props.currentRuneword,
+      }),
+    );
+    const url = shareUrlFor(encoded);
+    await navigator.clipboard.writeText(url);
+    shareMsg.value = `공유 링크를 복사했습니다 (${url.length.toLocaleString('ko-KR')}자). 받는 쪽은 로그인 없이 같은 캐릭터를 봅니다.`;
+  } catch (err) {
+    shareMsg.value = `링크 복사 실패: ${err?.message || '클립보드 접근 불가'}`;
+  }
+}
 
 const {
   characters,
@@ -134,6 +158,7 @@ async function onDelete(id) {
     </div>
     <p v-if="errorMsg" class="text-xs text-rose-500 mb-2">{{ errorMsg }}</p>
     <p v-if="ioMsg" class="text-xs text-stone-500 dark:text-stone-400 mb-2">{{ ioMsg }}</p>
+    <p v-if="shareMsg" class="text-xs text-stone-500 dark:text-stone-400 mb-2">{{ shareMsg }}</p>
 
     <ul v-if="characters.length > 0" class="space-y-1">
       <li
@@ -196,6 +221,14 @@ async function onDelete(id) {
         </template>
       </p>
       <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          @click="onShare"
+          class="h-7 px-2.5 rounded-md text-[11px] ring-1 ring-cyan-300 dark:ring-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 transition"
+          title="지금 화면의 캐릭터(스탯·각성석·메모리얼·룬워드)를 링크로 복사"
+        >
+          공유 링크
+        </button>
         <button
           type="button"
           @click="onExport"

@@ -30,6 +30,7 @@ import { useCharacterStorage } from './composables/useCharacterStorage.js';
 import { createSampleStats } from './data/sampleStats.js';
 import { sanitizeMemorialCards } from './utils/memorialLoadout.js';
 import { sanitizeRuneword } from './utils/runewordLoadout.js';
+import { decodeShare, takeShareParam } from './utils/shareLink.js';
 
 // ============================================================
 // 탭 컴포넌트 지연 로딩 — 기본 탭(전투력 계산)이 아닌 탭은 처음 누를 때 청크를 받는다.
@@ -261,6 +262,27 @@ async function applyCharacterToWorkspace(c) {
 
 watch(activeCharacter, (c) => applyCharacterToWorkspace(c), { immediate: true });
 
+// ── 공유 링크(?c=…)로 열린 경우 — 캐릭터를 선택하지 않은 "미저장" 상태로 작업영역에 올린다.
+//   활성 캐릭터가 없으니 자동 저장은 돌지 않고, 저장하려면 캐릭터 패널에서 이름을 넣고 저장하면 된다.
+const sharedInfo = ref(null); // { name }
+(async () => {
+  const raw = takeShareParam();
+  if (!raw) return;
+  const p = await decodeShare(raw);
+  if (!p) {
+    sharedInfo.value = { error: true };
+    return;
+  }
+  activeTab.value = 'calc';
+  await applyCharacterToWorkspace({
+    stats: p.stats,
+    awak_stones: p.awak_stones,
+    memorials: p.memorials,
+    runeword: p.runeword,
+  });
+  sharedInfo.value = { name: p.name || '' };
+})();
+
 // 자동 저장 상태 — 헤더 인디케이터에 표시.
 //   'idle'    : 변경 없음 (또는 활성 캐릭터 없음)
 //   'pending' : 변경 감지, 디바운스 대기 중
@@ -459,6 +481,36 @@ const savedTimeLabel = computed(() => {
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-5">
+
+      <!-- 공유 링크로 열린 캐릭터 안내 -->
+      <div
+        v-if="sharedInfo"
+        class="mb-4 rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3 flex items-start gap-3 flex-wrap"
+        role="status"
+      >
+        <div class="min-w-0 flex-1">
+          <template v-if="sharedInfo.error">
+            <p class="text-sm font-semibold text-stone-900 dark:text-stone-50">공유 링크를 읽지 못했습니다</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">링크가 잘렸거나 형식이 다릅니다. 보낸 사람에게 다시 요청해 주세요.</p>
+          </template>
+          <template v-else>
+            <p class="text-sm font-semibold text-stone-900 dark:text-stone-50">
+              공유된 캐릭터{{ sharedInfo.name ? ` "${sharedInfo.name}"` : '' }}를 불러왔습니다
+            </p>
+            <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5 leading-relaxed">
+              아직 저장되지 않은 상태입니다. 내 캐릭터로 두려면 오른쪽 캐릭터 패널에서 이름을 넣고 저장하세요.
+              그대로 구경만 해도 됩니다.
+            </p>
+          </template>
+        </div>
+        <button
+          type="button"
+          @click="sharedInfo = null"
+          class="h-8 px-3 rounded-lg text-xs ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition shrink-0"
+        >
+          닫기
+        </button>
+      </div>
 
       <!-- 낙관적 잠금 충돌 배너 — 다른 기기가 먼저 저장했을 때 사용자가 고른다 -->
 
