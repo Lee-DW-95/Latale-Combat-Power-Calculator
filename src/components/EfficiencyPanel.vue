@@ -757,12 +757,12 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
             </button>
           </div>
         </div>
-        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3 leading-snug">
-          각성석(최대 10개) 옵션을 입력하면 전투력 상승량을 합산하고
+        <p class="text-xs text-stone-500 dark:text-stone-300 mb-3 leading-snug">
+          각성석 옵션(최대 10개)을 입력하면
           <span
             class="cursor-help underline decoration-dotted"
             title='각 옵션을 단독 적용했을 때의 BP 상승을 기준 스탯으로 환산해 합산 — 예: "최대대미지 +100% + 크댐 +100%" → 합산 160%급'
-          >"○○%급" ⓘ</span>으로 요약해줍니다.
+          >크댐 ○○%급 ⓘ</span>으로 요약합니다.
         </p>
 
         <div class="space-y-2 mb-3">

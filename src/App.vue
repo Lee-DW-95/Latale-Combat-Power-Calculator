@@ -65,6 +65,7 @@ function openAuth(step = 'login') {
 // 캐릭터 영속화 — 활성 캐릭터의 stats / awak_stones 자동 동기화 & 자동 저장.
 // ============================================================
 const {
+  characters,
   activeCharacter,
   saveCharacter,
   conflict: saveConflict,
@@ -233,7 +234,10 @@ function resetEquipment() {
 }
 
 // ── 빈 상태 온보딩 — 입력이 하나도 없고 활성 캐릭터도 없을 때 예시 데이터 제안 ──
-const showOnboarding = computed(() => battlePower.value === 0 && !activeCharacter.value);
+// 저장된 캐릭터가 있으면(로그인 사용자 등) 온보딩 대신 목록에서 고르면 되므로 띄우지 않는다.
+const showOnboarding = computed(
+  () => battlePower.value === 0 && !activeCharacter.value && characters.value.length === 0,
+);
 
 function loadSampleStats() {
   // 활성 캐릭터가 없는 상태에서만 호출되므로 자동 저장을 트리거하지 않는다 (체험용 일회성).
@@ -582,19 +586,15 @@ const savedTimeLabel = computed(() => {
           v-if="showOnboarding"
           class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
         >
-          <div class="text-sm text-stone-700 dark:text-stone-200">
-            <strong>처음이신가요?</strong>
+          <p class="text-sm text-stone-700 dark:text-stone-200">
             게임 <strong>T창(능력치 세부정보)</strong>의 숫자를 그대로 옮겨 적으면 전투력이 계산됩니다.
-            <span class="block text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-              먼저 예시 데이터로 어떤 결과가 나오는지 구경해보세요 — 입력을 시작하면 언제든 덮어쓸 수 있습니다.
-            </span>
-          </div>
+          </p>
           <button
             type="button"
             @click="loadSampleStats"
             class="shrink-0 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold px-4 py-2 transition"
           >
-            📋 예시 데이터 불러오기
+            예시 데이터 불러오기
           </button>
         </div>
 
@@ -630,7 +630,7 @@ const savedTimeLabel = computed(() => {
               <RelicActivePanel :stats="stats" />
             </CollapsibleSection>
 
-            <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교">
+            <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교" :default-open="false">
               <div class="space-y-4">
                 <EquipmentCompare
                   :stats="stats"

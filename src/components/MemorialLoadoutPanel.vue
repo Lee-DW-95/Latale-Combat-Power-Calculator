@@ -98,10 +98,10 @@ const totalConv = computed(() =>
 <template>
   <div class="space-y-3">
     <div class="flex items-start justify-between gap-3 flex-wrap">
-      <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-400 max-w-2xl">
-        지금 장착 중인 메모리얼 옵션을 그대로 적어 두면 캐릭터와 함께 저장되고, 아래 스펙업 방향 분석의 기준이 됩니다.
-        <span class="text-stone-700 dark:text-stone-200">일반</span>은 개별 옵션 슬롯 9개(슬롯마다 따로 굴림),
-        <span class="text-stone-700 dark:text-stone-200">세트</span>는 한 번에 굴려지는 옵션 최대 4줄입니다.
+      <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-300 max-w-2xl">
+        장착 중인 메모리얼 옵션을 적어 두면 캐릭터와 함께 저장됩니다.
+        <span class="text-stone-700 dark:text-stone-200">일반</span>은 슬롯 9개(따로 굴림),
+        <span class="text-stone-700 dark:text-stone-200">세트</span>는 최대 4줄(한 번에 굴림).
       </p>
       <div class="flex items-center gap-2 shrink-0">
         <span class="text-xs text-stone-400 dark:text-stone-500 tabular-nums">{{ memorials.length }} / {{ MEMORIAL_CARD_MAX }}</span>

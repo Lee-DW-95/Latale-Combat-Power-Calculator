@@ -66,9 +66,8 @@ const grade = computed(() => gradeOf(score.value));
 <template>
   <div class="space-y-3">
     <div class="flex items-start justify-between gap-3 flex-wrap">
-      <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-400 max-w-2xl">
-        지금 장착한 룬워드의 룬 8개를 고르면 캐릭터와 함께 저장됩니다. 8번째 칸이 왕룬(수치 2배)입니다.
-        점수는 룬워드 시뮬과 같은 info 사이트 기준이고, 스펙업 방향 분석은 점수가 아니라 크댐환산으로 비교합니다.
+      <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-300 max-w-2xl">
+        장착한 룬 8개를 고르면 캐릭터와 함께 저장됩니다. 8번째 칸이 왕룬(수치 2배)입니다.
       </p>
       <div class="flex items-center gap-3 shrink-0 text-xs tabular-nums">
         <span class="text-stone-500 dark:text-stone-400">

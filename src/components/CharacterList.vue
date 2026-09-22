@@ -209,18 +209,9 @@ async function onDelete(id) {
       저장된 캐릭터가 없습니다. 위에서 이름을 입력하고 저장하세요.
     </p>
 
-    <!-- 저장 위치 안내 + 백업 -->
-    <div class="mt-3 pt-3 border-t border-stone-100 dark:border-stone-700/70 flex items-start justify-between gap-3 flex-wrap">
-      <p class="text-[11px] leading-relaxed text-stone-500 dark:text-stone-400 min-w-0 flex-1">
-        <template v-if="isLoggedIn">
-          서버에 저장되어 다른 기기에서도 같은 캐릭터를 이어 씁니다.
-        </template>
-        <template v-else>
-          지금은 <span class="text-stone-700 dark:text-stone-200">이 브라우저에만</span> 저장됩니다. 로그인하면 서버에 저장되어
-          다른 기기에서도 이어 쓸 수 있고, 아래 파일로 백업·이동할 수도 있습니다.
-        </template>
-      </p>
-      <div class="flex items-center gap-1.5 shrink-0">
+    <!-- 공유 · 백업 -->
+    <div class="mt-3 pt-3 border-t border-stone-100 dark:border-stone-700/70">
+      <div class="flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
           @click="onShare"
@@ -248,6 +239,9 @@ async function onDelete(id) {
         </button>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden" @change="onImportFile" />
       </div>
+      <p v-if="!isLoggedIn" class="mt-2 text-[11px] leading-relaxed text-stone-500 dark:text-stone-300">
+        저장은 이 브라우저에만 남습니다. 로그인하면 서버에 저장되어 다른 기기에서도 이어 씁니다.
+      </p>
     </div>
   </section>
 </template>

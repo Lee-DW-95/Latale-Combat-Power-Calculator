@@ -331,9 +331,8 @@ const BREAKDOWN_CARDS = [
           {{ baseFilledCount }} / {{ BASE_FIELD_DEFS.length }} 입력됨
         </span>
       </header>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
-        T창 <strong>추가 세부정보</strong> 패널의 우측 <strong class="text-emerald-600 dark:text-emerald-400">+값(녹색 숫자)</strong>을 입력하면
-        장비 비교의 % 옵션이 정확히 환산됩니다.
+      <p class="text-xs text-stone-500 dark:text-stone-300 mb-3">
+        T창 추가 세부정보의 <strong class="text-emerald-600 dark:text-emerald-400">+값(녹색 숫자)</strong> — % 옵션 환산에 쓰입니다.
         <span
           class="cursor-help underline decoration-dotted"
           title='예: "근력 +1,118,069 (506%)" 로 표시되면 기본 근력 = 1,118,069 입니다. 입력하지 않으면 % 옵션이 누적 0% 가정으로 추정됩니다.'

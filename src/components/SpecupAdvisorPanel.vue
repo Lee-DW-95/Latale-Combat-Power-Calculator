@@ -393,11 +393,10 @@ function setPriceMan(key, raw) {
 
 <template>
   <div class="space-y-4">
-    <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-      저장된 각성석·메모리얼·룬워드를 하나씩 "다시 굴렸을 때" 의 크댐환산 분포를 확률표로 표본 추출해
-      현재 옵션과 비교합니다. 재화가 다른 내실을 한 줄에 세우기 위해 1회 비용을 시세로 엘리 환산하고,
-      <strong class="font-medium text-stone-700 dark:text-stone-200">같은 엘리 예산</strong>을 어디에 쓰는 게 기대 이득이 큰지로 순위를 매깁니다.
-      굴려서 나쁘면 이전 옵션을 유지한다는 전제입니다.
+    <p class="text-xs leading-relaxed text-stone-500 dark:text-stone-300">
+      저장된 내실을 다시 굴렸을 때의 크댐환산 분포를 확률표로 뽑아 현재 옵션과 비교하고,
+      <strong class="font-medium text-stone-700 dark:text-stone-200">같은 엘리 예산</strong>으로 기대 이득이 큰 순서로 세웁니다.
+      1회 비용은 시세로 엘리 환산하며, 굴려서 나쁘면 이전 옵션을 유지한다고 봅니다.
     </p>
 
     <div
