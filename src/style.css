@@ -22,3 +22,12 @@ input[type='number']::-webkit-inner-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
 }
+
+/* 탭 바 — 가로 스크롤은 유지하되 스크롤바는 숨긴다 (양끝 페이드가 "더 있음" 을 대신 알린다) */
+.tab-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tab-scroll::-webkit-scrollbar {
+  display: none;
+}

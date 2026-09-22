@@ -107,6 +107,12 @@ async function onMigrationConfirm({ resolve, reject }) {
 // ============================================================
 // 탭 상태
 // ============================================================
+// 주소 해시(#memorial 등)로 탭을 기억한다 — 새로고침·링크 공유 시 같은 탭이 열린다.
+//   존재하지 않거나 권한 없는 탭 id 면 calc 로 돌아간다 (권한 검사는 아래 canSeeRestricted watch).
+function tabFromHash() {
+  const id = (typeof window !== 'undefined' ? window.location.hash : '').replace(/^#/, '');
+  return id && TABS.some((t) => t.id === id) ? id : 'calc';
+}
 const activeTab = ref('calc');
 
 // ── 탭 노출 게이팅 ──────────────────────────────────────────
@@ -147,6 +153,34 @@ const TABS = [
   // 게임을 켜둔 채 옆에 띄워 쓰는 용도라 로그인 조건 없이 항상 노출한다.
   { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
 ];
+
+// 탭 ↔ 주소 해시 동기화
+activeTab.value = tabFromHash();
+watch(activeTab, (id) => {
+  if (typeof window === 'undefined') return;
+  const next = id === 'calc' ? '' : `#${id}`;
+  if (window.location.hash !== next) history.replaceState(null, '', `${window.location.pathname}${window.location.search}${next}`);
+});
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => {
+    const id = tabFromHash();
+    if (id !== activeTab.value) activeTab.value = id;
+  });
+}
+
+// 탭 바 방향키 이동 (role=tablist 접근성) — ←/→ 로 인접 탭, Home/End 로 양끝
+function onTabKeydown(e, idx) {
+  const tabs = visibleTabs.value;
+  let next = null;
+  if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+  else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = tabs.length - 1;
+  if (next === null) return;
+  e.preventDefault();
+  activeTab.value = tabs[next].id;
+  e.currentTarget.parentElement?.children[next]?.focus();
+}
 
 // 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 특권 닉네임.
 const canSeeRestricted = computed(
@@ -327,25 +361,25 @@ const savedTimeLabel = computed(() => {
       class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-700"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
           <img
             src="/assets/latale/logo-latale.png"
             alt="LaTale"
-            class="h-10 sm:h-12 w-auto select-none"
+            class="h-9 sm:h-12 w-auto select-none shrink-0"
             draggable="false"
           />
-          <div class="border-l border-stone-300 dark:border-stone-600 pl-3">
-            <h1 class="text-base sm:text-lg font-extrabold text-cyan-700 dark:text-cyan-300 leading-tight">
+          <div class="border-l border-stone-300 dark:border-stone-600 pl-2 sm:pl-3 min-w-0">
+            <h1 class="text-sm sm:text-lg font-extrabold text-cyan-700 dark:text-cyan-300 leading-tight whitespace-nowrap break-keep">
               라테일 유틸리티
             </h1>
-            <p class="text-[11px] text-stone-500 dark:text-stone-400">
+            <p class="hidden sm:block text-[11px] text-stone-500 dark:text-stone-400">
               전투력 계산기 (베타)
             </p>
           </div>
         </div>
 
         <!-- 우측: 저장 상태 + 인증 + 다크모드 -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <!-- 자동 저장 인디케이터 — 활성 캐릭터 있을 때만 노출 -->
           <span
             v-if="activeCharacter"
@@ -373,7 +407,7 @@ const savedTimeLabel = computed(() => {
             <button
               type="button"
               @click="logout"
-              class="text-xs px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition"
+              class="text-xs px-2 py-1 rounded ring-1 ring-stone-300 dark:ring-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition whitespace-nowrap"
             >
               로그아웃
             </button>
@@ -382,7 +416,7 @@ const savedTimeLabel = computed(() => {
             <button
               type="button"
               @click="openAuth('login')"
-              class="text-xs px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition"
+              class="text-xs px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition whitespace-nowrap"
             >
               로그인
             </button>
@@ -391,23 +425,37 @@ const savedTimeLabel = computed(() => {
         </div>
       </div>
 
-      <!-- 탭 네비 — 보이는 탭이 1개뿐이면 (일반 유저) 탭바 자체를 숨김 -->
-      <nav v-if="visibleTabs.length > 1" class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
-        <button
-          v-for="tab in visibleTabs"
-          :key="tab.id"
-          type="button"
-          @click="activeTab = tab.id"
-          :class="[
-            'px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap',
-            activeTab === tab.id
-              ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
-              : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
-          ]"
+      <!-- 탭 네비 — 보이는 탭이 1개뿐이면 (일반 유저) 탭바 자체를 숨김.
+           가로 스크롤은 되지만 스크롤바는 숨기고(tab-scroll) 양끝 페이드로 "더 있음" 을 알린다. -->
+      <div v-if="visibleTabs.length > 1" class="relative max-w-7xl mx-auto">
+        <nav
+          role="tablist"
+          aria-label="기능 탭"
+          class="tab-scroll px-4 sm:px-6 flex gap-0.5 sm:gap-1 overflow-x-auto"
         >
-          {{ tab.label }}
-        </button>
-      </nav>
+          <button
+            v-for="(tab, i) in visibleTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === tab.id"
+            :tabindex="activeTab === tab.id ? 0 : -1"
+            :title="tab.desc"
+            @click="activeTab = tab.id"
+            @keydown="(e) => onTabKeydown(e, i)"
+            :class="[
+              'px-3 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 transition whitespace-nowrap break-keep',
+              activeTab === tab.id
+                ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
+                : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
+            ]"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+        <div class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white/90 dark:from-stone-900/90 to-transparent sm:hidden"></div>
+        <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/90 dark:from-stone-900/90 to-transparent"></div>
+      </div>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-5">
