@@ -368,7 +368,7 @@ function cardStyle(roll) {
   <div class="space-y-5">
     <!-- 안내 -->
     <div
-      class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
     >
       <strong>💠 아이템 각성 시뮬레이터</strong> · 장비/파츠 종류별 각성 옵션을 실제 확률표대로
       돌려보고, <strong>원하는 옵션이 나올 때까지 몇 번 각성해야 하는지</strong>를 분석한다.
@@ -398,9 +398,9 @@ function cardStyle(roll) {
 
     <!-- 각성 대상 선택 -->
     <section
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 각성 대상 선택</h2>
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-4">⚙️ 각성 대상 선택</h2>
       <div class="flex flex-wrap gap-2">
         <button
           v-for="(set, idx) in ITEM_AWAKENING_SETS"
@@ -410,7 +410,7 @@ function cardStyle(roll) {
           :class="[
             'rounded-md px-3 py-1.5 text-xs font-medium transition',
             activeIdx === idx
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
           ]"
         >
@@ -431,9 +431,9 @@ function cardStyle(roll) {
     <!-- 목표 옵션 시뮬                                                -->
     <!-- ============================================================ -->
     <section
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-1">🎯 목표 옵션 시뮬</h2>
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-1">🎯 목표 옵션 시뮬</h2>
       <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
         원하는 옵션 + 최소 수치를 지정하면 <strong>한 번의 각성으로 전부 동시에</strong> 만족할
         확률과, 거기까지 필요한 각성 횟수를 계산한다. 수치를 비우면 "옵션만 뜨면 OK"로 본다.
@@ -450,7 +450,7 @@ function cardStyle(roll) {
               :class="[
                 'px-2.5 py-2 text-xs font-medium transition',
                 t.mode === 'row'
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -463,7 +463,7 @@ function cardStyle(roll) {
               :class="[
                 'px-2.5 py-2 text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed',
                 t.mode === 'sum'
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -599,7 +599,7 @@ function cardStyle(roll) {
           <!-- 합계 목표 달성 요약 -->
           <div
             v-if="achievedSums.length"
-            class="mb-4 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
+            class="mb-4 rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
           >
             <div
               v-for="s in achievedSums"
@@ -674,10 +674,10 @@ function cardStyle(roll) {
     <!-- ============================================================ -->
     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
       <section
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
-          <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🎲 직접 돌려보기</h2>
+          <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">🎲 직접 돌려보기</h2>
           <div class="text-right">
             <div class="text-xs text-stone-500 dark:text-stone-400">시도 횟수</div>
             <div class="text-2xl font-bold tabular-nums text-cyan-700 dark:text-cyan-300">
@@ -829,7 +829,7 @@ function cardStyle(roll) {
       :default-open="false"
     >
       <div
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div class="overflow-x-auto">
           <table class="w-full text-sm">

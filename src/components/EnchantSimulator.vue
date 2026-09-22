@@ -546,7 +546,7 @@ function rollPctClass(p) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
+    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
       <strong>🔨 인챈트 시뮬레이터</strong> · 장비 인챈트(실패 시 파괴) / 특수장비 인챈트(레벨 강화) 두 가지 모드.
       <br />
       <strong>장비 인챈트</strong>: 일반(50%) / 슈퍼(60%) 시도 → 성공 시 옵션 1슬롯 부여, 실패 시 장비 파괴.
@@ -568,7 +568,7 @@ function rollPctClass(p) {
         :class="[
           'rounded-lg px-4 py-2.5 text-sm font-semibold transition',
           mode === 'normal'
-            ? 'bg-cyan-600 text-white'
+            ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
             : 'bg-white dark:bg-stone-800 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
         ]"
       >
@@ -580,7 +580,7 @@ function rollPctClass(p) {
         :class="[
           'rounded-lg px-4 py-2.5 text-sm font-semibold transition',
           mode === 'special'
-            ? 'bg-cyan-600 text-white'
+            ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
             : 'bg-white dark:bg-stone-800 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
         ]"
       >
@@ -592,7 +592,7 @@ function rollPctClass(p) {
         :class="[
           'rounded-lg px-4 py-2.5 text-sm font-semibold transition',
           mode === 'lookup'
-            ? 'bg-cyan-600 text-white'
+            ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
             : 'bg-white dark:bg-stone-800 ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
         ]"
       >
@@ -605,8 +605,8 @@ function rollPctClass(p) {
     <!-- ============================================================ -->
     <template v-if="mode === 'normal'">
       <!-- ① 공통 조건: 카테고리 / 부위 / 인챈트 종류 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 공통 조건</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-4">⚙️ 공통 조건</h2>
 
         <div class="mb-3">
           <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">카테고리</span>
@@ -619,7 +619,7 @@ function rollPctClass(p) {
               :class="[
                 'rounded-md px-3 py-1.5 text-xs font-medium transition',
                 normalCatKey === cat
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -659,7 +659,7 @@ function rollPctClass(p) {
               :class="[
                 'flex-1 min-w-[180px] rounded-md px-3 py-2 text-sm font-medium transition',
                 normalEnchantType === key
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -734,7 +734,7 @@ function rollPctClass(p) {
       </section>
 
       <!-- ② 1회 시뮬 / 풀강 시뮬 — 모든 결과(슬롯·로그·통계) 한 섹션에 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-cyan-300 dark:ring-cyan-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-cyan-300 dark:ring-cyan-700 p-5">
         <h2 class="text-lg font-bold text-cyan-700 dark:text-cyan-300 mb-1">
           🔨 옵션 굴려보기 / {{ normalSingleStage ? '완성' : '풀강' }} 비용 분석
         </h2>
@@ -1040,8 +1040,8 @@ function rollPctClass(p) {
       </section>
 
       <!-- ③ 🎯 목표 옵션 시뮬 (완전 분리된 섹션) -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5">
-        <h2 class="text-lg font-bold text-emerald-700 dark:text-emerald-300 mb-2">🎯 목표 옵션 시뮬</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-emerald-300 dark:ring-emerald-700 p-5">
+        <h2 class="text-base font-semibold text-emerald-700 dark:text-emerald-300 mb-2">🎯 목표 옵션 시뮬</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
           관심있는 옵션만 체크 + 최소값 설정 → "한 장비"에서 그 모든 조건을 동시 만족할 때까지의 평균 시도/망치/파괴 장비 수.
           순서대로 시도하다 추첨 값이 목표 미달이면 그 장비는 폐기 (망치는 소모됨).
@@ -1225,9 +1225,9 @@ function rollPctClass(p) {
     <!-- 모드 2: 특수장비 인챈트                                       -->
     <!-- ============================================================ -->
     <template v-else-if="mode === 'special'">
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">
+          <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">
             ✨ 특수장비 옵션 — {{ specialSlots.length }}/{{ SPECIAL_ENCHANT_MAX_SLOTS }}
           </h2>
           <div class="flex gap-2">
@@ -1339,10 +1339,10 @@ function rollPctClass(p) {
       </section>
 
       <!-- 누적 비용 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">💰 누적 비용</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-3">💰 누적 비용</h2>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-800 p-3">
+          <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-3">
             <div class="text-xs text-cyan-600 dark:text-cyan-300">총 인챈트 시도</div>
             <div class="text-2xl font-extrabold text-cyan-700 dark:text-cyan-200 tabular-nums">
               {{ fmt(specialCounters.tries) }}회
@@ -1366,9 +1366,9 @@ function rollPctClass(p) {
       <!-- 시도 로그 -->
       <section
         v-if="specialLog.length > 0"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">📜 최근 강화 로그</h2>
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-3">📜 최근 강화 로그</h2>
         <ul class="space-y-1 font-mono text-xs max-h-64 overflow-y-auto">
           <li
             v-for="(e, i) in specialLog"
@@ -1386,8 +1386,8 @@ function rollPctClass(p) {
     <!-- ============================================================ -->
     <template v-else-if="mode === 'lookup'">
       <!-- 입력 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-1">🔍 인챈트 수치 조회</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-1">🔍 인챈트 수치 조회</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
           <template v-if="lookupSingleStage">
             게임에서 얻은 옵션 값을 입력하면 최대치 대비 등급%를 보여줍니다.
@@ -1411,7 +1411,7 @@ function rollPctClass(p) {
               :class="[
                 'rounded-md px-3 py-1.5 text-xs font-medium transition',
                 lookupCatKey === cat
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -1519,7 +1519,7 @@ function rollPctClass(p) {
       <!-- 결과: 두 패널 -->
       <div v-if="lookupResult" :class="lookupSingleStage ? '' : 'grid grid-cols-1 md:grid-cols-2 gap-4'">
         <!-- Lv2 패널 (단일 단계 부위는 이 패널 하나만) -->
-        <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700 p-5">
+        <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-amber-300 dark:ring-amber-700 p-5">
           <h3 class="text-base font-bold text-amber-700 dark:text-amber-300 mb-3">
             <template v-if="!lookupSingleStage">Lv{{ lookupResult.base.level }} </template>{{ lookupResult.partName }}
           </h3>
@@ -1546,7 +1546,7 @@ function rollPctClass(p) {
         <!-- Lv풀강 패널 — 단일 단계 부위(캔서 배찌)는 환산 대상이 없어 숨김 -->
         <section
           v-if="!lookupSingleStage"
-          class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
+          class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
         >
           <h3 class="text-base font-bold text-emerald-700 dark:text-emerald-300 mb-3">
             [풀강] ★★★ Lv{{ lookupResult.full.level }} {{ lookupResult.partName }}

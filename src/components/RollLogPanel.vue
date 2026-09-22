@@ -52,7 +52,7 @@ function recAmountText(rec) {
 
 <template>
   <aside
-    class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-4 lg:sticky lg:top-4"
+    class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-4 lg:sticky lg:top-4"
   >
     <div class="flex items-center justify-between mb-2">
       <h3 class="text-sm font-bold text-stone-800 dark:text-stone-100">
@@ -81,7 +81,7 @@ function recAmountText(rec) {
           :class="[
             'flex-1 rounded-md px-2 py-1 text-[11px] font-semibold transition',
             !isOption
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
           ]"
         >
@@ -93,7 +93,7 @@ function recAmountText(rec) {
           :class="[
             'flex-1 rounded-md px-2 py-1 text-[11px] font-semibold transition',
             isOption
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
           ]"
         >

@@ -470,7 +470,7 @@ function gradeRange(g) {
 <template>
   <div class="space-y-5">
     <!-- 개요 -->
-    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
+    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
       <strong>🔮 룬 워드 시뮬레이터</strong> · 룬 30종 중 8개가 박히고, 마지막 8번째 룬이
       <strong>왕룬</strong>이 되어 옵션 수치와 점수가 2배가 됩니다 (통찰 왕룬만 120점 고정).
       <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-cyan-700/90 dark:text-cyan-300/80">
@@ -494,7 +494,7 @@ function gradeRange(g) {
             'px-4 py-2 text-sm font-medium transition whitespace-nowrap',
             i > 0 ? 'border-l border-stone-200 dark:border-stone-700' : '',
             subTab === t.id
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
           ]"
         >
@@ -507,10 +507,10 @@ function gradeRange(g) {
     <!-- [1] 내 룬워드 책정                                            -->
     <!-- ============================================================ -->
     <template v-if="subTab === 'manual'">
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">📋 내 룬워드 책정</h2>
+            <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">📋 내 룬워드 책정</h2>
             <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
               내 룬 8개를 순서대로 클릭하세요. <strong>마지막 8번째가 왕룬</strong>으로 계산됩니다.
             </p>
@@ -634,7 +634,7 @@ function gradeRange(g) {
       <!-- 책정 결과 -->
       <section
         v-if="manualResult"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
       >
         <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -683,10 +683,10 @@ function gradeRange(g) {
     <!-- [2] 목표 옵션 시뮬                                            -->
     <!-- ============================================================ -->
     <template v-else-if="subTab === 'target'">
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🎯 목표 옵션 시뮬</h2>
+            <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">🎯 목표 옵션 시뮬</h2>
             <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
               원하는 <strong>옵션</strong>(크댐·관통 등)·왕룬·총점을 지정하면
               <strong>스크롤을 몇 번 써야 하는지</strong>를 계산합니다.
@@ -783,7 +783,7 @@ function gradeRange(g) {
                 :class="[
                   'flex-1 px-2 py-2 text-xs font-medium transition',
                   tMode === 'all'
-                    ? 'bg-cyan-600 text-white'
+                    ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
                 ]"
               >
@@ -796,7 +796,7 @@ function gradeRange(g) {
                 :class="[
                   'flex-1 px-2 py-2 text-xs font-medium transition border-l border-stone-200 dark:border-stone-700 disabled:opacity-40 disabled:cursor-not-allowed',
                   tMode === 'atLeast'
-                    ? 'bg-cyan-600 text-white'
+                    ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
                 ]"
               >
@@ -877,9 +877,9 @@ function gradeRange(g) {
       <!-- 확률 분석 -->
       <section
         v-if="tStats"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">확률 분석</h2>
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-3">확률 분석</h2>
 
         <!-- 목표 요약 -->
         <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 px-4 py-3 mb-4">
@@ -909,7 +909,7 @@ function gradeRange(g) {
 
         <!-- 핵심 지표 -->
         <div class="grid gap-3 sm:grid-cols-2 mb-4">
-          <div class="rounded-lg bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3">
+          <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 px-4 py-3">
             <div class="text-[11px] font-medium uppercase tracking-wider text-cyan-700/70 dark:text-cyan-400/70">
               1회 성공확률
             </div>
@@ -976,7 +976,7 @@ function gradeRange(g) {
       <!-- 실행 결과 -->
       <section
         v-if="tSample"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
       >
         <template v-if="true">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700">
@@ -1046,8 +1046,8 @@ function gradeRange(g) {
     <!-- [3] 무작위 시뮬                                               -->
     <!-- ============================================================ -->
     <template v-else-if="subTab === 'sim'">
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">🎰 무작위 시뮬</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">🎰 무작위 시뮬</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5 mb-4">
           스크롤을 실제로 썼을 때 어떤 룬워드가 나오는지 돌려봅니다.
         </p>
@@ -1163,7 +1163,7 @@ function gradeRange(g) {
       <!-- 현재 결과 -->
       <section
         v-if="simCurrent"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden"
       >
         <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -1208,7 +1208,7 @@ function gradeRange(g) {
       <!-- 최근 기록 -->
       <section
         v-if="simHistory.length > 0"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div class="flex items-baseline justify-between gap-3 mb-2.5">
           <h2 class="text-sm font-bold text-stone-700 dark:text-stone-200">최근 기록</h2>
@@ -1239,10 +1239,10 @@ function gradeRange(g) {
     <!-- [4] 옵션표                                                    -->
     <!-- ============================================================ -->
     <template v-else>
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100">📖 룬워드 옵션표</h2>
+            <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100">📖 룬워드 옵션표</h2>
             <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
               단일 룬 20종 · 복합 룬 10종
             </p>
@@ -1254,7 +1254,7 @@ function gradeRange(g) {
               :class="[
                 'px-3 py-1.5 text-xs font-medium transition',
                 !optionKingView
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',
               ]"
             >
@@ -1338,7 +1338,7 @@ function gradeRange(g) {
       </section>
 
       <!-- 등급 기준 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <h2 class="text-sm font-bold text-stone-700 dark:text-stone-200 mb-3">총점 등급 기준</h2>
         <div class="rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 overflow-hidden">
           <div

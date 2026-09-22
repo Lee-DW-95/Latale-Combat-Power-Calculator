@@ -528,7 +528,7 @@ const savedTimeLabel = computed(() => {
         <!-- 빈 상태 온보딩 — 예시 데이터 체험 -->
         <div
           v-if="showOnboarding"
-          class="rounded-2xl border-2 border-dashed border-cyan-300 dark:border-cyan-700 bg-cyan-50/50 dark:bg-cyan-950/20 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
+          class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
         >
           <div class="text-sm text-stone-700 dark:text-stone-200">
             <strong>처음이신가요?</strong>

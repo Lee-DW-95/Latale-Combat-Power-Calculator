@@ -35,7 +35,7 @@ const sortedContribs = computed(() => {
 
 <template>
   <section
-    class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+    class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
     <!-- 장비 비교 섹션 하위 카드 — 소제목으로 표시 -->
     <h3 class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">📊 비교 결과</h3>
@@ -75,7 +75,7 @@ const sortedContribs = computed(() => {
           </dd>
         </div>
         <div
-          class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 p-3 ring-1 ring-cyan-200 dark:ring-cyan-800"
+          class="rounded-lg bg-stone-50 dark:bg-stone-900/40 p-3 ring-1 ring-stone-200 dark:ring-stone-700"
         >
           <dt class="text-cyan-600 dark:text-cyan-300">교체 후 예상</dt>
           <dd class="text-lg font-bold text-cyan-700 dark:text-cyan-200 tabular-nums">

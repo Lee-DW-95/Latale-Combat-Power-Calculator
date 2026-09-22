@@ -95,7 +95,7 @@ function fmtVal(v, option) {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
+    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
       <strong>🌟 성물 시뮬</strong> · 5개 성물(대미지 영향) 각각의 레벨 + 전용석 옵션 + 공용석 2슬롯을 입력하면 합산 보너스가 산출됩니다.
       <br />
       <strong class="text-xs">계산</strong>: 성물 배율 = 레벨 × (50/90) (Lv90 ≈ 50.0). 옵션 보너스 = 옵션값 × 배율 / 100.
@@ -116,7 +116,7 @@ function fmtVal(v, option) {
       <section
         v-for="relic in relicSet"
         :key="relic.key"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-base font-bold text-stone-800 dark:text-stone-100">
@@ -194,9 +194,9 @@ function fmtVal(v, option) {
     <!-- 합산 결과 -->
     <section
       v-if="totalsList.length > 0"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-emerald-300 dark:ring-emerald-700 p-5"
     >
-      <h2 class="text-lg font-bold text-emerald-700 dark:text-emerald-300 mb-3">📊 성물 합산 보너스</h2>
+      <h2 class="text-base font-semibold text-emerald-700 dark:text-emerald-300 mb-3">📊 성물 합산 보너스</h2>
       <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
         모든 성물의 전용석 + 공용석 옵션을 성물 배율로 환산한 합계. 인게임 적용 시 추가되는 스탯/효과 추정치.
       </p>
@@ -216,7 +216,7 @@ function fmtVal(v, option) {
     </section>
     <section
       v-else
-      class="rounded-2xl bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-center text-sm text-stone-500 dark:text-stone-400"
+      class="rounded-xl bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-center text-sm text-stone-500 dark:text-stone-400"
     >
       성물 옵션 입력 시 합산 보너스가 여기에 표시됩니다.
     </section>

@@ -231,7 +231,7 @@ function fmtSigned(n) {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+  <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
     <!-- ═══════ 헤더 ═══════ -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
       <div>
@@ -423,7 +423,7 @@ function fmtSigned(n) {
               :class="[
                 'px-3 py-1.5 transition',
                 editTarget === 'candidate'
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300',
               ]"
             >

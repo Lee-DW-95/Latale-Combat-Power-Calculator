@@ -145,7 +145,7 @@ function jumpToStage() {
               :class="[
                 'px-3.5 py-1.5 text-sm font-semibold transition',
                 viewMode === opt.v
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                   : 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50',
               ]"
             >

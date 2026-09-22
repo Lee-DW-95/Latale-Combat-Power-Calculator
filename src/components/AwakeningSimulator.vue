@@ -333,7 +333,7 @@ function fmtVal(v) {
   <div class="space-y-5">
     <!-- 안내 -->
     <div
-      class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
     >
       <strong>💎 (기간제) 상급 각성석 시뮬레이터</strong> ·
       원하는 옵션 + 수치를 설정하면 <strong>한 카드 안에서 모두 동시에 만족</strong>하는 카드를
@@ -348,9 +348,9 @@ function fmtVal(v) {
 
     <!-- 입력 -->
     <section
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
 
       <!-- 조건 모드 — 옵션별 목표 vs 카드 전체 크댐환산 -->
       <div class="flex gap-1 mb-4">
@@ -360,7 +360,7 @@ function fmtVal(v) {
           :class="[
             'flex-1 rounded-md px-3 py-2 text-xs font-semibold transition',
             simMode === 'option'
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
           ]"
           title="크리 ≥ 120 · 보몬지 ≥ 5 처럼 옵션별 목표를 한 카드에서 동시에 만족"
@@ -373,7 +373,7 @@ function fmtVal(v) {
           :class="[
             'flex-1 rounded-md px-3 py-2 text-xs font-semibold transition',
             simMode === 'equiv'
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700',
           ]"
           title="옵션 종류를 가리지 않고, 카드 전체를 크댐으로 환산한 합이 기준치 이상"
@@ -681,7 +681,7 @@ function fmtVal(v) {
       <!-- 좌측 자리 채움 — 아직 한 번도 안 굴렸을 때 -->
       <section
         v-else
-        class="rounded-2xl bg-stone-100 dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-sm text-stone-500 dark:text-stone-400"
+        class="rounded-xl bg-stone-100 dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-sm text-stone-500 dark:text-stone-400"
       >
         🎰 위의 <strong>1회 굴려보기</strong>를 누르면 카드 1장이 여기 표시되고,
         크댐 환산 합이 기준치 이상이면 우측에 회차와 함께 기록됩니다.
@@ -701,9 +701,9 @@ function fmtVal(v) {
     <!-- 시뮬 조건 요약 -->
     <section
       v-if="result"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">
         🎯 시뮬 조건 요약
       </h2>
       <ul v-if="result.mode !== 'equiv'" class="space-y-0.5 mb-2">
@@ -766,7 +766,7 @@ function fmtVal(v) {
     <!-- 1번 실행의 성공 카드 -->
     <section
       v-if="sampleWinningCard"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
       <div v-if="sampleWinningCard.success" class="space-y-3">
         <!-- 핵심 헤드라인 — N회차 + 실제 소비 -->

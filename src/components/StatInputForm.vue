@@ -164,7 +164,7 @@ const BREAKDOWN_CARDS = [
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+  <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
     <!-- ── 헤더: 계산된 전투력 + 실측 검증 (제목은 아코디언 바가 담당) ── -->
     <header class="flex flex-wrap items-start justify-between gap-3 mb-4">
       <!-- 실측 전투력 검증 — 게임 T창 표시 전투력을 넣으면 오차를 보여준다 -->
@@ -229,7 +229,7 @@ const BREAKDOWN_CARDS = [
           :class="[
             'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition',
             stats.type === 'P'
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'bg-white text-stone-700 hover:bg-stone-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700',
           ]"
         >
@@ -248,7 +248,7 @@ const BREAKDOWN_CARDS = [
           :class="[
             'flex items-center gap-2 pl-2 pr-4 py-1.5 text-sm font-medium transition border-l border-stone-300 dark:border-stone-600',
             stats.type === 'M'
-              ? 'bg-cyan-600 text-white'
+              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'bg-white text-stone-700 hover:bg-stone-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700',
           ]"
         >

@@ -234,7 +234,7 @@ function fmtEly(n) {
   <div class="space-y-5">
     <!-- 안내 -->
     <div
-      class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300"
     >
       <strong>🌟 성물 뽑기 시뮬레이터</strong> · 원하는 성물 옵션이 나올 때까지 평균 몇 회 뽑아야 하는지 분석합니다.
       <br />
@@ -261,8 +261,8 @@ function fmtEly(n) {
     <!-- ════════════════════ 신성의 돌 (공용석) ════════════════════ -->
     <template v-if="subTab === 'shared'">
       <!-- 입력 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           1회당 신비한 파편 50개 + 엘리 30,000,000 소비 · 옵션 15종 (1~4줄, 35/30/20/15) · 5레벨 균등.
         </p>
@@ -394,9 +394,9 @@ function fmtEly(n) {
       <!-- 시뮬 조건 요약 -->
       <section
         v-if="sharedResult"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">
           🎯 시뮬 조건 요약
         </h2>
         <ul class="space-y-0.5 mb-2">
@@ -421,7 +421,7 @@ function fmtEly(n) {
       <!-- 1번 실행의 성공 카드 -->
       <section
         v-if="sharedSampleCard"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div v-if="sharedSampleCard.success" class="space-y-3">
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">
@@ -483,8 +483,8 @@ function fmtEly(n) {
     <!-- ════════════════════ 전용석 ════════════════════ -->
     <template v-if="subTab === 'exclusive'">
       <!-- 입력 -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">⚙️ 시뮬 조건</h2>
         <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
           1회당 신비한 파편 150개 + 엘리 50,000,000 소비 · 메인 Lv 1~10 가중 추첨 (Lv1 18% → Lv10 2.5%) · 등급에 따라 추가 옵션 Lv1~5 1개.
           <br />
@@ -559,7 +559,7 @@ function fmtEly(n) {
       </section>
 
       <!-- 레벨 분포 표시 (참고용) -->
-      <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
         <h3 class="text-sm font-bold text-stone-700 dark:text-stone-200 mb-2">📊 메인 Lv 등장 확률 (참고)</h3>
         <div class="grid grid-cols-5 sm:grid-cols-10 gap-1 text-center text-xs">
           <div
@@ -616,9 +616,9 @@ function fmtEly(n) {
       <!-- 시뮬 조건 요약 -->
       <section
         v-if="exResult"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">
           🎯 시뮬 조건 요약
         </h2>
         <p class="text-sm text-cyan-600 dark:text-cyan-400 font-medium mb-2">
@@ -637,7 +637,7 @@ function fmtEly(n) {
       <!-- 1번 실행의 성공 카드 -->
       <section
         v-if="exSampleCard"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
         <div v-if="exSampleCard.success" class="space-y-3">
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-stone-200 dark:border-stone-700 pb-3">

@@ -92,7 +92,7 @@ function needsFallbackWarning(def) {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+  <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
     <!-- 제목은 아코디언 바가 담당 -->
     <header class="flex flex-wrap items-center justify-end gap-3 mb-1">
       <button

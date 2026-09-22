@@ -493,7 +493,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
 
 <template>
   <section
-    class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+    class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
   >
     <!-- 제목은 아코디언 바가 담당 -->
     <p
@@ -860,7 +860,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
         </div>
 
         <!-- 기준 스탯 셀렉터 + 결과 -->
-        <div v-if="awakResult" class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-800 px-3 py-3 space-y-2">
+        <div v-if="awakResult" class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-3 space-y-2">
           <div class="flex items-start gap-2 flex-wrap text-sm">
             <span class="text-stone-600 dark:text-stone-300 leading-6">
               합산 BP

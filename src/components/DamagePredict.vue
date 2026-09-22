@@ -250,7 +250,7 @@ const allSkillPredictions = computed(() => {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
+    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
       <strong>🎯 대미지 예측</strong> · <code>대미지 = C × BP × (스킬계수 / 100)</code>
       <br />
       <strong class="text-xs">사용 순서</strong>:
@@ -271,7 +271,7 @@ const allSkillPredictions = computed(() => {
     </div>
 
     <!-- 🎯 조건부 환산 (백어택/근거리/상태이상) — 옵션별 독립 ON/OFF -->
-    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700 p-5">
+    <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-amber-300 dark:ring-amber-700 p-5">
       <header class="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h2 class="text-lg font-bold text-amber-700 dark:text-amber-300">
           🎯 조건부 환산 — 가동률 기반 BP
@@ -343,8 +343,8 @@ const allSkillPredictions = computed(() => {
     </section>
 
     <!-- 설정 -->
-    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 스킬 선택</h2>
+    <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-4">⚙️ 스킬 선택</h2>
 
       <!-- 모드 -->
       <div class="mb-4">
@@ -356,7 +356,7 @@ const allSkillPredictions = computed(() => {
             :class="[
               'flex-1 rounded-md px-3 py-2 text-sm font-medium transition',
               mode === 'direct'
-                ? 'bg-cyan-600 text-white'
+                ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                 : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
             ]"
           >
@@ -368,7 +368,7 @@ const allSkillPredictions = computed(() => {
             :class="[
               'flex-1 rounded-md px-3 py-2 text-sm font-medium transition',
               mode === 'installer'
-                ? 'bg-cyan-600 text-white'
+                ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
                 : 'ring-1 ring-stone-300 dark:ring-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700',
             ]"
           >
@@ -417,8 +417,8 @@ const allSkillPredictions = computed(() => {
     </section>
 
     <!-- 캘리브레이션 -->
-    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700 p-5">
-      <h2 class="text-lg font-bold text-emerald-700 dark:text-emerald-300 mb-2">🔧 캘리브레이션</h2>
+    <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-emerald-300 dark:ring-emerald-700 p-5">
+      <h2 class="text-base font-semibold text-emerald-700 dark:text-emerald-300 mb-2">🔧 캘리브레이션</h2>
       <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
         인게임 허수아비 대미지 1회 측정 → 캘리브레이션 상수 C 역산. 한 번 입력하면 localStorage에 저장돼 다음에도 자동 적용됩니다.
         <br />
@@ -465,8 +465,8 @@ const allSkillPredictions = computed(() => {
     </section>
 
     <!-- 결과: 단일 스킬 -->
-    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3">🎯 예상 대미지</h2>
+    <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-3">🎯 예상 대미지</h2>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-3">
           <div class="text-xs text-stone-500 dark:text-stone-400">
@@ -485,7 +485,7 @@ const allSkillPredictions = computed(() => {
             평균 base {{ fmtRound(baseBP) }} · 일반 {{ fmtRound(normalBP) }}
           </div>
         </div>
-        <div class="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-800 p-3">
+        <div class="rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 p-3">
           <div class="text-xs text-cyan-600 dark:text-cyan-300">스킬 계수</div>
           <div class="text-xl font-extrabold text-cyan-700 dark:text-cyan-200 tabular-nums">{{ fmtRound(currentCoef) }}</div>
         </div>
@@ -502,7 +502,7 @@ const allSkillPredictions = computed(() => {
     <!-- 시나리오 비교표 — 백/근/상 조합별 BP·예상 대미지 -->
     <section
       v-if="scenarioMatrix.length > 0"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-amber-300 dark:ring-amber-700 p-5"
     >
       <h2 class="text-lg font-bold text-amber-700 dark:text-amber-300 mb-2">
         🎲 시나리오 비교 — {{ scenarioMatrix.length }}가지 조합
@@ -572,9 +572,9 @@ const allSkillPredictions = computed(() => {
     <!-- 결과: 같은 직업 모든 스킬 비교 (C 없어도 항시 노출) -->
     <section
       v-if="allSkillPredictions.length > 0"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">📊 스킬별 비교 (현재 직업)</h2>
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">📊 스킬별 비교 (현재 직업)</h2>
       <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
         스킬 레벨 {{ skillLevel }} 기준.
         <template v-if="!calibrationC">

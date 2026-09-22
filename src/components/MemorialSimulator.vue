@@ -314,7 +314,7 @@ const meanCost = computed(() => {
 <template>
   <div class="space-y-5">
     <!-- 안내 -->
-    <div class="rounded-xl bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-800 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200">
+    <div class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
       <strong>🎲 메모리얼 시뮬레이터</strong> · <strong>한 카드 안에서</strong> 설정한 모든 목표를
       <strong>동시에</strong> 만족하는 카드를 만나기까지 <strong>몇 회 굴려야 하는지</strong>를 분석합니다.
       <br />
@@ -326,8 +326,8 @@ const meanCost = computed(() => {
     </div>
 
     <!-- 입력 -->
-    <section class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5">
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
+    <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-4">⚙️ 시뮬 조건</h2>
 
       <label class="block mb-4">
         <span class="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
@@ -449,9 +449,9 @@ const meanCost = computed(() => {
     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
       <section
         v-if="sampleRoll"
-        class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+        class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
       >
-        <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-3 flex items-center justify-between gap-3">
+        <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-3 flex items-center justify-between gap-3">
           <span>
             🎰 1회 굴림 결과
             <span class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold ml-1">#{{ fmt(lastRollIndex) }}회차</span>
@@ -521,7 +521,7 @@ const meanCost = computed(() => {
 
       <section
         v-else
-        class="rounded-2xl bg-stone-100 dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-sm text-stone-500 dark:text-stone-400"
+        class="rounded-xl bg-stone-100 dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5 text-sm text-stone-500 dark:text-stone-400"
       >
         🎰 위의 <strong>1회 굴려보기</strong>를 누르면 카드 1장이 여기 표시되고,
         설정한 조건을 넘으면 우측에 회차와 함께 기록됩니다.
@@ -542,9 +542,9 @@ const meanCost = computed(() => {
     <!-- 시뮬 결과 (목표 요약 한 줄) -->
     <section
       v-if="result"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
-      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-100 mb-2">
+      <h2 class="text-base font-semibold text-stone-800 dark:text-stone-100 mb-2">
         🎯 시뮬 조건 요약
       </h2>
       <ul class="space-y-0.5 mb-2">
@@ -576,7 +576,7 @@ const meanCost = computed(() => {
     <!-- 1번 실행의 성공 카드 -->
     <section
       v-if="sampleWinningCard"
-      class="rounded-2xl bg-white dark:bg-stone-800 shadow-sm ring-1 ring-stone-200 dark:ring-stone-700 p-5"
+      class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5"
     >
       <div v-if="sampleWinningCard.success" class="space-y-3">
         <!-- 핵심 헤드라인 — N회차 + 실제 소비 -->

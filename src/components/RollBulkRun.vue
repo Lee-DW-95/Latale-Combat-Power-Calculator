@@ -175,7 +175,7 @@ function run() {
     <!-- 결과 요약 -->
     <div
       v-else-if="summary"
-      class="mt-2 rounded-lg ring-1 ring-cyan-200 dark:ring-cyan-800 bg-cyan-50 dark:bg-cyan-950/30 px-3 py-2"
+      class="mt-2 rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 bg-stone-50 dark:bg-stone-900/40 px-3 py-2"
     >
       <div class="text-sm text-stone-700 dark:text-stone-200">
         <span class="tabular-nums font-semibold">{{ fmt(summary.times) }}회</span> 중
