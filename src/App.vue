@@ -48,6 +48,7 @@ const ItemAwakeningSimulator = lazyTab(() => import('./components/ItemAwakeningS
 const RuneWordSimulator = lazyTab(() => import('./components/RuneWordSimulator.vue'));
 const AdventureView = lazyTab(() => import('./components/AdventureView.vue'));
 const AdventureQuickView = lazyTab(() => import('./components/AdventureQuickView.vue'));
+const DamageCalc = lazyTab(() => import('./components/DamageCalc.vue'));
 
 // ============================================================
 // 인증 상태 + 모달 트리거
@@ -151,6 +152,7 @@ const TABS = [
   { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기', restricted: true },
   { id: 'itemAwakening', label: '💠 아이템 각성 시뮬', desc: '장비/파츠 종류별 각성 옵션 뽑기', restricted: true },
   { id: 'runeword', label: '🔮 룬워드 시뮬', desc: '룬워드 점수 책정 + 목표 옵션 도달 확률', restricted: true },
+  { id: 'damage', label: '💥 대미지 계산', desc: '공식 기반 실제 대미지 (실측 검증 전)', restricted: true },
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
   // 게임을 켜둔 채 옆에 띄워 쓰는 용도라 로그인 조건 없이 항상 노출한다.
   { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
@@ -699,6 +701,11 @@ const savedTimeLabel = computed(() => {
       <!-- ───── 탭 8: 룬워드 시뮬 ───── -->
       <template v-else-if="activeTab === 'runeword'">
         <RuneWordSimulator />
+      </template>
+
+      <!-- ───── 탭: 대미지 계산 ───── -->
+      <template v-else-if="activeTab === 'damage'">
+        <DamageCalc :stats="stats" />
       </template>
 
       <!-- ───── 탭 9: 어드벤처 ───── -->
