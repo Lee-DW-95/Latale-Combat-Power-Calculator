@@ -5,7 +5,7 @@
 import { computed, ref, watch } from 'vue';
 import { categoryKeys, partKeys, getPart } from '../data/enchantData.js';
 import { fmt } from '../utils/format.js';
-import { gradeBarColor } from '../utils/enchantUi.js';
+import { gradeBarColor, rollPctClass } from '../utils/enchantUi.js';
 
 const catKeysList = categoryKeys();
 

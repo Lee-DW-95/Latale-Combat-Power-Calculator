@@ -25,7 +25,7 @@ import {
 } from '../utils/enchantSim.js';
 import { fmt, fmt1, pct, pctSmart } from '../utils/format.js';
 import { ENCHANT_SIM } from '../utils/simConstants.js';
-import { gradeBarColor } from '../utils/enchantUi.js';
+import { gradeBarColor, rollPctClass } from '../utils/enchantUi.js';
 import EnchantLookup from './EnchantLookup.vue';
 import InfoNote from './InfoNote.vue';
 
@@ -449,12 +449,6 @@ const avgSlotsGrade = computed(() => {
 });
 
 // 등급 색상 클래스 (≥90% 빨강, ≥70% 노랑, 그 외 기본 슬레이트)
-function rollPctClass(p) {
-  if (p == null) return 'text-stone-400 dark:text-stone-500';
-  if (p >= 90) return 'text-rose-600 dark:text-rose-400 font-bold';
-  if (p >= 70) return 'text-amber-600 dark:text-amber-400 font-bold';
-  return 'text-stone-400 dark:text-stone-500';
-}
 </script>
 
 <template>
