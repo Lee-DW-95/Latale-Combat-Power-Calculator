@@ -190,28 +190,29 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
       <!-- 스킬 설정 -->
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 p-3 sm:p-4 space-y-3">
         <div class="flex items-end gap-x-4 gap-y-3 flex-wrap">
-          <label class="flex flex-col gap-1">
+          <label class="flex flex-col gap-1 flex-1 sm:flex-none min-w-[8rem]">
             <span :class="labelCls">직업</span>
-            <select v-model.number="state.cls" :class="selectCls">
+            <select v-model.number="state.cls" :class="selectCls" class="w-full sm:w-auto">
               <option v-for="c in classes" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </label>
-          <label class="flex flex-col gap-1 min-w-0">
+          <label class="flex flex-col gap-1 min-w-0 w-full sm:w-auto">
             <span :class="labelCls">스킬</span>
-            <select v-model.number="state.skillId" :class="selectCls" class="max-w-[16rem]">
+            <select v-model.number="state.skillId" :class="selectCls" class="w-full max-w-full sm:w-auto sm:max-w-[16rem]">
               <option v-for="s in skills" :key="s.id" :value="s.id">
                 {{ SKILL_GRADE_LABEL[s.grade] ? `[${SKILL_GRADE_LABEL[s.grade]}] ` : '' }}{{ cleanName(s.name) }}
               </option>
             </select>
           </label>
-          <label v-if="config" class="flex flex-col gap-1">
+          <label v-if="config" class="flex flex-col gap-1 flex-1 sm:flex-none">
             <span :class="labelCls">스킬 레벨</span>
             <input
               v-model.number="config.level"
               type="number"
               min="1"
+              inputmode="numeric"
               :class="selectCls"
-              class="w-20 text-right tabular-nums"
+              class="w-full sm:w-20 text-right tabular-nums"
             />
           </label>
           <div v-if="config && pages.size" class="flex flex-col gap-1">
@@ -234,12 +235,12 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
               </label>
             </div>
           </div>
-          <label v-if="config && result && result.choices.length > 1" class="flex flex-col gap-1 min-w-0">
+          <label v-if="config && result && result.choices.length > 1" class="flex flex-col gap-1 min-w-0 w-full sm:w-auto">
             <span :class="labelCls">타격 동작</span>
             <select
               :value="result.variant?.key"
               :class="selectCls"
-              class="max-w-[18rem]"
+              class="w-full max-w-full sm:w-auto sm:max-w-[18rem]"
               @change="config.variant = $event.target.value"
             >
               <option v-for="v in result.choices" :key="v.key" :value="v.key">{{ variantLabel(v, result.level) }}</option>
@@ -394,7 +395,8 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
                     :value="countOf(h)"
                     type="number"
                     min="0"
-                    class="h-7 w-16 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-right focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    inputmode="numeric"
+                    class="h-7 w-20 sm:w-16 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-right focus:ring-2 focus:ring-cyan-500 focus:outline-none"
                     @input="setCount(h, $event.target.value)"
                   />
                   회

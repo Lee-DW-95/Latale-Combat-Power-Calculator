@@ -23,6 +23,32 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
+/* ── 모바일 입력 UX ──────────────────────────────────────────
+   iOS Safari 는 글자 16px 미만인 입력에 포커스하면 화면을 강제 확대한다.
+   작은 화면에서는 입력·선택 글자를 16px 로 올려 확대를 막고,
+   최소 높이 44px(Apple 터치 가이드)로 좁은 입력칸을 손가락 크기에 맞춘다.
+   !important 는 요소에 직접 붙는 Tailwind text-sm/text-xs 를 이기기 위함. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+  /* 체크박스·라디오는 칸 자체 대신 터치 판정만 키운다 */
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-width: 1.25rem;
+    min-height: 1.25rem;
+  }
+}
+
+/* 노치·홈바 안전영역 (PWA standalone / 아이폰 가로모드) */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 /* 탭 바 — 가로 스크롤은 유지하되 스크롤바는 숨긴다 (양끝 페이드가 "더 있음" 을 대신 알린다) */
 .tab-scroll {
   scrollbar-width: none;

@@ -169,11 +169,11 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
 
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 p-3 sm:p-4 space-y-3">
         <div class="flex items-end gap-x-4 gap-y-3 flex-wrap">
-          <label class="flex flex-col gap-1 min-w-0">
+          <label class="flex flex-col gap-1 min-w-0 w-full sm:w-auto">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">대상</span>
             <select
               v-model="presetId"
-              class="h-9 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              class="h-9 w-full sm:w-auto max-w-full rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             >
               <optgroup v-for="[group, list] in presetGroups" :key="group" :label="group">
                 <option v-for="p in list" :key="p.id" :value="p.id">{{ p.label }}</option>
@@ -189,13 +189,14 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
               <option v-for="n in 5" :key="n" :value="n">{{ n }}단계</option>
             </select>
           </label>
-          <label class="flex flex-col gap-1">
+          <label class="flex flex-col gap-1 flex-1 sm:flex-none">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">캐릭터 레벨</span>
             <input
               v-model.number="level"
               type="number"
               min="1"
-              class="h-9 w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              inputmode="numeric"
+              class="h-9 w-full sm:w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </label>
           <label v-if="inputMode === 'manual'" class="flex flex-col gap-1">
@@ -213,28 +214,29 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
               >{{ m.label }}</button>
             </div>
           </label>
-          <label v-if="inputMode === 'manual' && skillMode === 'direct'" class="flex flex-col gap-1">
+          <label v-if="inputMode === 'manual' && skillMode === 'direct'" class="flex flex-col gap-1 flex-1 sm:flex-none">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">스킬 계수</span>
             <input
               v-model.number="skillCoef"
               type="number"
               min="0"
-              class="h-9 w-28 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              inputmode="numeric"
+              class="h-9 w-full sm:w-28 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </label>
           <template v-else-if="inputMode === 'manual'">
-            <label class="flex flex-col gap-1">
+            <label class="flex flex-col gap-1 flex-1 sm:flex-none">
               <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">능력치 배율 %</span>
-              <input v-model.number="summonS" type="number" min="0" class="h-9 w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
+              <input v-model.number="summonS" type="number" min="0" inputmode="numeric" class="h-9 w-full sm:w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
             </label>
-            <label class="flex flex-col gap-1">
+            <label class="flex flex-col gap-1 flex-1 sm:flex-none">
               <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">공격력 계수 SC</span>
-              <input v-model.number="summonSc" type="number" min="0" class="h-9 w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
+              <input v-model.number="summonSc" type="number" min="0" inputmode="numeric" class="h-9 w-full sm:w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
             </label>
           </template>
-          <label class="flex flex-col gap-1">
+          <label class="flex flex-col gap-1 flex-1 sm:flex-none">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">크리 확률 %</span>
-            <input v-model.number="critRate" type="number" min="0" max="100" class="h-9 w-20 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
+            <input v-model.number="critRate" type="number" min="0" max="100" inputmode="numeric" class="h-9 w-full sm:w-20 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
           </label>
         </div>
 

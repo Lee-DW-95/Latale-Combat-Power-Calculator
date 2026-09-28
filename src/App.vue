@@ -20,6 +20,7 @@ import EquipmentCompare from './components/EquipmentCompare.vue';
 import ResultDisplay from './components/ResultDisplay.vue';
 import CharacterList from './components/CharacterList.vue';
 import DarkModeToggle from './components/DarkModeToggle.vue';
+import InstallBanner from './components/InstallBanner.vue';
 import TabLoading from './components/TabLoading.vue';
 // import DamagePredict from './components/DamagePredict.vue'; // 대미지 예측 탭 — DB 작업 보류로 일시 숨김
 // import RelicSimulator from './components/RelicSimulator.vue'; // 기존 성물 환산기 (전용석/공용석 합산) — 보존, 추후 부활용
@@ -438,7 +439,7 @@ const savedTimeLabel = computed(() => {
 <template>
   <div class="min-h-screen bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100">
     <header
-      class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-700"
+      class="sticky top-0 z-10 backdrop-blur bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-700 pt-[env(safe-area-inset-top)]"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -568,6 +569,9 @@ const savedTimeLabel = computed(() => {
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-5">
+
+      <!-- PWA 설치 유도 — 설치 가능 환경에서만, 닫으면 다시 안 보임 -->
+      <InstallBanner />
 
       <!-- 공유 링크로 열린 캐릭터 안내 -->
       <div
