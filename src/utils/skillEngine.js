@@ -19,6 +19,9 @@
 
 import { damageRange } from './damageFormula.js';
 
+/** 토즈 버프 — 직타 스킬 계수 +1000 (buffs.toz) */
+export const TOZ_COEF_BONUS = 1000;
+
 /** 특화석 스탯 ID 표시 이름 */
 const STAT_NAMES = {
   196: '마법 백어택 대미지',
@@ -359,7 +362,7 @@ export function createSkillEngine(data) {
    * @param {number|string} id    스킬 ID
    * @param {any} config          defaultConfig 형태
    * @param {any} input           엔진 입력 s (skillInputs.engineInputFromStats)
-   * @param {{noblesse?:boolean,title?:boolean}} [buffs]
+   * @param {{noblesse?:boolean,title?:boolean,toz?:boolean}} [buffs]
    * @param {{channels?: Set<string>}} [opt]  계산할 채널 — 캐릭터가 한쪽 스탯만 가질 때 다른 채널은 건너뛴다
    */
   function calculate(cls, id, config, input, buffs = {}, opt = {}) {
@@ -426,7 +429,8 @@ export function createSkillEngine(data) {
       dedup.add(key);
 
       const override = config.overrides?.[key] || config.overrides?.[legacyKey] || {};
-      const C = override.C ?? coefficient;
+      // 토즈는 key 계산 뒤에 더한다 — 토글해도 overrides/hitCounts 키가 유지되게. 직타에만 (특화석 659 와 동일 규칙).
+      const C = override.C ?? (coefficient + (parent || !buffs.toz ? 0 : TOZ_COEF_BONUS));
       const base = {
         key,
         channel: p.channel,

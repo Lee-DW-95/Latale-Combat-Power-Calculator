@@ -14,6 +14,7 @@ const props = defineProps({
   level: { type: Number, required: true },
   critRate: { type: Number, required: true },
   conditions: { type: Object, required: true },
+  toz: { type: Boolean, default: false },
 });
 
 const STORAGE_KEY = 'latale.skillDamage.v1';
@@ -139,7 +140,7 @@ const input = computed(() =>
 const result = computed(() => {
   const e = engine.value;
   if (!e || !config.value || !skill.value) return null;
-  return e.calculate(state.cls, state.skillId, config.value, input.value, { noblesse: state.noblesse, title: state.title }, {
+  return e.calculate(state.cls, state.skillId, config.value, input.value, { noblesse: state.noblesse, title: state.title, toz: props.toz }, {
     channels: new Set([channel.value]),
   });
 });

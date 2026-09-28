@@ -7,6 +7,7 @@ import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../ut
 import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal } from '../utils/damageInputs.js';
 import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty, isStatusImmune } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
+import { TOZ_COEF_BONUS } from '../utils/skillEngine.js';
 import InfoNote from './InfoNote.vue';
 import SkillDamagePanel from './SkillDamagePanel.vue';
 
@@ -29,6 +30,7 @@ const critRate = ref(100);
 const backAttack = ref(false);
 const melee = ref(false);
 const status = ref(false);
+const toz = ref(false); // 토즈 버프 — 직타 스킬 계수 +1000
 
 // 입력은 브라우저에 남긴다 — 매번 다시 채우지 않게.
 try {
@@ -36,7 +38,7 @@ try {
   if (saved) {
     for (const [k, r] of Object.entries({
       presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
-      critRate, backAttack, melee, status,
+      critRate, backAttack, melee, status, toz,
     })) {
       if (saved[k] !== undefined) r.value = saved[k];
     }
@@ -45,14 +47,14 @@ try {
   /* localStorage 불가 환경 — 기본값 사용 */
 }
 watch(
-  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status],
+  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status, toz],
   () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         presetId: presetId.value, difficulty: difficulty.value, level: level.value,
         inputMode: inputMode.value, skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
         critRate: critRate.value,
-        backAttack: backAttack.value, melee: melee.value, status: status.value,
+        backAttack: backAttack.value, melee: melee.value, status: status.value, toz: toz.value,
       }));
     } catch {
       /* 저장 실패는 무시 */
@@ -85,7 +87,7 @@ const attacker = computed(() =>
 const target = computed(() => targetFromPreset(targetStats.value));
 const skill = computed(() => ({
   mode: skillMode.value,
-  coef: Number(skillCoef.value) || 0,
+  coef: (Number(skillCoef.value) || 0) + (skillMode.value === 'direct' && toz.value ? TOZ_COEF_BONUS : 0),
   summonS: Number(summonS.value) || 0,
   summonSc: Number(summonSc.value) || 0,
 }));
@@ -259,6 +261,13 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
             />
             상태이상<span v-if="statusImmune" class="text-[11px] text-stone-400 dark:text-stone-500">(면역)</span>
           </label>
+          <label
+            v-if="inputMode === 'skill' || skillMode === 'direct'"
+            class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300"
+            title="토즈 버프 — 직타 스킬 계수 +1000"
+          >
+            <input v-model="toz" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 토즈 <span class="text-[11px] text-stone-400 dark:text-stone-500">(계수 +1000)</span>
+          </label>
         </div>
       </div>
 
@@ -270,6 +279,7 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         :level="Number(level) || 1"
         :crit-rate="Number(critRate) || 0"
         :conditions="conditions"
+        :toz="toz"
       />
 
       <!-- 결과 (계수 직접 입력) -->
@@ -284,7 +294,7 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         <p class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">
           {{ preset.label }} · {{ preset.target === 'boss' ? '보스' : '일반' }}
           <span class="mx-1 text-stone-300 dark:text-stone-600">|</span>
-          {{ skillMode === 'direct' ? `직타 계수 ${fmt(skillCoef)}` : `소환 S ${summonS}% · SC ${fmt(summonSc)}` }}
+          {{ skillMode === 'direct' ? `직타 계수 ${fmt(skillCoef)}${toz ? ` + 토즈 ${fmt(TOZ_COEF_BONUS)}` : ''}` : `소환 S ${summonS}% · SC ${fmt(summonSc)}` }}
         </p>
       </div>
 

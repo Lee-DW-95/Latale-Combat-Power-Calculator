@@ -7,7 +7,7 @@
  *   행 형식: [종류, 채널, 계수, 비크리 min, 비크리 max, 크리 min, 크리 max]
  */
 import { readFileSync } from 'node:fs';
-import { createSkillEngine, scaled, statText, hitLabel } from '../src/utils/skillEngine.js';
+import { createSkillEngine, scaled, statText, hitLabel, TOZ_COEF_BONUS } from '../src/utils/skillEngine.js';
 import { engineInputFromStats } from '../src/utils/damageInputs.js';
 
 const data = JSON.parse(readFileSync(new URL('../src/data/skillData.json', import.meta.url), 'utf8'));
@@ -64,6 +64,23 @@ for (const g of GOLDEN) {
 const mixed = GOLDEN.find((g) => g.rows.some((x) => x[1] === 'magic') && g.rows.some((x) => x[1] === 'physical'));
 const onlyP = E.calculate(mixed.cls, mixed.id, structuredClone(mixed.cfg), input(mixed.boss, mixed.t), mixed.buffs, { channels: new Set(['physical']) });
 check('반대 채널 타격은 unavailable', onlyP.rows.every((x) => (x.channel === 'magic') === (x.unavailable === 'channel')));
+
+// ── 토즈 버프: 직타 계수만 +1000, 소환은 그대로 ──
+const gt = GOLDEN.find((g) => g.rows.some((x) => x[0] === 'direct') && g.rows.some((x) => x[0] === 'summon'));
+const tozOff = E.calculate(gt.cls, gt.id, structuredClone(gt.cfg), input(gt.boss, gt.t), gt.buffs);
+const tozOn = E.calculate(gt.cls, gt.id, structuredClone(gt.cfg), input(gt.boss, gt.t), { ...gt.buffs, toz: true });
+check(
+  '토즈: 직타 계수 +1000 · 소환 계수 불변',
+  tozOn.rows.length === tozOff.rows.length &&
+    tozOn.rows.every((x, i) => x.C === tozOff.rows[i].C + (x.kind === 'direct' ? TOZ_COEF_BONUS : 0)),
+);
+check(
+  '토즈: 직타 대미지 증가',
+  tozOn.rows.filter((x) => x.kind === 'direct').every((x, i) => {
+    const off = tozOff.rows.filter((y) => y.kind === 'direct')[i];
+    return x.noncrit.min > off.noncrit.min && x.crit.max > off.crit.max;
+  }),
+);
 
 // ── 특화석 규칙 ──
 const cls = 24;
