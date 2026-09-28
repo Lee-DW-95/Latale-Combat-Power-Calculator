@@ -126,13 +126,14 @@ const weapon = computed(() => weaponRangeOf(props.stats));
         <strong class="font-medium text-orange-600 dark:text-orange-400">아직 인게임 실측과 대조하지 않은 계산</strong>이라 값이 틀릴 수 있습니다.
       </template>
       <p>
-        공식 출처: 공개 분석 문서(alfm201/damage-test). 대상 수치도 그쪽이 정리한 값을 옮긴 것이라 우리 실측 검증 전입니다.
+        공식 출처: 공개 계산기 alfm201/damage-test (v9.17). 원본 계산 코드와 결과가 정수 단위로 일치하도록 맞췄지만,
+        인게임 실측과는 아직 대조하지 않았습니다. 대상 수치도 그쪽이 정리한 값입니다.
         검증 절차와 남은 일은 저장소의 <strong>docs/DAMAGE_FORMULA.md</strong> 에 적어 두었습니다.
       </p>
       <p>
         계산 구조: 기본 공격값 → {{ defenseInfo.label }}·관통 계수 → 고정·추가 대미지 → 피해 감소 →
         크리티컬·조건부 계수 → 최소~최대 난수 → 대미지 감소 → 지배력.
-        무기공격력과 대미지 난수가 각각 있어 결과는 범위로 나옵니다.
+        무기공격력과 대미지 난수가 각각 있어 결과는 범위로 나오고, 평균은 난수 구간을 적분해 구합니다.
       </p>
     </InfoNote>
 
@@ -262,10 +263,15 @@ const weapon = computed(() => weaponRangeOf(props.stats));
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div v-for="row in [{ k: 'noncrit', label: '비크리', data: nonCrit }, { k: 'crit', label: '크리티컬', data: crit }]" :key="row.k"
           class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 px-4 py-3">
-          <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">{{ row.label }}</p>
-          <p class="text-xl font-semibold tabular-nums text-stone-900 dark:text-stone-50 mt-0.5">{{ fmt(row.data.mid) }}</p>
+          <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
+            {{ row.label }} · {{ row.data.avg != null ? '평균' : '중앙값' }}
+          </p>
+          <p class="text-xl font-semibold tabular-nums text-stone-900 dark:text-stone-50 mt-0.5">{{ fmt(row.data.avg ?? row.data.mid) }}</p>
           <p class="text-xs text-stone-500 dark:text-stone-400 tabular-nums mt-0.5">
             {{ fmt(row.data.min) }} ~ {{ fmt(row.data.max) }}
+          </p>
+          <p v-if="row.data.floorActive" class="text-[11px] text-orange-600 dark:text-orange-400 mt-1">
+            방어가 공격을 넘어 최소 대미지(1~2) 구간입니다.
           </p>
         </div>
       </div>

@@ -130,9 +130,13 @@ check(
 );
 
 // ── 기대 대미지 ──
+// 기대 대미지는 적분 평균(avg)을 쓴다 — 중앙값(mid)과는 미세하게 다르다
 const exp0 = expectedDamage(ATT, DUMMY, SKILL, {}, 0);
 const exp1 = expectedDamage(ATT, DUMMY, SKILL, {}, 1);
-check('크리율 0 = 비크리, 1 = 크리', Math.abs(exp0 - base) < 1 && Math.abs(exp1 - crit) < 1);
+const avgNon = damageRange(ATT, DUMMY, SKILL, {}).avg;
+const avgCrit = damageRange(ATT, DUMMY, SKILL, { crit: true }).avg;
+check('크리율 0 = 비크리 평균, 1 = 크리 평균', Math.abs(exp0 - avgNon) < 1e-6 && Math.abs(exp1 - avgCrit) < 1e-6);
+check('평균과 중앙값 차이는 0.01% 이내', Math.abs(avgNon / base - 1) < 1e-4, `mid ${base} · avg ${avgNon.toFixed(1)}`);
 
 // ── 프리셋 데이터 ──
 check('프리셋 12종 로드', MONSTER_PRESETS.length === 12);
@@ -172,6 +176,65 @@ check('대상 분류에 맞는 지배력 선택', aNormal.dominance === 0 && aBo
 check('무기 표시범위를 그대로 쓴다', aNormal.weaponMin === 86_931 && aNormal.weaponMax === 89_042);
 const t = targetFromPreset(dummyPreset.stats);
 check('프리셋 → TargetInput 변환', t.armor === 0 && t.guard === 0 && t.elasticity === 0);
+
+// ── 원본 계산기 대조값 (alfm201/damage-test v9.17 의 calculateChannel 을 같은 입력으로 돌린 결과) ──
+//   인게임 실측이 아니라 "원본 구현과 연산 순서·f32 위치가 같은지" 를 고정하는 값이다.
+//   엔진을 고쳐서 여기가 깨지면 원본과 어긋난 것이다. 실측값이 들어오면 별도 블록으로 추가한다.
+const REF_L = 235;
+const GOLDEN = [
+  {
+    label: '물리 직타 · 목각인형',
+    att: { ...ATT, dominance: 0, backAttack: 30, meleeDamage: 15, statusDamage: 10, level: REF_L },
+    tgt: DUMMY,
+    skill: { mode: 'direct', coef: 1000 },
+    noncrit: [1232385392, 1328075325, 1280151742.400467],
+    crit: [147122175344, 158545634918, 152824511481.6001],
+  },
+  {
+    label: '물리 직타 · 보스형 강철인형',
+    att: { ...ATT, addDamage: 1058835, dominance: 3, backAttack: 30, meleeDamage: 15, statusDamage: 10, level: REF_L },
+    tgt: { armor: 4374342, res: 4374342, fP: 4374342, fM: 4374342, guard: 90, elasticity: 700 },
+    skill: { mode: 'direct', coef: 1000 },
+    noncrit: [83355987, 89985037, 86662491.6791687],
+    crit: [3043326872, 3285353683, 3164047445.266388],
+  },
+  {
+    label: '마법 직타 · 일반형 강철인형',
+    att: {
+      type: 'M', mainStat: 8120334, eff: 12, weaponMin: 61234, weaponMax: 61234,
+      rawMin: 8700, fMin: 0, rawMax: 9400, fMax: 0, rawCd: 10500, fCd: 0,
+      fixedDamage: 912003, addDamage: 1011000, pen: 95, dominance: 2.5, level: REF_L,
+      backAttack: 25, meleeDamage: 15, statusDamage: 10,
+    },
+    tgt: { armor: 2187171, res: 2187171, fP: 2187171, fM: 2187171, guard: 53, elasticity: 600 },
+    skill: { mode: 'direct', coef: 6400 },
+    noncrit: [668088479, 721842752, 694965623.1090698],
+    crit: [28727805331, 31039239570, 29883522566.305786],
+  },
+  {
+    label: '물리 소환 · 목각인형',
+    att: { ...ATT, dominance: 0, backAttack: 30, meleeDamage: 15, statusDamage: 10, level: REF_L },
+    tgt: DUMMY,
+    skill: { mode: 'summon', coef: 0, summonS: 103, summonSc: 2000 },
+    noncrit: [1474277867, 1592779079, 1533371787.8565521],
+    crit: [181203495813, 195768489082, 188466732204.00043],
+  },
+];
+for (const gc of GOLDEN) {
+  for (const [kind, exp] of [['noncrit', gc.noncrit], ['crit', gc.crit]]) {
+    const r = damageRange(gc.att, gc.tgt, gc.skill, { crit: kind === 'crit' });
+    const ok = r.min === exp[0] && r.max === exp[1] && Math.abs(r.avg - exp[2]) < 1e-6;
+    check(
+      `원본 대조 ${gc.label} · ${kind === 'crit' ? '크리' : '비크리'}`,
+      ok,
+      ok ? `${exp[0]} ~ ${exp[1]}` : `기대 ${exp.join(' / ')} · 실제 ${r.min} / ${r.max} / ${r.avg}`,
+    );
+  }
+}
+
+// ── 방어 초과 영역은 {1 … max(2, T)} 범위 ──
+const blocked = damageRange({ ...ATT, pen: 0 }, { ...DUMMY, fP: 10 ** 12 }, SKILL, {});
+check('방어 초과 시 floorActive + 평균 없음', blocked.floorActive && blocked.avg === null && blocked.min === 1 && blocked.max === 2);
 
 console.log('───────────────────────────────────────────────────');
 console.log(fail ? `✗ ${fail}개 항목 실패 (통과 ${pass})` : `✓ 대미지 공식 구조 전부 통과 (${pass})`);
