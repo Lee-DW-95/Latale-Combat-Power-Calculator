@@ -40,8 +40,6 @@ export const MONSTER_PRESETS = Object.freeze([
   {
     id: '810007331', group: '수련의 방', label: '보스형 강철인형 머슬링', target: 'boss',
     stats: { ARMOR: 4374342, RES: 4374342, F_P: 4374342, F_M: 4374342, Guard: 90, ELASTICITY: 700 },
-    // 상태이상에 걸리지 않아 상태이상 대미지 조건이 성립하지 않는다 (사용자 제보 2026-09-28)
-    statusImmune: true,
     basis: '수련의 방 · 대미지 테스트', verified: false,
   },
   {
@@ -137,3 +135,10 @@ export function scaledMonsterStats(preset, difficultyLevel) {
 export function hasDifficulty(preset) {
   return !!DUNGEON_DIFFICULTIES[preset?.group];
 }
+
+/**
+ * 상태이상 면역 — 보스형 강철인형·던전 보스 모두 상태이상에 걸리지 않아
+ * 상태이상 대미지 조건이 성립하지 않는다 (사용자 확인 2026-09-28). 보스 분류 전체에 적용.
+ * @param {{target: string}} preset
+ */
+export const isStatusImmune = (preset) => preset?.target === 'boss';

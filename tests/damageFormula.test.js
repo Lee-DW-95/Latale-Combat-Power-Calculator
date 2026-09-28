@@ -12,7 +12,7 @@ import {
   expectedDamage,
   SUMMON_EFFECTIVE_PEN,
 } from '../src/utils/damageFormula.js';
-import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty } from '../src/data/monsterPresets.js';
+import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty, isStatusImmune } from '../src/data/monsterPresets.js';
 import { attackerFromStats, targetFromPreset } from '../src/utils/damageInputs.js';
 
 let pass = 0;
@@ -236,8 +236,10 @@ for (const gc of GOLDEN) {
 const blocked = damageRange({ ...ATT, pen: 0 }, { ...DUMMY, fP: 10 ** 12 }, SKILL, {});
 check('방어 초과 시 floorActive + 평균 없음', blocked.floorActive && blocked.avg === null && blocked.min === 1 && blocked.max === 2);
 
-// ── 상태이상 면역: 보스형 강철인형만 ──
-check('보스형 강철인형은 상태이상 면역', MONSTER_PRESETS.filter((p) => p.statusImmune).map((p) => p.id).join() === '810007331');
+// ── 상태이상 면역: 보스 전부 (보스형 강철인형 + 던전 보스 4종), 일반은 아님 ──
+const immune = MONSTER_PRESETS.filter(isStatusImmune);
+check('보스 5종 상태이상 면역', immune.length === 5 && immune.every((p) => p.target === 'boss') && immune.some((p) => p.id === '810007331'));
+check('일반 대상은 상태이상 가능', MONSTER_PRESETS.filter((p) => p.target === 'normal').every((p) => !isStatusImmune(p)));
 
 console.log('───────────────────────────────────────────────────');
 console.log(fail ? `✗ ${fail}개 항목 실패 (통과 ${pass})` : `✓ 대미지 공식 구조 전부 통과 (${pass})`);

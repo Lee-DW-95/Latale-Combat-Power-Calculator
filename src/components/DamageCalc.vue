@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../utils/damageFormula.js';
 import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal } from '../utils/damageInputs.js';
-import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty } from '../data/monsterPresets.js';
+import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty, isStatusImmune } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
 import InfoNote from './InfoNote.vue';
 import SkillDamagePanel from './SkillDamagePanel.vue';
@@ -89,8 +89,8 @@ const skill = computed(() => ({
   summonS: Number(summonS.value) || 0,
   summonSc: Number(summonSc.value) || 0,
 }));
-// 상태이상 면역 대상(보스형 강철인형)은 체크 여부와 관계없이 상태이상 대미지를 빼고 계산한다
-const statusImmune = computed(() => !!preset.value.statusImmune);
+// 상태이상 면역 대상(보스 전부)은 체크 여부와 관계없이 상태이상 대미지를 빼고 계산한다
+const statusImmune = computed(() => isStatusImmune(preset.value));
 const conditions = computed(() => ({
   backAttack: backAttack.value,
   melee: melee.value,
