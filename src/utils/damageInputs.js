@@ -2,14 +2,32 @@
 /**
  * T창 스탯 → 대미지 공식 입력 변환.
  *
- * 공식은 "고정값(raw) + 최종 %(F…)" 로 나눠 받는데, T창은 이미 둘을 합친 표시값을 보여준다.
- *   표시값 = floor(raw × (100 + F) / 100)
- * 그래서 표시값을 raw 로 넣고 F=0 으로 두면 같은 결과가 나온다. (기본_* 를 아는 항목도
- * raw/F 로 굳이 쪼개지 않는다 — 쪼개면 floor 가 한 번 더 끼어 값이 미세하게 달라진다.)
- *
- * ⚠ 예외: "최종 크리티컬/최소/최대 대미지" 처럼 T창 표시값 밖에서 곱해지는 옵션이 있다면
- *   그건 F_CD / F_MIN / F_MAX 로 따로 넣어야 한다 (지금은 UI 에서 직접 입력받는다).
+ * 공식은 크리티컬·최소·최대 대미지를 "추가 세부정보의 +값(raw) + 최종 %(F)" 로 나눠 받는다.
+ *   T창 표시값 = floor(raw × (100 + F) / 100)
+ * 전투력 탭의 기본_크댐·기본_최소뎀·기본_최대뎀(= 추가 세부정보 +값)과 표시값으로 F 를 역산한다 (splitFinal).
+ * 기본값이 없으면 표시값을 raw 로, F=0 으로 둔다 — 한 방 대미지는 같지만,
+ * 특화석·노블레스처럼 최종 %를 더하는 효과는 표시값 기준으로 들어가 조금 크게 잡힌다.
  */
+
+/**
+ * 표시값·기본값 → { raw, f } — floor(raw × (100 + f) / 100) === 표시값 이 되는 최종 % 를 찾는다.
+ * 맞는 f 를 못 찾으면(기본값 미입력·오타) 표시값을 raw 로 쓰고 f=0.
+ * @param {any} display
+ * @param {any} base
+ */
+export function splitFinal(display, base) {
+  const d = Number(display) || 0;
+  const b = Number(base) || 0;
+  if (b > 0 && d >= b) {
+    const exact = ((d / b) - 1) * 100;
+    // 표시값을 만족하는 % 는 여러 개일 수 있다 — 게임 옵션처럼 가장 단순한 값(정수 → 소수 1·2자리)을 고른다
+    const round = (k) => Math.round(exact * k) / k;
+    for (const f of [round(1), round(10), round(100), exact, exact + 1e-9]) {
+      if (Math.floor((b * (100 + f)) / 100) === d) return { raw: b, f, derived: true };
+    }
+  }
+  return { raw: d, f: 0, derived: false };
+}
 
 /**
  * 물리 무기공격력 표시범위 — 입력돼 있으면 그대로, 없으면 중간값 단일
@@ -28,26 +46,26 @@ export function weaponRangeOf(stats) {
  * @param {object} opt
  * @param {'normal'|'boss'} opt.target   대상 분류 — 추가대미지·지배력 선택
  * @param {number} opt.level             캐릭터 레벨
- * @param {number} [opt.finalCritPct]    최종 크리티컬 대미지 % (T창 밖 옵션)
- * @param {number} [opt.finalMinPct]     최종 최소 대미지 %
- * @param {number} [opt.finalMaxPct]     최종 최대 대미지 %
  * @returns {import('./damageFormula.js').AttackerInput}
  */
 export function attackerFromStats(stats, opt) {
   const isBoss = opt.target === 'boss';
   const w = weaponRangeOf(stats);
+  const mn = splitFinal(stats?.최소뎀, stats?.기본_최소뎀);
+  const mx = splitFinal(stats?.최대뎀, stats?.기본_최대뎀);
+  const cd = splitFinal(stats?.크댐, stats?.기본_크댐);
   return {
     type: stats?.type === 'M' ? 'M' : 'P',
     mainStat: Number(stats?.주스탯) || 0,
     eff: Number(stats?.근마효율) || 0,
     weaponMin: w.min,
     weaponMax: w.max,
-    rawMin: Number(stats?.최소뎀) || 0,
-    fMin: Number(opt.finalMinPct) || 0,
-    rawMax: Number(stats?.최대뎀) || 0,
-    fMax: Number(opt.finalMaxPct) || 0,
-    rawCd: Number(stats?.크댐) || 0,
-    fCd: Number(opt.finalCritPct) || 0,
+    rawMin: mn.raw,
+    fMin: mn.f,
+    rawMax: mx.raw,
+    fMax: mx.f,
+    rawCd: cd.raw,
+    fCd: cd.f,
     fixedDamage: Number(stats?.고댐) || 0,
     addDamage: Number(isBoss ? stats?.보몬추 : stats?.일몬추) || 0,
     pen: Number(stats?.관통) || 0,
@@ -94,9 +112,6 @@ function cumulativePct(display, base) {
  * @param {any} opt.targetStats            프리셋 스탯 (ARMOR/RES/F_P/F_M/Guard/ELASTICITY)
  * @param {'normal'|'boss'} opt.targetType
  * @param {number} opt.level
- * @param {number} [opt.finalCritPct]
- * @param {number} [opt.finalMinPct]
- * @param {number} [opt.finalMaxPct]
  * @param {{backAttack?:boolean, melee?:boolean, status?:boolean}} [opt.conditions]
  */
 export function engineInputFromStats(stats, opt) {
@@ -109,6 +124,9 @@ export function engineInputFromStats(stats, opt) {
   const weaponPct = cumulativePct(stats?.공격력, stats?.기본_공격력);
   const n = (v) => Number(v) || 0;
   const t = opt.targetStats || {};
+  const mn = splitFinal(stats?.최소뎀, stats?.기본_최소뎀);
+  const mx = splitFinal(stats?.최대뎀, stats?.기본_최대뎀);
+  const cd = splitFinal(stats?.크댐, stats?.기본_크댐);
   const cond = opt.conditions || {};
   const s = {
     L: n(opt.level) || 1,
@@ -125,12 +143,12 @@ export function engineInputFromStats(stats, opt) {
     [`EFF_${x}`]: n(stats?.근마효율),
     [`FD_${x}`]: n(stats?.고댐),
     [`BD_${x}`]: n(stats?.백어택),
-    [`rawMIN_${x}`]: n(stats?.최소뎀),
-    [`rawMAX_${x}`]: n(stats?.최대뎀),
-    [`rawCD_${x}`]: n(stats?.크댐),
-    [`FMIN_${x}`]: n(opt.finalMinPct),
-    [`FMAX_${x}`]: n(opt.finalMaxPct),
-    [`FCD_${x}`]: n(opt.finalCritPct),
+    [`rawMIN_${x}`]: mn.raw,
+    [`rawMAX_${x}`]: mx.raw,
+    [`rawCD_${x}`]: cd.raw,
+    [`FMIN_${x}`]: mn.f,
+    [`FMAX_${x}`]: mx.f,
+    [`FCD_${x}`]: cd.f,
     [`PEN_${x}`]: n(stats?.관통),
     [`EFF_${y}`]: 0,
     [`FD_${y}`]: 0,

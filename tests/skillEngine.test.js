@@ -81,13 +81,15 @@ check('같은 특화석 중복 불가', E.optionRows(cls, sid, dup).length === o
 // ── 어댑터 ──
 const st = {
   type: 'P', 주스탯: 3000, 기본_주스탯: 1000, 공격력: 5000, 기본_공격력: 2500, 무기공표시min: 4900, 무기공표시max: 5100,
-  근마효율: 7, 최소뎀: 100, 최대뎀: 200, 크댐: 300, 고댐: 50, 관통: 60, 일몬추: 400, 보몬추: 600, 기본_보몬추: 300,
+  근마효율: 7, 최소뎀: 100, 최대뎀: 200, 크댐: 312, 기본_크댐: 300, 고댐: 50, 관통: 60, 일몬추: 400, 보몬추: 600, 기본_보몬추: 300,
   일몬지: 1, 보몬지: 2, 백어택: 10, 근거리: 5, 상태대미지: 3,
 };
-const s = engineInputFromStats(st, { targetStats: { ARMOR: 7 }, targetType: 'boss', level: 235, finalCritPct: 4, conditions: { backAttack: true } });
+const s = engineInputFromStats(st, { targetStats: { ARMOR: 7 }, targetType: 'boss', level: 235, conditions: { backAttack: true } });
 check('어댑터: 누적% 역산', s.STR_PCT === 200 && s.STR_BASE === 1000 && s.WPN_MIN_PCT === 100 && s.ADD_boss_PCT === 100);
 check('어댑터: 보스 대상 추가·지배력', s.ADD === 600 && s.Dom === 2 && s.targetType === 'boss');
-check('어댑터: 채널 필드', s.WPN_MIN === 4900 && s.WPN_MAX === 5100 && s.FCD_P === 4 && s.rawCD_M === 0 && s.MAG === 0);
+check('어댑터: 채널 필드', s.WPN_MIN === 4900 && s.WPN_MAX === 5100 && s.rawCD_M === 0 && s.MAG === 0);
+check('어댑터: 크댐 = 기본 300 × (1 + 최종 4%)', s.rawCD_P === 300 && s.FCD_P === 4);
+check('어댑터: 기본값 없으면 표시값·최종 0%', s.rawMIN_P === 100 && s.FMIN_P === 0);
 check('어댑터: 조건·대상', s.isBack && !s.isMelee && s.ARMOR === 7 && s.L === 235);
 const boosted = E.applyStoneStats(s, { 595: 10, 594: 100 });
 check('어댑터+특화석: 기본값 기준으로 % 적용', boosted.STR === Math.floor((1000 + 100) * 310 / 100));

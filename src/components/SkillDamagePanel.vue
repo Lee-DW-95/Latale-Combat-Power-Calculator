@@ -13,9 +13,6 @@ const props = defineProps({
   targetType: { type: String, required: true },
   level: { type: Number, required: true },
   critRate: { type: Number, required: true },
-  finalCritPct: { type: Number, default: 0 },
-  finalMinPct: { type: Number, default: 0 },
-  finalMaxPct: { type: Number, default: 0 },
   conditions: { type: Object, required: true },
 });
 
@@ -134,9 +131,6 @@ const input = computed(() =>
     targetStats: props.targetStats,
     targetType: /** @type {'normal'|'boss'} */ (props.targetType),
     level: props.level,
-    finalCritPct: props.finalCritPct,
-    finalMinPct: props.finalMinPct,
-    finalMaxPct: props.finalMaxPct,
     conditions: props.conditions,
   }),
 );

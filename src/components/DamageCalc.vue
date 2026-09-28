@@ -4,7 +4,7 @@
 import { computed, ref, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../utils/damageFormula.js';
-import { attackerFromStats, targetFromPreset, weaponRangeOf } from '../utils/damageInputs.js';
+import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal } from '../utils/damageInputs.js';
 import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
 import InfoNote from './InfoNote.vue';
@@ -26,9 +26,6 @@ const skillCoef = ref(1000);
 const summonS = ref(100);
 const summonSc = ref(2000);
 const critRate = ref(100);
-const finalCritPct = ref(0);
-const finalMinPct = ref(0);
-const finalMaxPct = ref(0);
 const backAttack = ref(false);
 const melee = ref(false);
 const status = ref(false);
@@ -39,7 +36,7 @@ try {
   if (saved) {
     for (const [k, r] of Object.entries({
       presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
-      critRate, finalCritPct, finalMinPct, finalMaxPct, backAttack, melee, status,
+      critRate, backAttack, melee, status,
     })) {
       if (saved[k] !== undefined) r.value = saved[k];
     }
@@ -48,14 +45,13 @@ try {
   /* localStorage 불가 환경 — 기본값 사용 */
 }
 watch(
-  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, finalCritPct, finalMinPct, finalMaxPct, backAttack, melee, status],
+  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status],
   () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         presetId: presetId.value, difficulty: difficulty.value, level: level.value,
         inputMode: inputMode.value, skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
-        critRate: critRate.value, finalCritPct: finalCritPct.value,
-        finalMinPct: finalMinPct.value, finalMaxPct: finalMaxPct.value,
+        critRate: critRate.value,
         backAttack: backAttack.value, melee: melee.value, status: status.value,
       }));
     } catch {
@@ -84,9 +80,6 @@ const attacker = computed(() =>
   attackerFromStats(props.stats, {
     target: preset.value.target,
     level: level.value,
-    finalCritPct: finalCritPct.value,
-    finalMinPct: finalMinPct.value,
-    finalMaxPct: finalMaxPct.value,
   }),
 );
 const target = computed(() => targetFromPreset(targetStats.value));
@@ -118,6 +111,15 @@ const defenseInfo = computed(() => {
 });
 
 const weapon = computed(() => weaponRangeOf(props.stats));
+
+// 크리·최소·최대 = 추가 세부정보 +값 × (1 + 최종 %) — 기본_* 로 역산한 결과를 보여준다
+const finals = computed(() => [
+  { label: '크리티컬 대미지', ...splitFinal(props.stats?.크댐, props.stats?.기본_크댐) },
+  { label: '최소 대미지', ...splitFinal(props.stats?.최소뎀, props.stats?.기본_최소뎀) },
+  { label: '최대 대미지', ...splitFinal(props.stats?.최대뎀, props.stats?.기본_최대뎀) },
+]);
+const finalsMissing = computed(() => finals.value.filter((f) => !f.derived).map((f) => f.label));
+const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
 </script>
 
 <template>
@@ -243,20 +245,6 @@ const weapon = computed(() => weaponRangeOf(props.stats));
           <label v-if="inputMode === 'skill' || skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
             <input v-model="status" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 상태이상
           </label>
-          <span class="text-stone-300 dark:text-stone-600">|</span>
-          <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">최종 대미지 옵션 %</span>
-          <label class="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-            크리
-            <input v-model.number="finalCritPct" type="number" class="h-8 w-16 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-xs text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
-          </label>
-          <label class="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-            최소
-            <input v-model.number="finalMinPct" type="number" class="h-8 w-16 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-xs text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
-          </label>
-          <label class="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-            최대
-            <input v-model.number="finalMaxPct" type="number" class="h-8 w-16 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-xs text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
-          </label>
         </div>
       </div>
 
@@ -267,9 +255,6 @@ const weapon = computed(() => weaponRangeOf(props.stats));
         :target-type="preset.target"
         :level="Number(level) || 1"
         :crit-rate="Number(critRate) || 0"
-        :final-crit-pct="Number(finalCritPct) || 0"
-        :final-min-pct="Number(finalMinPct) || 0"
-        :final-max-pct="Number(finalMaxPct) || 0"
         :conditions="conditions"
       />
 
@@ -321,9 +306,16 @@ const weapon = computed(() => weaponRangeOf(props.stats));
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">지배력</span><span class="text-stone-800 dark:text-stone-100">{{ attacker.dominance }}%</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">주스탯(효율 적용)</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(attacker.mainStat * (1 + attacker.eff / 100)) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">{{ stats.type === 'M' ? '속성력' : '무기공격력' }}</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(weapon.min) }}~{{ fmt(weapon.max) }}</span></div>
-          <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">최소~최대 대미지</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(attacker.rawMin) }}~{{ fmt(attacker.rawMax) }}</span></div>
+          <div v-for="f in finals" :key="f.label" class="flex justify-between gap-2">
+            <span class="text-stone-500 dark:text-stone-400">{{ f.label }}</span>
+            <span class="text-stone-800 dark:text-stone-100">{{ fmt(f.raw) }}<span v-if="f.f" class="text-stone-500 dark:text-stone-400"> · 최종 +{{ pct(f.f) }}%</span></span>
+          </div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">추가 대미지</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(attacker.addDamage) }}</span></div>
         </div>
+        <p v-if="finalsMissing.length" class="mt-2 text-[11px] text-orange-600 dark:text-orange-400 leading-relaxed">
+          {{ finalsMissing.join('·') }}의 기본값(T창 추가 세부정보 +값)이 없어 최종 %를 나누지 못했습니다.
+          한 방 대미지는 같지만, 특화석·노블레스의 최종 % 효과가 조금 크게 잡힙니다.
+        </p>
         <p class="mt-2 text-[11px] text-stone-400 dark:text-stone-500 leading-relaxed">
           대상 수치는 아직 우리 실측으로 확인하지 않았습니다 ({{ preset.basis }}).
           목각인형 프리링은 모든 방어 항이 0 이라 공식 검증의 기준점으로 씁니다.
