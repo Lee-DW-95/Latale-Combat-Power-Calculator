@@ -31,6 +31,7 @@ const backAttack = ref(false);
 const melee = ref(false);
 const status = ref(false);
 const toz = ref(false); // 토즈 버프 — 직타 스킬 계수 +1000
+const survival = ref(false); // 생존본능(수련의방) — 대미지 난수를 최대값으로 고정해 표기
 
 // 입력은 브라우저에 남긴다 — 매번 다시 채우지 않게.
 try {
@@ -38,7 +39,7 @@ try {
   if (saved) {
     for (const [k, r] of Object.entries({
       presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
-      critRate, backAttack, melee, status, toz,
+      critRate, backAttack, melee, status, toz, survival,
     })) {
       if (saved[k] !== undefined) r.value = saved[k];
     }
@@ -47,14 +48,14 @@ try {
   /* localStorage 불가 환경 — 기본값 사용 */
 }
 watch(
-  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status, toz],
+  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status, toz, survival],
   () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         presetId: presetId.value, difficulty: difficulty.value, level: level.value,
         inputMode: inputMode.value, skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
         critRate: critRate.value,
-        backAttack: backAttack.value, melee: melee.value, status: status.value, toz: toz.value,
+        backAttack: backAttack.value, melee: melee.value, status: status.value, toz: toz.value, survival: survival.value,
       }));
     } catch {
       /* 저장 실패는 무시 */
@@ -101,9 +102,14 @@ const conditions = computed(() => ({
 
 const nonCrit = computed(() => (hasStats.value ? damageRange(attacker.value, target.value, skill.value, { ...conditions.value, crit: false }) : null));
 const crit = computed(() => (hasStats.value ? damageRange(attacker.value, target.value, skill.value, { ...conditions.value, crit: true }) : null));
-const expected = computed(() =>
-  hasStats.value ? expectedDamage(attacker.value, target.value, skill.value, conditions.value, (Number(critRate.value) || 0) / 100) : 0,
-);
+// 표시 기준 — 생존본능이면 난수 최대(맥댐)로 고정, 아니면 적분 평균(없으면 중앙값)
+const pickVal = (r) => (survival.value ? r.max : (r.avg ?? r.mid));
+const expected = computed(() => {
+  if (!hasStats.value) return 0;
+  const p = Math.min(1, Math.max(0, (Number(critRate.value) || 0) / 100));
+  if (survival.value) return nonCrit.value.max * (1 - p) + crit.value.max * p;
+  return expectedDamage(attacker.value, target.value, skill.value, conditions.value, p);
+});
 
 // 방어 계수 — "내 관통이 이 대상에 얼마나 먹히는지" 를 숫자로 보여준다.
 const defenseInfo = computed(() => {
@@ -270,6 +276,12 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
           >
             <input v-model="toz" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 토즈 <span class="text-[11px] text-stone-400 dark:text-stone-500">(계수 +1000)</span>
           </label>
+          <label
+            class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300"
+            title="수련의방 생존본능 — 대미지·무기공격력 난수를 최대값으로 고정하고 최대 대미지만 표기합니다"
+          >
+            <input v-model="survival" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 생존본능 <span class="text-[11px] text-stone-400 dark:text-stone-500">(맥댐 고정)</span>
+          </label>
         </div>
       </div>
 
@@ -282,13 +294,14 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         :crit-rate="Number(critRate) || 0"
         :conditions="conditions"
         :toz="toz"
+        :survival="survival"
       />
 
       <!-- 결과 (계수 직접 입력) -->
       <template v-else>
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3">
         <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
-          기대 대미지 · 크리 {{ critRate }}%
+          기대 대미지 · 크리 {{ critRate }}%<span v-if="survival"> · 생존본능(최대 고정)</span>
         </p>
         <p class="text-3xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 leading-none mt-1">
           {{ fmt(expected) }}
@@ -304,11 +317,12 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         <div v-for="row in [{ k: 'noncrit', label: '비크리', data: nonCrit }, { k: 'crit', label: '크리티컬', data: crit }]" :key="row.k"
           class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 px-4 py-3">
           <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
-            {{ row.label }} · {{ row.data.avg != null ? '평균' : '중앙값' }}
+            {{ row.label }} · {{ survival ? '최대 고정' : row.data.avg != null ? '평균' : '중앙값' }}
           </p>
-          <p class="text-xl font-semibold tabular-nums text-stone-900 dark:text-stone-50 mt-0.5">{{ fmt(row.data.avg ?? row.data.mid) }}</p>
+          <p class="text-xl font-semibold tabular-nums text-stone-900 dark:text-stone-50 mt-0.5">{{ fmt(pickVal(row.data)) }}</p>
           <p class="text-xs text-stone-500 dark:text-stone-400 tabular-nums mt-0.5">
-            {{ fmt(row.data.min) }} ~ {{ fmt(row.data.max) }}
+            <template v-if="survival">난수 미적용 (생존본능)</template>
+            <template v-else>{{ fmt(row.data.min) }} ~ {{ fmt(row.data.max) }}</template>
           </p>
           <p v-if="row.data.floorActive" class="text-[11px] text-orange-600 dark:text-orange-400 mt-1">
             방어가 공격을 넘어 최소 대미지(1~2) 구간입니다.

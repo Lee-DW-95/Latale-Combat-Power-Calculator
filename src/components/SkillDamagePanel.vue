@@ -15,6 +15,7 @@ const props = defineProps({
   critRate: { type: Number, required: true },
   conditions: { type: Object, required: true },
   toz: { type: Boolean, default: false },
+  survival: { type: Boolean, default: false }, // 생존본능 — 난수 최대 고정 표기
 });
 
 const STORAGE_KEY = 'latale.skillDamage.v1';
@@ -146,7 +147,8 @@ const result = computed(() => {
 });
 
 const p = computed(() => Math.min(1, Math.max(0, (Number(props.critRate) || 0) / 100)));
-const avgOf = (r) => r.avg ?? r.mid;
+// 생존본능이면 난수 최대(맥댐 고정), 아니면 적분 평균(없으면 중앙값)
+const avgOf = (r) => (props.survival ? r.max : (r.avg ?? r.mid));
 const hits = computed(() =>
   (result.value?.rows || []).map((r, i) => ({
     ...r,
@@ -350,7 +352,7 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
       <template v-else-if="result">
         <p class="text-xs text-stone-500 dark:text-stone-400">
           스킬 레벨 {{ result.level }}<span v-if="result.level !== config.level"> (특화석 +{{ result.level - config.level }})</span>
-          · 크리 {{ critRate }}% 기대값
+          · 크리 {{ critRate }}% 기대값<span v-if="survival"> · 생존본능(최대 고정)</span>
         </p>
         <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3">
           <p :class="labelCls">총 누적 대미지 · 직타 {{ total.direct }}회 + 소환 {{ total.summon }}회</p>
@@ -382,9 +384,12 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
               <p class="text-2xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 mt-1">{{ fmt(h.expected) }}</p>
               <div class="grid grid-cols-2 gap-3 mt-1.5 text-xs tabular-nums">
                 <div v-for="k in ['noncrit', 'crit']" :key="k">
-                  <p class="text-stone-400 dark:text-stone-500">{{ k === 'crit' ? '크리' : '비크리' }} 평균</p>
+                  <p class="text-stone-400 dark:text-stone-500">{{ k === 'crit' ? '크리' : '비크리' }} {{ survival ? '최대' : '평균' }}</p>
                   <p class="text-stone-800 dark:text-stone-100 font-medium">{{ fmt(avgOf(h[k])) }}</p>
-                  <p class="text-stone-500 dark:text-stone-400">{{ fmt(h[k].min) }} ~ {{ fmt(h[k].max) }}</p>
+                  <p class="text-stone-500 dark:text-stone-400">
+                    <template v-if="survival">난수 미적용</template>
+                    <template v-else>{{ fmt(h[k].min) }} ~ {{ fmt(h[k].max) }}</template>
+                  </p>
                 </div>
               </div>
               <p v-if="h.conditions?.length" class="text-[11px] text-stone-400 dark:text-stone-500 mt-1">조건 충족 시 발생하는 타격입니다.</p>
