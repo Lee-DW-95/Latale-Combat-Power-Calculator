@@ -236,6 +236,9 @@ for (const gc of GOLDEN) {
 const blocked = damageRange({ ...ATT, pen: 0 }, { ...DUMMY, fP: 10 ** 12 }, SKILL, {});
 check('방어 초과 시 floorActive + 평균 없음', blocked.floorActive && blocked.avg === null && blocked.min === 1 && blocked.max === 2);
 
+// ── 상태이상 면역: 보스형 강철인형만 ──
+check('보스형 강철인형은 상태이상 면역', MONSTER_PRESETS.filter((p) => p.statusImmune).map((p) => p.id).join() === '810007331');
+
 console.log('───────────────────────────────────────────────────');
 console.log(fail ? `✗ ${fail}개 항목 실패 (통과 ${pass})` : `✓ 대미지 공식 구조 전부 통과 (${pass})`);
 if (fail) process.exit(1);

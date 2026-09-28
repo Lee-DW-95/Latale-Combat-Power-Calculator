@@ -89,10 +89,12 @@ const skill = computed(() => ({
   summonS: Number(summonS.value) || 0,
   summonSc: Number(summonSc.value) || 0,
 }));
+// 상태이상 면역 대상(보스형 강철인형)은 체크 여부와 관계없이 상태이상 대미지를 빼고 계산한다
+const statusImmune = computed(() => !!preset.value.statusImmune);
 const conditions = computed(() => ({
   backAttack: backAttack.value,
   melee: melee.value,
-  status: status.value,
+  status: status.value && !statusImmune.value,
 }));
 
 const nonCrit = computed(() => (hasStats.value ? damageRange(attacker.value, target.value, skill.value, { ...conditions.value, crit: false }) : null));
@@ -242,8 +244,20 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
           <label v-if="inputMode === 'skill' || skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
             <input v-model="melee" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 근거리
           </label>
-          <label v-if="inputMode === 'skill' || skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
-            <input v-model="status" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 상태이상
+          <label
+            v-if="inputMode === 'skill' || skillMode === 'direct'"
+            class="flex items-center gap-1.5 text-stone-600 dark:text-stone-300"
+            :class="statusImmune ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+            :title="statusImmune ? `${preset.label}는 상태이상에 걸리지 않아 상태이상 대미지가 적용되지 않습니다` : ''"
+          >
+            <input
+              :checked="status && !statusImmune"
+              :disabled="statusImmune"
+              type="checkbox"
+              class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500"
+              @change="status = $event.target.checked"
+            />
+            상태이상<span v-if="statusImmune" class="text-[11px] text-stone-400 dark:text-stone-500">(면역)</span>
           </label>
         </div>
       </div>
