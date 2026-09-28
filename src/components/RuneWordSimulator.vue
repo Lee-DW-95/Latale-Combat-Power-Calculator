@@ -427,16 +427,16 @@ watch(subTab, (tab) => {
     </InfoNote>
 
     <!-- 서브 탭 (세그먼트 컨트롤) -->
-    <div class="overflow-x-auto -mx-1 px-1">
-      <div class="inline-flex rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden bg-white dark:bg-stone-800">
+    <!-- 모바일에선 2×2 격자로 — 가로 스크롤바가 드러나지 않게 -->
+    <div>
+      <div class="grid grid-cols-2 sm:inline-flex gap-px rounded-lg ring-1 ring-stone-300 dark:ring-stone-600 overflow-hidden bg-stone-200 dark:bg-stone-700">
         <button
-          v-for="(t, i) in SUB_TABS"
+          v-for="t in SUB_TABS"
           :key="t.id"
           type="button"
           @click="subTab = t.id"
           :class="[
             'px-4 py-2 text-sm font-medium transition whitespace-nowrap',
-            i > 0 ? 'border-l border-stone-200 dark:border-stone-700' : '',
             subTab === t.id
               ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
               : 'text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700',

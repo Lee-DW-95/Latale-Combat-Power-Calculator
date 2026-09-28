@@ -143,20 +143,25 @@ const isLocalDev =
     (typeof window !== 'undefined' && LOCAL_HOSTNAMES.includes(window.location.hostname)));
 
 const TABS = [
-  { id: 'calc', label: '🛡️ 전투력 계산', desc: '장비 교체 시 BP 변화 시뮬' },
-  { id: 'memorial', label: '🎲 메모리얼 시뮬', desc: '목표 옵션 도달까지 시도 횟수', restricted: true },
-  { id: 'enchant', label: '🔨 인챈트 시뮬', desc: '장비 인챈트 / 특수장비 강화', restricted: true },
+  { id: 'calc', label: '🛡️ 전투력 계산', short: '🛡️ 전투력', desc: '장비 교체 시 BP 변화 시뮬' },
+  { id: 'memorial', label: '🎲 메모리얼', desc: '목표 옵션 도달까지 시도 횟수', restricted: true, group: 'sim' },
+  { id: 'enchant', label: '🔨 인챈트', desc: '장비 인챈트 / 특수장비 강화', restricted: true, group: 'sim' },
   // { id: 'damage', label: '🎯 대미지 예측', desc: '스킬계수 + 캘리브레이션' }, // DB 작업 보류로 일시 숨김
   // { id: 'relic', label: '🌟 성물 환산', desc: '성물 레벨 + 전용석/공용석 합산' }, // 기존 환산기 — 임시 비활성
-  { id: 'relicGacha', label: '🌟 성물 시뮬', desc: '신성의 돌 / 전용석 뽑기 시뮬', restricted: true },
-  { id: 'awakening', label: '💎 각성석 시뮬', desc: '(기간제) 상급 각성석 돌려보기', restricted: true },
-  { id: 'itemAwakening', label: '💠 아이템 각성 시뮬', desc: '장비/파츠 종류별 각성 옵션 뽑기', restricted: true },
-  { id: 'runeword', label: '🔮 룬워드 시뮬', desc: '룬워드 점수 책정 + 목표 옵션 도달 확률', restricted: true },
-  { id: 'damage', label: '💥 대미지 계산', desc: '공식 기반 실제 대미지 (실측 검증 전)', restricted: true },
+  { id: 'relicGacha', label: '🌟 성물', desc: '신성의 돌 / 전용석 뽑기 시뮬', restricted: true, group: 'sim' },
+  { id: 'awakening', label: '💎 각성석', desc: '(기간제) 상급 각성석 돌려보기', restricted: true, group: 'sim' },
+  { id: 'itemAwakening', label: '💠 아이템 각성', desc: '장비/파츠 종류별 각성 옵션 뽑기', restricted: true, group: 'sim' },
+  { id: 'runeword', label: '🔮 룬워드', desc: '룬워드 점수 책정 + 목표 옵션 도달 확률', restricted: true, group: 'sim' },
+  { id: 'damage', label: '💥 대미지 계산', short: '💥 대미지', desc: '공식 기반 실제 대미지 (실측 검증 전)', restricted: true },
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
   // 게임을 켜둔 채 옆에 띄워 쓰는 용도라 로그인 조건 없이 항상 노출한다.
-  { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
+  { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', short: '⚡ 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
 ];
+
+// 탭이 많아 한 줄에 다 안 들어가므로 시뮬레이터 6종은 상위 탭 하나로 묶고, 고르면 아래 줄에 하위 탭을 띄운다.
+const TAB_GROUPS = {
+  sim: { label: '🎲 시뮬레이터', short: '🎲 시뮬', desc: '메모리얼 · 인챈트 · 성물 · 각성석 · 아이템 각성 · 룬워드' },
+};
 
 // 탭 ↔ 주소 해시 동기화
 activeTab.value = tabFromHash();
@@ -173,16 +178,15 @@ if (typeof window !== 'undefined') {
 }
 
 // 탭 바 방향키 이동 (role=tablist 접근성) — ←/→ 로 인접 탭, Home/End 로 양끝
-function onTabKeydown(e, idx) {
-  const tabs = visibleTabs.value;
+function onTabKeydown(e, idx, items, pick) {
   let next = null;
-  if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
-  else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+  if (e.key === 'ArrowRight') next = (idx + 1) % items.length;
+  else if (e.key === 'ArrowLeft') next = (idx - 1 + items.length) % items.length;
   else if (e.key === 'Home') next = 0;
-  else if (e.key === 'End') next = tabs.length - 1;
+  else if (e.key === 'End') next = items.length - 1;
   if (next === null) return;
   e.preventDefault();
-  activeTab.value = tabs[next].id;
+  pick(items[next]);
   e.currentTarget.parentElement?.children[next]?.focus();
 }
 
@@ -196,6 +200,54 @@ const canSeeRestricted = computed(
 // 실제로 그릴 탭 목록.
 const visibleTabs = computed(() =>
   TABS.filter((t) => !t.restricted || canSeeRestricted.value),
+);
+
+// 그룹 안에서 마지막으로 본 하위 탭 — 상위 탭을 다시 누르면 그 탭으로 돌아간다
+const lastInGroup = ref({});
+watch(
+  activeTab,
+  (id) => {
+    const g = TABS.find((t) => t.id === id)?.group;
+    if (g) lastInGroup.value = { ...lastInGroup.value, [g]: id };
+  },
+  { immediate: true },
+);
+/** 상위 탭 줄 — 그룹은 한 칸으로 */
+const primaryTabs = computed(() => {
+  const out = [];
+  for (const t of visibleTabs.value) {
+    if (!t.group) out.push({ id: t.id, label: t.label, short: t.short, desc: t.desc });
+    else if (!out.some((x) => x.id === t.group)) out.push({ id: t.group, ...TAB_GROUPS[t.group], group: true });
+  }
+  return out;
+});
+const activeGroup = computed(() => TABS.find((t) => t.id === activeTab.value)?.group || null);
+const activePrimary = computed(() => activeGroup.value || activeTab.value);
+const subTabs = computed(() => (activeGroup.value ? visibleTabs.value.filter((t) => t.group === activeGroup.value) : []));
+function selectPrimary(item) {
+  if (!item.group) {
+    activeTab.value = item.id;
+    return;
+  }
+  const members = visibleTabs.value.filter((t) => t.group === item.id);
+  const last = lastInGroup.value[item.id];
+  activeTab.value = members.some((t) => t.id === last) ? last : members[0]?.id || 'calc';
+}
+const selectSub = (t) => (activeTab.value = t.id);
+// 모바일에서 탭 줄이 가로로 넘칠 때, 선택된 탭이 화면 밖에 있으면 보이는 곳까지 스크롤
+watch(activeTab, () =>
+  nextTick(() => {
+    if (typeof document === 'undefined') return;
+    // scrollIntoView 는 페이지 세로 위치까지 움직일 수 있어 탭 줄의 scrollLeft 만 조정한다
+    document.querySelectorAll('header [role="tab"][aria-selected="true"]').forEach((el) => {
+      const nav = /** @type {HTMLElement} */ (el).parentElement;
+      if (!nav) return;
+      const b = /** @type {HTMLElement} */ (el);
+      if (b.offsetLeft < nav.scrollLeft) nav.scrollLeft = b.offsetLeft - 16;
+      else if (b.offsetLeft + b.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = b.offsetLeft + b.offsetWidth - nav.clientWidth + 16;
+    });
+  }),
+  { immediate: true },
 );
 
 // 권한이 사라졌는데(로그아웃 등) 제한 탭을 보고 있으면 전투력 탭으로 되돌림.
@@ -455,34 +507,63 @@ const savedTimeLabel = computed(() => {
 
       <!-- 탭 네비 — 보이는 탭이 1개뿐이면 (일반 유저) 탭바 자체를 숨김.
            가로 스크롤은 되지만 스크롤바는 숨기고(tab-scroll) 양끝 페이드로 "더 있음" 을 알린다. -->
-      <div v-if="visibleTabs.length > 1" class="relative max-w-7xl mx-auto">
+      <div v-if="primaryTabs.length > 1" class="relative max-w-7xl mx-auto">
         <nav
           role="tablist"
           aria-label="기능 탭"
-          class="tab-scroll px-4 sm:px-6 flex gap-0.5 sm:gap-1 overflow-x-auto"
+          class="tab-scroll relative px-2 sm:px-6 flex sm:gap-1 overflow-x-auto"
         >
           <button
-            v-for="(tab, i) in visibleTabs"
+            v-for="(tab, i) in primaryTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :aria-selected="activePrimary === tab.id"
+            :tabindex="activePrimary === tab.id ? 0 : -1"
+            :title="tab.desc"
+            @click="selectPrimary(tab)"
+            @keydown="(e) => onTabKeydown(e, i, primaryTabs, selectPrimary)"
+            :class="[
+              'px-1.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition whitespace-nowrap break-keep',
+              activePrimary === tab.id
+                ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
+                : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
+            ]"
+          >
+            <span class="sm:hidden">{{ tab.short || tab.label }}</span><span class="hidden sm:inline">{{ tab.label }}</span><span v-if="tab.group" class="ml-1 text-[10px] opacity-60">▾</span>
+          </button>
+        </nav>
+        <div class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white/90 dark:from-stone-900/90 to-transparent sm:hidden"></div>
+        <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/90 dark:from-stone-900/90 to-transparent"></div>
+      </div>
+      <!-- 하위 탭 (시뮬레이터 그룹) -->
+      <div v-if="subTabs.length" class="relative border-t border-stone-200/70 dark:border-stone-700/70">
+        <nav
+          role="tablist"
+          aria-label="시뮬레이터"
+          class="tab-scroll relative max-w-7xl mx-auto px-4 sm:px-6 py-1.5 flex gap-1 overflow-x-auto"
+        >
+          <button
+            v-for="(tab, i) in subTabs"
             :key="tab.id"
             type="button"
             role="tab"
             :aria-selected="activeTab === tab.id"
             :tabindex="activeTab === tab.id ? 0 : -1"
             :title="tab.desc"
-            @click="activeTab = tab.id"
-            @keydown="(e) => onTabKeydown(e, i)"
+            @click="selectSub(tab)"
+            @keydown="(e) => onTabKeydown(e, i, subTabs, selectSub)"
             :class="[
-              'px-3 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 transition whitespace-nowrap break-keep',
+              'px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap break-keep',
               activeTab === tab.id
-                ? 'border-cyan-500 text-cyan-700 dark:text-cyan-300'
-                : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200',
+                ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 ring-1 ring-cyan-200 dark:ring-cyan-800'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800',
             ]"
           >
             {{ tab.label }}
           </button>
         </nav>
-        <div class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white/90 dark:from-stone-900/90 to-transparent sm:hidden"></div>
-        <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/90 dark:from-stone-900/90 to-transparent"></div>
+        <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/90 dark:from-stone-900/90 to-transparent sm:hidden"></div>
       </div>
     </header>
 
