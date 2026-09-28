@@ -304,7 +304,11 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">대미지 감소</span><span class="text-stone-800 dark:text-stone-100">{{ targetStats.Guard }}%</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">크리 저항</span><span class="text-stone-800 dark:text-stone-100">{{ targetStats.ELASTICITY }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">지배력</span><span class="text-stone-800 dark:text-stone-100">{{ attacker.dominance }}%</span></div>
-          <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">주스탯(효율 적용)</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(attacker.mainStat * (1 + attacker.eff / 100)) }}</span></div>
+          <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">{{ stats.type === 'M' ? '마법력' : '근력' }}</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(attacker.mainStat) }}</span></div>
+          <div class="flex justify-between gap-2" title="직타의 능력치 항에만 곱해진다: floor(근력 × (1 + 효율%)). T창 근력·소환 대미지에는 영향 없음">
+            <span class="text-stone-500 dark:text-stone-400">{{ stats.type === 'M' ? '마법력' : '근력' }} 효율 <span class="text-stone-400 dark:text-stone-500">(직타만)</span></span>
+            <span class="text-stone-800 dark:text-stone-100">+{{ attacker.eff }}% → {{ fmt(Math.floor(attacker.mainStat * (1 + attacker.eff / 100))) }}</span>
+          </div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">{{ stats.type === 'M' ? '속성력' : '무기공격력' }}</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(weapon.min) }}~{{ fmt(weapon.max) }}</span></div>
           <div v-for="f in finals" :key="f.label" class="flex justify-between gap-2">
             <span class="text-stone-500 dark:text-stone-400">{{ f.label }}</span>
