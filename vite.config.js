@@ -24,6 +24,8 @@ const pwa = VitePWA({
   workbox: {
     // 빌드 산출물(앱 셸)만 프리캐시
     globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
+    // 스킬 데이터 청크(skillData, 약 3.5MB · gzip 215KB)도 오프라인에서 쓰도록 한도를 올린다
+    maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
     // 백엔드 API(운영 duckdns · 로컬 8000)는 절대 캐시하지 않는다
     runtimeCaching: [
       {
@@ -41,5 +43,9 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5173,
     open: true,
+  },
+  build: {
+    // skillData 청크(게임 데이터 3.5MB, 대미지 탭에서만 지연 로드)는 의도된 크기다
+    chunkSizeWarningLimit: 4000,
   },
 }));

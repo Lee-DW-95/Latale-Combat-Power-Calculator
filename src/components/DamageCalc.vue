@@ -8,6 +8,7 @@ import { attackerFromStats, targetFromPreset, weaponRangeOf } from '../utils/dam
 import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
 import InfoNote from './InfoNote.vue';
+import SkillDamagePanel from './SkillDamagePanel.vue';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -19,6 +20,7 @@ const STORAGE_KEY = 'latale.damageCalc.v1';
 const presetId = ref(MONSTER_PRESETS[0].id);
 const difficulty = ref(4);
 const level = ref(235);
+const inputMode = ref('skill'); // 'skill' 스킬 선택 | 'manual' 계수 직접 입력
 const skillMode = ref('direct'); // 'direct' | 'summon'
 const skillCoef = ref(1000);
 const summonS = ref(100);
@@ -36,7 +38,7 @@ try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
   if (saved) {
     for (const [k, r] of Object.entries({
-      presetId, difficulty, level, skillMode, skillCoef, summonS, summonSc,
+      presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
       critRate, finalCritPct, finalMinPct, finalMaxPct, backAttack, melee, status,
     })) {
       if (saved[k] !== undefined) r.value = saved[k];
@@ -46,12 +48,12 @@ try {
   /* localStorage 불가 환경 — 기본값 사용 */
 }
 watch(
-  [presetId, difficulty, level, skillMode, skillCoef, summonS, summonSc, critRate, finalCritPct, finalMinPct, finalMaxPct, backAttack, melee, status],
+  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, finalCritPct, finalMinPct, finalMaxPct, backAttack, melee, status],
   () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         presetId: presetId.value, difficulty: difficulty.value, level: level.value,
-        skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
+        inputMode: inputMode.value, skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
         critRate: critRate.value, finalCritPct: finalCritPct.value,
         finalMinPct: finalMinPct.value, finalMaxPct: finalMaxPct.value,
         backAttack: backAttack.value, melee: melee.value, status: status.value,
@@ -122,7 +124,7 @@ const weapon = computed(() => weaponRangeOf(props.stats));
   <div class="space-y-4">
     <InfoNote>
       <template #summary>
-        T창 스탯과 대상 정보로 실제 대미지를 계산합니다.
+        T창 스탯과 대상 정보로 스킬별 실제 대미지를 계산합니다.
         <strong class="font-medium text-orange-600 dark:text-orange-400">아직 인게임 실측과 대조하지 않은 계산</strong>이라 값이 틀릴 수 있습니다.
       </template>
       <p>
@@ -146,6 +148,19 @@ const weapon = computed(() => weaponRangeOf(props.stats));
 
     <template v-else>
       <!-- 설정 -->
+      <div class="inline-flex rounded-lg bg-stone-100 dark:bg-stone-900/60 p-0.5 h-9">
+        <button
+          v-for="m in [{ id: 'skill', label: '스킬 선택' }, { id: 'manual', label: '계수 직접 입력' }]"
+          :key="m.id"
+          type="button"
+          @click="inputMode = m.id"
+          class="px-3 rounded-md text-xs font-medium transition"
+          :class="inputMode === m.id
+            ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-50 shadow-sm ring-1 ring-stone-200 dark:ring-stone-600'
+            : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-100'"
+        >{{ m.label }}</button>
+      </div>
+
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 p-3 sm:p-4 space-y-3">
         <div class="flex items-end gap-x-4 gap-y-3 flex-wrap">
           <label class="flex flex-col gap-1 min-w-0">
@@ -177,7 +192,7 @@ const weapon = computed(() => weaponRangeOf(props.stats));
               class="h-9 w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </label>
-          <label class="flex flex-col gap-1">
+          <label v-if="inputMode === 'manual'" class="flex flex-col gap-1">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">공격 방식</span>
             <div class="inline-flex rounded-lg bg-stone-100 dark:bg-stone-900/60 p-0.5 h-9">
               <button
@@ -192,7 +207,7 @@ const weapon = computed(() => weaponRangeOf(props.stats));
               >{{ m.label }}</button>
             </div>
           </label>
-          <label v-if="skillMode === 'direct'" class="flex flex-col gap-1">
+          <label v-if="inputMode === 'manual' && skillMode === 'direct'" class="flex flex-col gap-1">
             <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">스킬 계수</span>
             <input
               v-model.number="skillCoef"
@@ -201,7 +216,7 @@ const weapon = computed(() => weaponRangeOf(props.stats));
               class="h-9 w-28 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </label>
-          <template v-else>
+          <template v-else-if="inputMode === 'manual'">
             <label class="flex flex-col gap-1">
               <span class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">능력치 배율 %</span>
               <input v-model.number="summonS" type="number" min="0" class="h-9 w-24 rounded-lg border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
@@ -222,10 +237,10 @@ const weapon = computed(() => weaponRangeOf(props.stats));
           <label class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
             <input v-model="backAttack" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 백어택
           </label>
-          <label v-if="skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
+          <label v-if="inputMode === 'skill' || skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
             <input v-model="melee" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 근거리
           </label>
-          <label v-if="skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
+          <label v-if="inputMode === 'skill' || skillMode === 'direct'" class="flex items-center gap-1.5 cursor-pointer text-stone-600 dark:text-stone-300">
             <input v-model="status" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-cyan-600 focus:ring-cyan-500" /> 상태이상
           </label>
           <span class="text-stone-300 dark:text-stone-600">|</span>
@@ -245,7 +260,21 @@ const weapon = computed(() => weaponRangeOf(props.stats));
         </div>
       </div>
 
-      <!-- 결과 -->
+      <SkillDamagePanel
+        v-if="inputMode === 'skill'"
+        :stats="stats"
+        :target-stats="targetStats"
+        :target-type="preset.target"
+        :level="Number(level) || 1"
+        :crit-rate="Number(critRate) || 0"
+        :final-crit-pct="Number(finalCritPct) || 0"
+        :final-min-pct="Number(finalMinPct) || 0"
+        :final-max-pct="Number(finalMaxPct) || 0"
+        :conditions="conditions"
+      />
+
+      <!-- 결과 (계수 직접 입력) -->
+      <template v-else>
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3">
         <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase">
           기대 대미지 · 크리 {{ critRate }}%
@@ -276,9 +305,11 @@ const weapon = computed(() => weaponRangeOf(props.stats));
         </div>
       </div>
 
+      </template>
+
       <!-- 적용 값 확인 -->
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 px-4 py-3">
-        <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-2">적용된 값</p>
+        <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-2">적용된 값<span v-if="inputMode === 'skill'" class="normal-case tracking-normal"> · 특화석·버프 적용 전</span></p>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs tabular-nums">
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">{{ defenseInfo.label }}</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(defenseInfo.def) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">레벨 상수 a</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(defenseInfo.a) }}</span></div>

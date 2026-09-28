@@ -73,3 +73,97 @@ export function targetFromPreset(presetStats) {
     elasticity: Number(presetStats?.ELASTICITY) || 0,
   };
 }
+
+/** 표시값·기본값 → 누적 % (기본값을 모르면 0 — 특화석 % 옵션이 과소 반영될 수 있다) */
+function cumulativePct(display, base) {
+  const d = Number(display) || 0;
+  const b = Number(base) || 0;
+  return b > 0 && d > 0 ? (d / b - 1) * 100 : 0;
+}
+
+/**
+ * T창 스탯 → 스킬 엔진 입력(skillEngine.calculate 의 input).
+ * 캐릭터는 한 채널(물리/마법) 스탯만 있으므로 반대 채널 값은 0 이다 —
+ * 그 채널 타격은 엔진 호출 시 channels 로 걸러 "계산 불가" 로 표시한다.
+ *
+ * 특화석의 가산·% 옵션은 "기본값 × (1 + 누적%)" 규칙으로 들어가므로 누적%가 필요하다.
+ * 기본_* 가 입력돼 있으면 그 값을 기본값으로 바로 쓰고(ceil 역산 오차 없음), 없으면 누적 0% 로 본다.
+ *
+ * @param {any} stats
+ * @param {object} opt
+ * @param {any} opt.targetStats            프리셋 스탯 (ARMOR/RES/F_P/F_M/Guard/ELASTICITY)
+ * @param {'normal'|'boss'} opt.targetType
+ * @param {number} opt.level
+ * @param {number} [opt.finalCritPct]
+ * @param {number} [opt.finalMinPct]
+ * @param {number} [opt.finalMaxPct]
+ * @param {{backAttack?:boolean, melee?:boolean, status?:boolean}} [opt.conditions]
+ */
+export function engineInputFromStats(stats, opt) {
+  const magic = stats?.type === 'M';
+  const x = magic ? 'M' : 'P';
+  const y = magic ? 'P' : 'M';
+  const w = weaponRangeOf(stats);
+  const main = Number(stats?.주스탯) || 0;
+  const mainBase = Number(stats?.기본_주스탯) || 0;
+  const weaponPct = cumulativePct(stats?.공격력, stats?.기본_공격력);
+  const n = (v) => Number(v) || 0;
+  const t = opt.targetStats || {};
+  const cond = opt.conditions || {};
+  const s = {
+    L: n(opt.level) || 1,
+    STR: magic ? 0 : main,
+    MAG: magic ? main : 0,
+    [`${magic ? 'MAG' : 'STR'}_PCT`]: cumulativePct(main, mainBase),
+    [`${magic ? 'MAG' : 'STR'}_BASE`]: mainBase,
+    WPN_MIN: magic ? 0 : w.min,
+    WPN_MAX: magic ? 0 : w.max,
+    ELE: magic ? w.min : 0,
+    WPN_MIN_PCT: magic ? 0 : weaponPct,
+    WPN_MAX_PCT: magic ? 0 : weaponPct,
+    ELE_PCT: magic ? weaponPct : 0,
+    [`EFF_${x}`]: n(stats?.근마효율),
+    [`FD_${x}`]: n(stats?.고댐),
+    [`BD_${x}`]: n(stats?.백어택),
+    [`rawMIN_${x}`]: n(stats?.최소뎀),
+    [`rawMAX_${x}`]: n(stats?.최대뎀),
+    [`rawCD_${x}`]: n(stats?.크댐),
+    [`FMIN_${x}`]: n(opt.finalMinPct),
+    [`FMAX_${x}`]: n(opt.finalMaxPct),
+    [`FCD_${x}`]: n(opt.finalCritPct),
+    [`PEN_${x}`]: n(stats?.관통),
+    [`EFF_${y}`]: 0,
+    [`FD_${y}`]: 0,
+    [`BD_${y}`]: 0,
+    [`rawMIN_${y}`]: 0,
+    [`rawMAX_${y}`]: 0,
+    [`rawCD_${y}`]: 0,
+    [`FMIN_${y}`]: 0,
+    [`FMAX_${y}`]: 0,
+    [`FCD_${y}`]: 0,
+    [`PEN_${y}`]: 0,
+    ADD_normal: n(stats?.일몬추),
+    ADD_boss: n(stats?.보몬추),
+    ADD_normal_PCT: cumulativePct(stats?.일몬추, stats?.기본_일몬추),
+    ADD_boss_PCT: cumulativePct(stats?.보몬추, stats?.기본_보몬추),
+    ADD_normal_BASE: n(stats?.기본_일몬추),
+    ADD_boss_BASE: n(stats?.기본_보몬추),
+    Dom_normal: n(stats?.일몬지),
+    Dom_boss: n(stats?.보몬지),
+    MD: n(stats?.근거리),
+    SD: n(stats?.상태대미지),
+    isBack: !!cond.backAttack,
+    isMelee: !!cond.melee,
+    isStatus: !!cond.status,
+    targetType: opt.targetType,
+    ARMOR: n(t.ARMOR),
+    RES: n(t.RES),
+    F_P: n(t.F_P),
+    F_M: n(t.F_M),
+    Guard: n(t.Guard),
+    ELASTICITY: n(t.ELASTICITY),
+  };
+  s.ADD = s[`ADD_${opt.targetType}`];
+  s.Dom = s[`Dom_${opt.targetType}`];
+  return s;
+}

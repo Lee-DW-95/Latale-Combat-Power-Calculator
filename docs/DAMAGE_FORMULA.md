@@ -6,6 +6,8 @@
 
 공개 계산기 `alfm201/damage-test` 의 **실제 계산 코드 전체**를 분석해 우리 엔진을 맞췄다.
 원본 코드와 **정수 단위로 완전히 일치**한다 (대조 72건 + 골든 테스트 8건).
+원본의 `SKILL_DATA` 전체와 `SkillEngine` 도 가져와(2026-09-28 사용자 결정) **직업·스킬·레벨·각성·특화석만 고르면
+타격별 대미지가 자동 계산**된다 — 전 직업·스킬·특화석 7,530개 설정, 11,466타에서 원본과 완전 일치.
 **인게임 실측과는 아직 대조하지 않았다** — 다음 할 일은 실측 검증이다.
 
 ---
@@ -199,6 +201,10 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
 | `src/data/monsterPresets.js` | 대상 12종 + 난이도 보정 (전부 `verified: false`) |
 | `src/components/DamageCalc.vue` | "💥 대미지 계산" 탭 (제한 탭) |
 | `tests/damageFormula.test.js` | 구조 테스트 + **원본 대조 골든 값 8건** |
+| `src/data/skillData.json` | 원본 `SKILL_DATA` 전체 (3.5MB, gzip 215KB, 추출일 2026-09-16). 대미지 탭에서만 동적 import |
+| `src/utils/skillEngine.js` | 원본 `SkillEngine` 을 다시 쓴 것 — 특화석·각성·변형·버프 → 타격별 `damageRange` |
+| `src/components/SkillDamagePanel.vue` | 대미지 탭의 "스킬 선택" 모드 (직업·스킬·레벨·각성·특화석 3칸·버프) |
+| `tests/skillEngine.test.js` | 원본 `SkillEngine` 골든 14건 + 특화석 규칙 + 어댑터 |
 
 원본 대조: 직타/소환 × 물리/마법 × 대상 3종 × 조건 조합 **72건에서 min·max·평균 완전 일치**.
 
@@ -217,12 +223,29 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
 
 맞으면 그 케이스를 테스트에 "실측" 블록으로 추가하고 프리셋을 `verified: true` 로 바꾼다.
 
-### 9-2. `SKILL_DATA` 를 가져올지 — **사용자 결정 필요**
+### 9-2. `SKILL_DATA` — **가져옴 (2026-09-28 사용자 결정)**
 
-가져오면 직업·스킬·레벨만 고르면 계수와 소환체 프로필이 자동으로 채워진다. 다만
-- 게임 클라이언트에서 추출한 데이터로 보이고, 라테일은 액토즈소프트 IP 다
-  (이 앱은 이미 확률표 탭을 저작권 문제로 특정 계정에만 노출하고 있다).
-- 3MB 라 번들에 넣으면 대미지 탭 청크가 커진다 (지연 로딩이라 첫 화면엔 영향 없음).
+사용자 판단: 개인 정보 분석용 비영리 사이트라 가져온다. 대미지 탭은 여전히 제한 탭이다.
+
+- 데이터: `src/data/skillData.json` — 원본 `SKILL_DATA` 를 compact JSON 으로 그대로 옮김.
+  원본이 갱신되면 `index.html` 의 `const SKILL_DATA = {...}` 를 다시 떼어 덮어쓰면 된다.
+- 번들: 동적 import 라 대미지 탭의 "스킬 선택" 을 열 때만 받는다 (skillData 청크 3.5MB / gzip 212KB).
+  PWA 프리캐시 한도를 6MB 로 올려 오프라인에서도 쓴다 (`vite.config.js`).
+- 엔진 흐름 (`skillEngine.calculate`):
+  1. 특화석 3칸 → 옵션 행 → 스탯 ID 합계. 유니크는 1개, 같은 돌 중복 불가,
+     `custom[직업:스킬].awaken` 에 해당하는 각성이 꺼져 있으면 특화석 전체 무효.
+  2. 스킬 레벨 = 설정 레벨 + `stats[642 + grade]`.
+  3. 변형: 특화석 `Custom_Key` 가 있으면 그 커스텀 변형, 아니면 켜진 각성 중 가장 높은 페이지 변형.
+     구성이 같은 변형은 `aliases` 로 묶는다.
+  4. 입력 반영: 공용 버프(노블레스 +1%p ×3, 타이틀 크리 +200) → 특화석·스킬 버프(`scaled` 누적 규칙, §7).
+  5. 파트 방문: 직타 `C = base + step×레벨 (+최상위만 659/660)`,
+     소환 `summons[stat + statStep×레벨]` 프로필 × `mobs[mob]` — `damageRange` summon 모드로 계산.
+     특화석 `optionEffects[Effect]` 의 추가 타격도 방문한다. 중복 타격은 키로 제거.
+- 원본과 같게 **1회 적중 기준**이다 (타수·쿨타임·DPS 없음).
+- 캐릭터는 한 채널 스탯만 있으므로 반대 채널 타격(팬텀메이지·쥬얼스타 혼합 스킬)은 `unavailable: 'channel'` 로 표시만 한다.
+- 어댑터 `engineInputFromStats` (damageInputs.js): 누적% 는 `기본_*` 로 역산하고,
+  `기본_주스탯`·`기본_일몬추`·`기본_보몬추` 는 `*_BASE` 로 넘겨 ceil 역산 오차 없이 기본값을 그대로 쓴다.
+  무기공격력은 기본값에 +130/+115 오프셋이 있어 누적% 만 넘기고 원본처럼 역산한다.
 
 ### 9-3. 우리 스탯 누적 반올림을 `scaled()` 에 맞출지
 
@@ -243,5 +266,9 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
   `calculateChannel` 과 그 의존 함수(`attackPipeline`, `hitFlow`, `hitRange`, `finalDamageFlow`,
   `averageDamageEstimate`, `kahanAdd`, `estimateChannelAverages`)를 떼어 `node:vm` 에서 실행하면 된다.
   `f32 = Math.fround`, `floor = Math.floor`, 표본 상수 `16384 / 256 / 16384` 를 함께 정의한다.
+- 스킬 엔진을 원본과 다시 대조하려면: 위 함수들 + `const SKILL_DATA = <skillData.json>` +
+  `index.html` 두 번째 스크립트의 `const SkillEngine = (() => {...})()` 를 같은 vm 에서 실행하고,
+  모든 직업·스킬 × (기본 / 각성 on / 특화석 조합 / 유니크) × (버프 on/off) 로 `rows` 의 min·max 를 비교한다.
+  `tests/skillEngine.test.js` 의 `input()` 이 그때 쓴 공통 입력이다.
 - 원본이 갱신됐는지는 `gh api repos/alfm201/damage-test/commits` 로 확인한다 (익명 API 는 요청 제한이 걸린다).
 - 프로젝트 규칙: 브랜치 없이 `main` 에 바로 커밋·푸시. UI 세부는 묻지 말고 기존 톤(한 줄 설명 + 접기, cyan 단일 포인트)에 맞춘다.
