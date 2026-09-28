@@ -104,6 +104,8 @@ function setStone(slot, value) {
     const prev = c.stones[slot];
     const level = prev && opt?.levels.includes(prev.level) ? prev.level : opt?.levels.at(-1);
     c.stones[slot] = { type, number, level };
+    // 특화석은 각성 스킬에 끼우는 것이라(데이터상 290개 전부 각성 필요) 고르면 해당 각성을 함께 켠다
+    if (requiredPage.value) c[`aw${requiredPage.value}`] = true;
   }
   c.variant = '';
 }
@@ -241,11 +243,19 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
         <div v-if="config && stoneOptions.length" class="space-y-1.5">
           <div class="flex items-baseline gap-2">
             <span :class="labelCls">특화석</span>
-            <span v-if="stonesBlocked" class="text-[11px] text-orange-600 dark:text-orange-400">
-              {{ awakeningName(requiredPage) || `각성 ${requiredPage}` }} 을 켜야 특화석이 적용됩니다.
+            <span class="text-[11px] text-stone-400 dark:text-stone-500">
+              {{ awakeningName(requiredPage) || `각성 ${requiredPage}` }} 상태의 스킬에 끼웁니다
             </span>
+            <button
+              v-if="stonesBlocked"
+              type="button"
+              class="text-[11px] text-orange-600 dark:text-orange-400 underline underline-offset-2"
+              @click="config[`aw${requiredPage}`] = true; config.variant = ''"
+            >
+              각성이 꺼져 있어 적용 안 됨 · 켜기
+            </button>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2" :class="stonesBlocked ? 'opacity-50' : ''">
             <div v-for="slot in [0, 1, 2]" :key="slot" class="flex gap-1.5 min-w-0">
               <select
                 :value="stoneValue(slot)"
