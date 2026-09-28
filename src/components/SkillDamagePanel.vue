@@ -153,6 +153,20 @@ const hits = computed(() =>
     expected: r.unavailable ? null : avgOf(r.noncrit) * (1 - p.value) + avgOf(r.crit) * p.value,
   })),
 );
+// 타격 횟수 — 스킬 데이터에 타수가 없어 직접 입력받는다 (스킬 설정마다 기억, 기본 1회)
+const countOf = (h) => Math.max(0, Number(config.value?.hitCounts?.[h.key] ?? 1) || 0);
+function setCount(h, v) {
+  if (!config.value) return;
+  config.value.hitCounts = { ...(config.value.hitCounts || {}), [h.key]: Math.max(0, Math.round(Number(v) || 0)) };
+}
+const total = computed(() => {
+  const list = hits.value.filter((h) => !h.unavailable);
+  return {
+    sum: list.reduce((a, h) => a + h.expected * countOf(h), 0),
+    direct: list.filter((h) => h.kind === 'direct').reduce((a, h) => a + countOf(h), 0),
+    summon: list.filter((h) => h.kind === 'summon').reduce((a, h) => a + countOf(h), 0),
+  };
+});
 const unavailableCount = computed(() => hits.value.filter((h) => h.unavailable === 'channel').length);
 const stoneEffects = computed(() => Object.entries(result.value?.stats || {}).map(([id, v]) => statText(id, v)));
 
@@ -334,8 +348,15 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
       <template v-else-if="result">
         <p class="text-xs text-stone-500 dark:text-stone-400">
           스킬 레벨 {{ result.level }}<span v-if="result.level !== config.level"> (특화석 +{{ result.level - config.level }})</span>
-          · 1회 적중 기준 · 크리 {{ critRate }}% 기대값
+          · 크리 {{ critRate }}% 기대값
         </p>
+        <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3">
+          <p :class="labelCls">총 누적 대미지 · 직타 {{ total.direct }}회 + 소환 {{ total.summon }}회</p>
+          <p class="text-3xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 leading-none mt-1">{{ fmt(total.sum) }}</p>
+          <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1.5">
+            스킬 데이터에는 타수가 없어 각 타격의 횟수를 직접 넣어야 합니다 (기본 1회). 인게임 대미지 로그 개수를 세어 넣으세요.
+          </p>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div
             v-for="h in hits"
@@ -365,6 +386,20 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
                 </div>
               </div>
               <p v-if="h.conditions?.length" class="text-[11px] text-stone-400 dark:text-stone-500 mt-1">조건 충족 시 발생하는 타격입니다.</p>
+              <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 dark:border-stone-700/60 text-xs tabular-nums">
+                <label class="flex items-center gap-1.5 text-stone-500 dark:text-stone-400">
+                  타격 횟수
+                  <input
+                    :value="countOf(h)"
+                    type="number"
+                    min="0"
+                    class="h-7 w-16 rounded-md border-0 ring-1 ring-stone-300 dark:ring-stone-600 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-right focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    @input="setCount(h, $event.target.value)"
+                  />
+                  회
+                </label>
+                <span class="text-stone-600 dark:text-stone-300">합 {{ fmt(h.expected * countOf(h)) }}</span>
+              </div>
             </template>
           </div>
         </div>
