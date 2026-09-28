@@ -145,7 +145,82 @@ function needsFallbackWarning(def) {
       </div>
     </details>
 
-    <div class="overflow-x-auto">
+    <!-- 모바일: 스탯별 카드 — 5열 표는 좁은 화면에서 입력칸이 뭉개져서 카드형으로 대체 -->
+    <div class="sm:hidden space-y-2.5">
+      <div
+        v-for="def in EQUIP_ROW_DEFS"
+        :key="`m-${def.key}`"
+        class="rounded-lg ring-1 ring-stone-200 dark:ring-stone-700 p-3"
+      >
+        <p class="text-sm font-medium text-stone-700 dark:text-stone-300">
+          {{ rowLabel(def) }}
+          <span
+            v-if="pctPoolFor(def) != null"
+            class="ml-1 text-[11px] font-normal text-cyan-500 dark:text-cyan-400"
+            :title="pctBadgeTitle(def)"
+          >
+            ({{ formatPct(pctPoolFor(def)) }}<template v-if="def.key === '올스탯'"> · 주스탯 풀</template>)
+          </span>
+          <span
+            v-else-if="needsFallbackWarning(def)"
+            class="ml-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400"
+            :title="fallbackTitle(def)"
+          >
+            ⚠ 기본값 미입력 (추정)
+          </span>
+        </p>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <label class="block">
+            <span class="block text-[11px] text-rose-600 dark:text-rose-400 mb-0.5">현재 장비 (-) 가산값</span>
+            <NumInput
+              :step="def.addStep"
+              :model-value="oldEquip[def.addKey]"
+              @update:model-value="setOld(def.addKey, $event)"
+              class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
+            />
+            <span v-if="displayGainOf(oldEquip, def) != null" class="block mt-0.5 text-[10px] text-stone-400 dark:text-stone-500 tabular-nums">
+              → 표시 {{ fmtGain(displayGainOf(oldEquip, def)) }}
+            </span>
+          </label>
+          <label v-if="def.pctKey" class="block">
+            <span class="block text-[11px] text-rose-600 dark:text-rose-400 mb-0.5">% 옵션 (최종)</span>
+            <NumInput
+              step="1"
+              :model-value="oldEquip[def.pctKey]"
+              @update:model-value="setOld(def.pctKey, $event)"
+              placeholder="%"
+              class="w-full rounded-md border-0 ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-rose-400 focus:outline-none"
+            />
+          </label>
+          <span v-else aria-hidden="true"></span>
+          <label class="block">
+            <span class="block text-[11px] text-emerald-600 dark:text-emerald-400 mb-0.5">새 장비 (+) 가산값</span>
+            <NumInput
+              :step="def.addStep"
+              :model-value="newEquip[def.addKey]"
+              @update:model-value="setNew(def.addKey, $event)"
+              class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+            />
+            <span v-if="displayGainOf(newEquip, def) != null" class="block mt-0.5 text-[10px] text-stone-400 dark:text-stone-500 tabular-nums">
+              → 표시 {{ fmtGain(displayGainOf(newEquip, def)) }}
+            </span>
+          </label>
+          <label v-if="def.pctKey" class="block">
+            <span class="block text-[11px] text-emerald-600 dark:text-emerald-400 mb-0.5">% 옵션 (최종)</span>
+            <NumInput
+              step="1"
+              :model-value="newEquip[def.pctKey]"
+              @update:model-value="setNew(def.pctKey, $event)"
+              placeholder="%"
+              class="w-full rounded-md border-0 ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-stone-900 dark:text-stone-100 px-2 py-1 tabular-nums focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 데스크탑: 5열 표 -->
+    <div class="hidden sm:block overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-stone-500 dark:text-stone-400 text-xs">
