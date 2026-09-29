@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import {
   getStatLabel,
   expectedConditionalMultiplier,
@@ -11,6 +11,7 @@ import {
 import { STAT_FIELD_DEFS, BASE_FIELD_DEFS } from '../data/statLabels.js';
 import { fmt as formatBP } from '../utils/format.js';
 import NumInput from './NumInput.vue';
+import TchangImportDialog from './TchangImportDialog.vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -44,6 +45,29 @@ function setField(key, raw) {
   const num = raw === '' || raw === null ? 0 : Number(raw);
   emit('update:modelValue', { ...props.modelValue, [key]: Number.isFinite(num) ? num : 0 });
 }
+
+// ── T창 캡처로 채우기 — 버튼, 또는 이 화면에서 입력칸 밖에 이미지를 Ctrl+V ──
+const importOpen = ref(false);
+const importBlob = shallowRef(null);
+const formEl = ref(null);
+function openImport(blob = null) {
+  importBlob.value = blob;
+  importOpen.value = true;
+}
+function applyImport(patch) {
+  emit('update:modelValue', { ...props.modelValue, ...patch });
+}
+function onPagePaste(e) {
+  if (importOpen.value || !formEl.value?.offsetParent) return; // 다른 탭이면 무시
+  const tag = /** @type {HTMLElement} */ (document.activeElement)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  const item = [...(e.clipboardData?.items || [])].find((x) => x.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+  openImport(item.getAsFile());
+}
+onMounted(() => window.addEventListener('paste', onPagePaste));
+onBeforeUnmount(() => window.removeEventListener('paste', onPagePaste));
 
 // V_BIG32: 물리 공격력 = 무기공 표시범위(min~max)의 중간값 — 게임 실측으로 확정된 입력 규칙.
 // 두 칸 중 하나만 입력되면 그 값을 임시 사용, 둘 다 입력되면 (min+max)/2 를 공격력에 기록.
@@ -164,7 +188,20 @@ const BREAKDOWN_CARDS = [
 </script>
 
 <template>
-  <section class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+  <section ref="formEl" class="rounded-xl bg-white dark:bg-stone-800/60 ring-1 ring-stone-200 dark:ring-stone-700 p-5">
+    <div class="flex items-center justify-between gap-2 mb-3 -mt-1 rounded-lg bg-stone-50 dark:bg-stone-900/40 ring-1 ring-stone-200 dark:ring-stone-700 px-3 py-2">
+      <p class="text-xs text-stone-500 dark:text-stone-400">
+        숫자 입력이 번거로우면 T창 두 창을 캡처해 이 화면에서 <strong class="font-medium text-stone-700 dark:text-stone-200">Ctrl+V</strong>
+      </p>
+      <button
+        type="button"
+        class="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold"
+        @click="openImport()"
+      >
+        캡처로 채우기
+      </button>
+    </div>
+    <TchangImportDialog v-model="importOpen" :stats="modelValue" :initial-blob="importBlob" @apply="applyImport" />
     <!-- ── 헤더: 계산된 전투력 + 실측 검증 (제목은 아코디언 바가 담당) ── -->
     <header class="flex flex-wrap items-start justify-between gap-3 mb-4">
       <!-- 실측 전투력 검증 — 게임 T창 표시 전투력을 넣으면 오차를 보여준다 -->
