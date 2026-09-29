@@ -311,6 +311,7 @@ const BREAKDOWN_CARDS = [
           {{ getStatLabel(stats.type, def.key) }}
           <span v-if="def.key === '공격력' && stats.type === 'P'" class="text-stone-400">(표시범위)</span>
           <span v-else-if="def.unit" class="text-stone-400">({{ def.unit }})</span>
+          <span v-if="def.key === '관통'" class="ml-1 text-[11px] font-normal text-stone-400 dark:text-stone-500" :title="def.tooltip">전투력은 99 고정 · 대미지 계산용</span>
         </span>
         <!-- 물리 무기공격력: T창 표시범위 두 값 → 중간값 자동 적용 (V_BIG32) -->
         <template v-if="def.key === '공격력' && stats.type === 'P'">

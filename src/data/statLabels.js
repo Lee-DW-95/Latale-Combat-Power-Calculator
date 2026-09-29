@@ -8,7 +8,7 @@
 export const STAT_FIELD_DEFS = [
   { key: '주스탯', step: 1, unit: '', tooltip: '근력(물리) 또는 마법력(마법)' },
   { key: '공격력', step: 1, unit: '', tooltip: '물리: 무기공격력 표시범위(두 값)를 입력하면 중간값이 자동 적용됩니다 (V_BIG32 확정 규칙). 마법: 속성력 단일값.' },
-  { key: '관통', step: 1, unit: '%', tooltip: '관통력' },
+  { key: '관통', step: 1, unit: '%', tooltip: '관통력 — 인게임 패치로 전투력은 관통 99 고정 계산이라 전투력엔 영향이 없고, 대미지 계산 탭에서 쓰입니다.' },
   { key: '크댐', step: 1, unit: '', tooltip: '크리티컬 데미지 (본인 직업 영역값)' },
   { key: '최소뎀', step: 1, unit: '', tooltip: '최소 데미지 (수련의방 등에서 최대뎀을 초과하면 자동으로 최대뎀으로 cap)' },
   { key: '최대뎀', step: 1, unit: '', tooltip: '최대 데미지' },
@@ -46,7 +46,7 @@ export const EQUIP_FIELD_DEFS = [
   { key: '주스탯', group: '가산', step: 1, unit: '', tooltip: '근력 또는 마법력 가산' },
   { key: '올스탯', group: '가산', step: 1, unit: '', tooltip: '체력+행운+근력+마법력에 동시 가산 (전투력 계산상 주스탯에 합산)' },
   { key: '공격력', group: '가산', step: 1, unit: '', tooltip: '무기공격력/속성력 가산' },
-  { key: '관통', group: '가산', step: 1, unit: '%', tooltip: '관통력' },
+  { key: '관통', group: '가산', step: 1, unit: '%', tooltip: '관통력 — 전투력은 관통 99 고정 계산이라 전투력 변화 없음 (대미지에는 반영)' },
   { key: '크댐', group: '가산', step: 1, unit: '', tooltip: '크리티컬 데미지 가산' },
   { key: '최소뎀', group: '가산', step: 1, unit: '', tooltip: '최소 데미지 가산' },
   { key: '최대뎀', group: '가산', step: 1, unit: '', tooltip: '최대 데미지 가산' },
