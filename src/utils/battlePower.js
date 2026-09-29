@@ -169,6 +169,9 @@
 //   검증: 세이버 ΔBP -6742 = 실측 완벽 일치. 박햇님 sensitivity 0.135% (직 0.009%/소 0.177%).
 //   알려진 한계: 카톡 근마 페어 직타Δ ~-10K 이 실측 -21746 의 절반 (4 모델 모두 동일 한계)
 //     → 카톡 페어가 시사하는 K_cross(0.53)와 세이버 페어(0.24)가 단일 K로 모순 (모델 구조적 한계).
+/** 전투력 계산에 쓰는 관통 — 인게임 패치(2026-08~09)로 실제 관통과 무관하게 99 고정 */
+export const BP_PENETRATION = 99;
+
 export const PHYSICAL_PARAMS = Object.freeze({
   // V_BIG31: 통제실험 정확 역산 확정치 (base 게이지 1.078e-8 — 계수×base 곱만이 실측 결정량)
   K0: 1.4776987,           // 주스탯 가중치 (선형 항)
@@ -299,8 +302,13 @@ function multiplierFor(stats, mode = 'direct') {
   const dominanceMultiplier =
     1 + (Number(stats.일몬지 || 0) + Number(stats.보몬지 || 0)) / params.D_dom;
   // 관통 boost 1% 단위 floor
+  // 2026-08~09 인게임 패치: 전투력은 실제 관통과 상관없이 관통 99 기준으로 표기된다 (100 도 99).
+  //   DB 실측 확인 — 7월 입력(관통 98)은 98 로, 9월 입력(관통 98·100)은 99 로 계산해야 ±0.02% 일치.
+  //   패치 이전 학습 데이터(SAMPLE_DATA) 검증은 stats._penAsIs = true 로 실제 관통을 쓴다.
+  //   대미지 계산(damageFormula)은 실제 관통을 그대로 쓴다 — 패치는 전투력 표기만 바꿨다.
+  const penForBP = stats._penAsIs ? Number(stats.관통 || 0) : BP_PENETRATION;
   const penetrationMultiplier =
-    1 + Math.floor(Number(stats.관통 || 0) / params.D_pen * 100) / 100;
+    1 + Math.floor(penForBP / params.D_pen * 100) / 100;
   return (
     critMultiplier *
     dmgMultiplier *

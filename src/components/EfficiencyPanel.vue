@@ -45,7 +45,7 @@ const STATS_WITH_BASE = [
 //   누적%P 옵션 (+1%): 주/공/고/일·보몬추
 //   raw +1 가산:        크댐/최소뎀/최대뎀
 //   직접 +1pp:          일/보몬지/근마효율
-//   raw +1 (cap 99):    관통
+//   관통은 제외 — 인게임 패치(2026-08~09)로 전투력이 관통 99 고정으로 계산돼 전투력 효율이 0
 const MARGINAL_STEPS = [
   { key: '주스탯',   label: '+1%',  unitNote: '누적' },
   { key: '공격력',   label: '+1%',  unitNote: '누적' },
@@ -58,7 +58,6 @@ const MARGINAL_STEPS = [
   { key: '일몬지',   label: '+1%',  unitNote: '가산' },
   { key: '보몬지',   label: '+1%',  unitNote: '가산' },
   { key: '근마효율', label: '+1%',  unitNote: '가산' },
-  { key: '관통',     label: '+1',   unitNote: '가산' },
 ];
 
 // ============================================================
@@ -410,6 +409,10 @@ const awakResult = computed(() => {
 // 빠른 시뮬 (A) — 부적/장비 가산 옵션 + % 옵션 시뮬
 // ============================================================
 const simStat = ref('주스탯');
+// 예전에 저장된 선택이 목록에서 빠진 스탯(관통)이면 기본값으로
+watch(simStat, (v) => {
+  if (!MARGINAL_STEPS.some((m) => m.key === v)) simStat.value = '주스탯';
+}, { immediate: true });
 const simAmount = ref('');     // 가산값 (부적 raw 옵션)
 const simPct = ref('');        // % 옵션
 
@@ -725,7 +728,7 @@ const sign = (n) => (n >= 0 ? `+${fmt(n)}` : fmt(n));
           </ul>
           <p class="mt-2 text-[10px] text-stone-400 dark:text-stone-500 italic leading-snug">
             ⓘ <strong>≈</strong> 는 옵션이 정수 단위(floor)로만 적용돼 가장 근접한 근사 환산값임을 뜻합니다 ·
-            <strong>도달 불가</strong> 는 관통 cap(99)·최소뎀 한계처럼 게임상 천장에 막힌 경우입니다.
+            <strong>도달 불가</strong> 는 최소뎀 한계(최대뎀 초과 불가)처럼 게임상 천장에 막힌 경우입니다. 관통은 패치로 전투력이 99 고정 계산이라 목록에서 뺐습니다.
             정확한 환산은 장비비교 섹션의 <strong>기본 스탯</strong> 입력이 필요합니다 (미입력 시 누적 0% 폴백).
           </p>
         </div>

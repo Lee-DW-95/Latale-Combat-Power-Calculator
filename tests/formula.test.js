@@ -37,7 +37,8 @@ console.log('');
 
 for (const s of samples) {
   const expected = s.전투력;
-  const actual = calculateBattlePower(s);
+  // SAMPLE_DATA 는 관통 99 고정 패치(2026-08~09) 이전 캡처 — 실제 관통으로 검증
+  const actual = calculateBattlePower({ ...s, _penAsIs: true });
   const diff = actual - expected;
   const errorPercent = (diff / expected) * 100;
   const absErrorPct = Math.abs(errorPercent);

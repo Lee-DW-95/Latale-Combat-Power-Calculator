@@ -126,7 +126,8 @@ for (const k of ['공격력', '고댐', '최대뎀', '일몬지', '보몬지']) 
   const t2 = bpWithOption(s2, '주스탯', 1, mode) - base2;
   const dfn2 = (k) => (amt) => bpWithOption(s2, k, amt, mode) - base2;
   const rPen = solveEquivalentAmount(dfn2('관통'), t2);
-  check('저관통 캐릭 → 관통 도달 가능', rPen.reachable === true, `reachable=${rPen.reachable}`);
+  // 인게임 패치(2026-08~09): 전투력은 관통 99 고정 계산 → 관통을 올려도 전투력 불변 = 도달 불가
+  check('관통은 전투력에 영향 없음 (99 고정 패치) → 도달 불가', rPen.reachable === false, `reachable=${rPen.reachable}`);
   const rMin = solveEquivalentAmount(dfn2('최소뎀'), t2);
   check('최소<최대 캐릭 → 최소뎀 도달 가능', rMin.reachable === true, `reachable=${rMin.reachable}`);
 }
