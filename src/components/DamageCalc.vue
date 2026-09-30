@@ -100,10 +100,10 @@ const deltaOpen = ref(adjusting.value);
 const resetDeltas = () => DELTA_FIELDS.forEach((f) => (deltas[f.key] = 0));
 /** 계산에 쓰는 스탯 — 조정값이 있으면 가감한 사본 */
 const cur = computed(() => (adjusting.value ? applyStatDeltas(props.stats, deltas, deltaMode.value) : props.stats));
-const deltaNoBase = computed(() => (adjusting.value && deltaMode.value === 'base' ? deltaMissingBase(props.stats, deltas) : []));
+const deltaNoBase = computed(() => (adjusting.value ? deltaMissingBase(props.stats, deltas, deltaMode.value) : []));
 const deltaSummary = computed(() =>
   DELTA_FIELDS.filter((f) => Number(deltas[f.key]))
-    .map((f) => `${f.label.replace(/ %$/, '')} ${deltas[f.key] > 0 ? '+' : ''}${fmt1(deltas[f.key])}`)
+    .map((f) => `${f.label.replace(/ %$/, '')} ${deltas[f.key] > 0 ? '+' : ''}${fmt1(deltas[f.key])}${/ %$/.test(f.label) ? '%' : ''}`)
     .join(' · '),
 );
 
@@ -369,10 +369,10 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
           <p class="text-[11px] text-stone-400 dark:text-stone-500">
             <template v-if="deltaMode === 'base'">추가 세부정보의 기본값(+값)에 더하고 최종 %를 다시 곱합니다. 예) 크댐 −300 → 기본 크댐 −300.</template>
             <template v-else>전투력이 표기되는 종합 T창 값에 그대로 더합니다. 예) 크댐 −300 → 최종 크댐 −300.</template>
-            빼려면 음수를 넣습니다. 캐릭터 스탯은 그대로 둡니다.
+            % 칸은 장비 % 옵션처럼 누적 %에 더합니다 (최소·최대·크리는 최종 %). 빼려면 음수를 넣습니다. 캐릭터 스탯은 그대로 둡니다.
           </p>
           <p v-if="deltaNoBase.length" class="text-[11px] text-orange-600 dark:text-orange-400">
-            {{ deltaNoBase.join('·') }}의 기본값이 없어 최종 %를 몰라 표시값에 그대로 더했습니다. 전투력 탭에서 기본값을 채우면 정확해집니다.
+            {{ deltaNoBase.join('·') }}: 기본값이 없어 누적 %를 모르는 채로 계산했습니다 (가산은 표시값에 그대로, %는 누적 0%로 가정). 전투력 탭에서 기본값을 채우면 정확해집니다.
           </p>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2">
             <label v-for="f in DELTA_FIELDS" :key="f.key" class="flex flex-col gap-1 min-w-0">

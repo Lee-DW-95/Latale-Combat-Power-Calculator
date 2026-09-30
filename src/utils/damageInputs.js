@@ -30,17 +30,25 @@ export function splitFinal(display, base) {
 }
 
 /**
- * 대미지 탭 "스탯 조정" 항목. 가감 기준은 applyStatDeltas 의 mode 로 고른다.
+ * 대미지 탭 "스탯 조정" 항목. 가산값의 가감 기준은 applyStatDeltas 의 mode 로 고른다.
+ * pct 항목(_퍼)은 장비 % 옵션과 같다 — 누적 %(최소·최대·크리는 최종 %)에 더해진다.
  * 추가대미지·지배력은 일반·보스 양쪽에 같이 더한다.
  */
 export const DELTA_FIELDS = [
   { key: '주스탯', label: '근력/마법력', base: '기본_주스탯' },
+  { key: '주스탯_퍼', label: '근력/마법력 %', base: '기본_주스탯', pct: true },
   { key: '공격력', label: '무기공격력/속성력', base: '기본_공격력' },
+  { key: '공격력_퍼', label: '무기공격력/속성력 %', base: '기본_공격력', pct: true },
   { key: '최소뎀', label: '최소 대미지', base: '기본_최소뎀' },
+  { key: '최소뎀_퍼', label: '최소 대미지 %', base: '기본_최소뎀', pct: true },
   { key: '최대뎀', label: '최대 대미지', base: '기본_최대뎀' },
+  { key: '최대뎀_퍼', label: '최대 대미지 %', base: '기본_최대뎀', pct: true },
   { key: '크댐', label: '크리티컬 대미지', base: '기본_크댐' },
+  { key: '크댐_퍼', label: '크리티컬 대미지 %', base: '기본_크댐', pct: true },
   { key: '고댐', label: '고정 대미지', base: '기본_고댐' },
+  { key: '고댐_퍼', label: '고정 대미지 %', base: '기본_고댐', pct: true },
   { key: '추가', label: '몬스터 추가 대미지', base: '기본_보몬추' },
+  { key: '추가_퍼', label: '몬스터 추가 대미지 %', base: '기본_보몬추', pct: true },
   { key: '지배력', label: '지배력 %', step: 0.1 },
   { key: '관통', label: '관통 %' },
   { key: '근마효율', label: '근력/마법력 효율 %' },
@@ -55,7 +63,9 @@ export const DELTA_FIELDS = [
  *                    인게임에서 +값 옵션이 늘고 준 것과 같다. 예) 크댐 −300 → 기본 크댐 −300
  *   mode 'display' — 종합 T창 표시값 ± δ, 기본값은 누적 % 가 유지되도록 역산해 옮긴다.
  *                    최소·최대·크리는 floor(raw × (100+F)/100) 가 되는 값으로 맞춰 ±1 오차가 날 수 있다.
- *   기본값이 없는 항목은 누적 % 를 알 수 없어 두 모드 모두 표시값에 그대로 더한다 (deltaMissingBase).
+ *   _퍼 항목은 모드와 관계없이 누적 % 에 더한다: 표시값 = 기본값 × (1 + 누적% + δ%) (장비 비교 applyEquipDelta 와 같은 규칙).
+ *     최소·최대·크리 %는 최종 %(F)에 더한다: floor(raw × (100 + F + δ) / 100).
+ *   기본값이 없는 항목은 누적 % 를 알 수 없다 — 가산은 표시값에 그대로 더하고, % 는 누적 0% 로 보고 곱한다 (deltaMissingBase).
  * @param {any} stats
  * @param {Record<string, number>} deltas
  * @param {'base'|'display'} [mode]
@@ -99,23 +109,47 @@ export function applyStatDeltas(stats, deltas, mode = 'base') {
     s[key] = Math.floor((nb * (100 + sp.f)) / 100);
   };
 
+  /** 누적 % + δ% — 표시값 = 기본값 × (표시값/기본값 + δ/100). 기본값이 없으면 표시값을 기본값(누적 0%)으로 본다. 반환: 표시값 배율 변화 */
+  const addPct = (key, baseKey, pct) => {
+    const disp = n(s[key]);
+    if (!(disp > 0)) return 1;
+    const base = n(s[baseKey]) > 0 ? n(s[baseKey]) : disp;
+    s[baseKey] = base;
+    const after = Math.max(0, base * (disp / base + pct / 100));
+    s[key] = Math.floor(after + 1e-9);
+    return after / disp;
+  };
+  /** 최종 %(F) + δ% — floor(raw × (100 + F + δ) / 100) */
+  const addFinalPct = (key, baseKey, pct) => {
+    const sp = splitFinal(s[key], s[baseKey]);
+    const f = Math.max(-100, sp.f + pct);
+    s[baseKey] = sp.raw;
+    s[key] = Math.floor((sp.raw * (100 + f)) / 100);
+  };
+  const moveWeaponRange = (mult, add) => {
+    if (n(s.무기공표시min) > 0 && n(s.무기공표시max) > 0) {
+      s.무기공표시min = Math.max(0, Math.floor(n(s.무기공표시min) * mult + add));
+      s.무기공표시max = Math.max(0, Math.floor(n(s.무기공표시max) * mult + add));
+    }
+  };
+
   if (d('주스탯')) shiftBase('주스탯', '기본_주스탯', d('주스탯'));
+  if (d('주스탯_퍼')) addPct('주스탯', '기본_주스탯', d('주스탯_퍼'));
   if (d('공격력')) {
     const w = d('공격력');
-    const ratio = shiftBase('공격력', '기본_공격력', w);
     // 무공 표시범위 두 값도 함께 — 기본 기준이면 δ × 누적 배율, 표시 기준이면 δ 그대로
-    if (n(s.무기공표시min) > 0 && n(s.무기공표시max) > 0) {
-      s.무기공표시min = Math.max(0, Math.floor(n(s.무기공표시min) + w * ratio));
-      s.무기공표시max = Math.max(0, Math.floor(n(s.무기공표시max) + w * ratio));
-    }
+    moveWeaponRange(1, w * shiftBase('공격력', '기본_공격력', w));
   }
-  if (d('최소뎀')) shiftFinal('최소뎀', '기본_최소뎀', d('최소뎀'));
-  if (d('최대뎀')) shiftFinal('최대뎀', '기본_최대뎀', d('최대뎀'));
-  if (d('크댐')) shiftFinal('크댐', '기본_크댐', d('크댐'));
+  if (d('공격력_퍼')) moveWeaponRange(addPct('공격력', '기본_공격력', d('공격력_퍼')), 0);
+  for (const [k, bk] of [['최소뎀', '기본_최소뎀'], ['최대뎀', '기본_최대뎀'], ['크댐', '기본_크댐']]) {
+    if (d(k)) shiftFinal(k, bk, d(k));
+    if (d(`${k}_퍼`)) addFinalPct(k, bk, d(`${k}_퍼`));
+  }
   if (d('고댐')) shiftBase('고댐', '기본_고댐', d('고댐'));
-  if (d('추가')) {
-    shiftBase('일몬추', '기본_일몬추', d('추가'));
-    shiftBase('보몬추', '기본_보몬추', d('추가'));
+  if (d('고댐_퍼')) addPct('고댐', '기본_고댐', d('고댐_퍼'));
+  for (const [k, bk] of [['일몬추', '기본_일몬추'], ['보몬추', '기본_보몬추']]) {
+    if (d('추가')) shiftBase(k, bk, d('추가'));
+    if (d('추가_퍼')) addPct(k, bk, d('추가_퍼'));
   }
   for (const k of ['일몬지', '보몬지']) if (d('지배력')) s[k] = Math.max(0, n(s[k]) + d('지배력'));
   for (const k of ['관통', '근마효율', '백어택', '근거리', '상태대미지']) if (d(k)) s[k] = Math.max(0, n(s[k]) + d(k));
@@ -123,12 +157,16 @@ export function applyStatDeltas(stats, deltas, mode = 'base') {
 }
 
 /**
- * 조정값을 넣었지만 기본값이 없어 표시값에 그대로 더해진 항목 라벨
+ * 조정값을 넣었지만 기본값이 없어 누적 % 를 모른 채 계산된 항목 라벨.
+ * 가산값은 기본값 기준일 때만, % 항목은 기준과 관계없이 기본값이 필요하다.
  * @param {any} stats
  * @param {Record<string, number>} deltas
+ * @param {'base'|'display'} [mode]
  */
-export function deltaMissingBase(stats, deltas) {
-  return DELTA_FIELDS.filter((f) => f.base && Number(deltas?.[f.key]) && !(Number(stats?.[f.base]) > 0)).map((f) => f.label);
+export function deltaMissingBase(stats, deltas, mode = 'base') {
+  return DELTA_FIELDS.filter(
+    (f) => f.base && (f.pct || mode !== 'display') && Number(deltas?.[f.key]) && !(Number(stats?.[f.base]) > 0),
+  ).map((f) => f.label);
 }
 
 /**
