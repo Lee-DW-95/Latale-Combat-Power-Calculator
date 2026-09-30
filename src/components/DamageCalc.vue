@@ -4,7 +4,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../utils/damageFormula.js';
-import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal, applyStatDeltas, DELTA_FIELDS } from '../utils/damageInputs.js';
+import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal, applyStatDeltas, deltaMissingBase, DELTA_FIELDS } from '../utils/damageInputs.js';
 import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty, isStatusImmune } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
 import { TOZ_COEF_BONUS } from '../utils/skillEngine.js';
@@ -85,6 +85,7 @@ const deltaOpen = ref(adjusting.value);
 const resetDeltas = () => DELTA_FIELDS.forEach((f) => (deltas[f.key] = 0));
 /** 계산에 쓰는 스탯 — 조정값이 있으면 가감한 사본 */
 const cur = computed(() => (adjusting.value ? applyStatDeltas(props.stats, deltas) : props.stats));
+const deltaNoBase = computed(() => (adjusting.value ? deltaMissingBase(props.stats, deltas) : []));
 const deltaSummary = computed(() =>
   DELTA_FIELDS.filter((f) => Number(deltas[f.key]))
     .map((f) => `${f.label.replace(/ %$/, '')} ${deltas[f.key] > 0 ? '+' : ''}${fmt1(deltas[f.key])}`)
@@ -339,7 +340,11 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         <p v-if="adjusting && !deltaOpen" class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">{{ deltaSummary }}</p>
         <div v-show="deltaOpen" class="mt-3 space-y-2">
           <p class="text-[11px] text-stone-400 dark:text-stone-500">
-            T창 표시값에 더할 값을 넣습니다 (빼려면 음수). 캐릭터 스탯은 그대로 두고, 결과에 조정 전 대비 증감을 함께 보여 줍니다.
+            기본값(T창 추가 세부정보 +값)에 더할 값을 넣습니다 (빼려면 음수). 최종 %는 그대로 다시 곱해집니다.
+            캐릭터 스탯은 그대로 두고, 결과에 조정 전 대비 증감을 함께 보여 줍니다.
+          </p>
+          <p v-if="deltaNoBase.length" class="text-[11px] text-orange-600 dark:text-orange-400">
+            {{ deltaNoBase.join('·') }}의 기본값이 없어 표시값에 그대로 더했습니다. 전투력 탭에서 기본값을 채우면 최종 %가 반영됩니다.
           </p>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2">
             <label v-for="f in DELTA_FIELDS" :key="f.key" class="flex flex-col gap-1 min-w-0">
