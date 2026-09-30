@@ -30,6 +30,79 @@ export function splitFinal(display, base) {
 }
 
 /**
+ * 대미지 탭 "스탯 조정" 항목 — T창 표시값에 더하거나 뺄 값.
+ * 추가대미지·지배력은 일반·보스 양쪽에 같이 더한다.
+ */
+export const DELTA_FIELDS = [
+  { key: '주스탯', label: '근력/마법력' },
+  { key: '공격력', label: '무기공격력/속성력' },
+  { key: '최소뎀', label: '최소 대미지' },
+  { key: '최대뎀', label: '최대 대미지' },
+  { key: '크댐', label: '크리티컬 대미지' },
+  { key: '고댐', label: '고정 대미지' },
+  { key: '추가', label: '몬스터 추가 대미지' },
+  { key: '지배력', label: '지배력 %', step: 0.1 },
+  { key: '관통', label: '관통 %' },
+  { key: '근마효율', label: '근력/마법력 효율 %' },
+  { key: '백어택', label: '백어택 대미지' },
+  { key: '근거리', label: '근거리 대미지' },
+  { key: '상태대미지', label: '상태이상 대미지' },
+];
+
+/**
+ * T창 스탯에 표시값 기준 가감을 적용한 사본을 만든다.
+ *   - 기본_* 가 있는 항목은 누적 % 가 그대로 유지되도록 기본값도 같은 비율로 옮긴다
+ *     (인게임에서 +값 옵션이 늘어난 것과 같은 효과 — 특화석 % 옵션 계산이 어긋나지 않게).
+ *   - 최소·최대·크리 대미지는 최종 %(F)를 유지한 채 floor(raw × (100+F)/100) 가 되는 표시값으로 맞춘다 (±1 오차).
+ * @param {any} stats
+ * @param {Record<string, number>} deltas
+ */
+export function applyStatDeltas(stats, deltas) {
+  const s = { ...stats };
+  const n = (v) => Number(v) || 0;
+  const d = (k) => n(deltas?.[k]);
+  const scaleWithBase = (key, baseKey, delta) => {
+    if (!delta) return;
+    const before = n(s[key]);
+    const after = Math.max(0, before + delta);
+    if (baseKey && n(s[baseKey]) > 0 && before > 0) s[baseKey] = (n(s[baseKey]) * after) / before;
+    s[key] = after;
+  };
+  const shiftFinal = (key, baseKey, delta) => {
+    if (!delta) return;
+    const sp = splitFinal(s[key], s[baseKey]);
+    const after = Math.max(0, n(s[key]) + delta);
+    if (!sp.derived) {
+      s[key] = after;
+      s[baseKey] = 0; // 기본값으로 F 를 못 나눈 상태 그대로 (raw = 표시값, F = 0)
+      return;
+    }
+    const raw = Math.round((after * 100) / (100 + sp.f));
+    s[baseKey] = raw;
+    s[key] = Math.floor((raw * (100 + sp.f)) / 100);
+  };
+
+  scaleWithBase('주스탯', '기본_주스탯', d('주스탯'));
+  if (d('공격력')) {
+    const w = d('공격력');
+    if (n(s.무기공표시min) > 0 && n(s.무기공표시max) > 0) {
+      s.무기공표시min = Math.max(0, n(s.무기공표시min) + w);
+      s.무기공표시max = Math.max(0, n(s.무기공표시max) + w);
+    }
+    scaleWithBase('공격력', '기본_공격력', w);
+  }
+  shiftFinal('최소뎀', '기본_최소뎀', d('최소뎀'));
+  shiftFinal('최대뎀', '기본_최대뎀', d('최대뎀'));
+  shiftFinal('크댐', '기본_크댐', d('크댐'));
+  scaleWithBase('고댐', '기본_고댐', d('고댐'));
+  scaleWithBase('일몬추', '기본_일몬추', d('추가'));
+  scaleWithBase('보몬추', '기본_보몬추', d('추가'));
+  for (const k of ['일몬지', '보몬지']) if (d('지배력')) s[k] = Math.max(0, n(s[k]) + d('지배력'));
+  for (const k of ['관통', '근마효율', '백어택', '근거리', '상태대미지']) if (d(k)) s[k] = Math.max(0, n(s[k]) + d(k));
+  return s;
+}
+
+/**
  * 물리 무기공격력 표시범위 — 입력돼 있으면 그대로, 없으면 중간값 단일
  * @param {any} stats
  */

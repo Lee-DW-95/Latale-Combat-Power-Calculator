@@ -16,6 +16,7 @@ const props = defineProps({
   conditions: { type: Object, required: true },
   toz: { type: Boolean, default: false },
   survival: { type: Boolean, default: false }, // 생존본능 — 난수 최대 고정 표기
+  baseStats: { type: Object, default: null }, // 스탯 조정 중이면 조정 전 스탯 — 같은 스킬 설정으로 한 번 더 계산해 비교
 });
 
 const STORAGE_KEY = 'latale.skillDamage.v1';
@@ -130,32 +131,38 @@ function resetSkill() {
 
 // ── 계산 ──
 const channel = computed(() => (props.stats?.type === 'M' ? 'magic' : 'physical'));
-const input = computed(() =>
-  engineInputFromStats(props.stats, {
+function calcFor(stats) {
+  const e = engine.value;
+  if (!e || !config.value || !skill.value || !stats) return null;
+  const input = engineInputFromStats(stats, {
     targetStats: props.targetStats,
     targetType: /** @type {'normal'|'boss'} */ (props.targetType),
     level: props.level,
     conditions: props.conditions,
-  }),
-);
-const result = computed(() => {
-  const e = engine.value;
-  if (!e || !config.value || !skill.value) return null;
-  return e.calculate(state.cls, state.skillId, config.value, input.value, { noblesse: state.noblesse, title: state.title, toz: props.toz }, {
+  });
+  return e.calculate(state.cls, state.skillId, config.value, input, { noblesse: state.noblesse, title: state.title, toz: props.toz }, {
     channels: new Set([channel.value]),
   });
-});
+}
+const result = computed(() => calcFor(props.stats));
+const baseResult = computed(() => (props.baseStats ? calcFor(props.baseStats) : null));
 
 const p = computed(() => Math.min(1, Math.max(0, (Number(props.critRate) || 0) / 100)));
 // 생존본능이면 난수 최대(맥댐 고정), 아니면 적분 평균(없으면 중앙값)
 const avgOf = (r) => (props.survival ? r.max : (r.avg ?? r.mid));
-const hits = computed(() =>
-  (result.value?.rows || []).map((r, i) => ({
-    ...r,
-    label: hitLabel(r, i + 1),
-    expected: r.unavailable ? null : avgOf(r.noncrit) * (1 - p.value) + avgOf(r.crit) * p.value,
-  })),
-);
+const expectedOf = (r) => (r.unavailable ? null : avgOf(r.noncrit) * (1 - p.value) + avgOf(r.crit) * p.value);
+const hits = computed(() => {
+  const baseRows = baseResult.value?.rows || [];
+  return (result.value?.rows || []).map((r, i) => {
+    const b = baseRows.find((x) => x.key === r.key);
+    return {
+      ...r,
+      label: hitLabel(r, i + 1),
+      expected: expectedOf(r),
+      baseExpected: b ? expectedOf(b) : null,
+    };
+  });
+});
 // 타격 횟수 — 스킬 데이터에 타수가 없어 직접 입력받는다 (스킬 설정마다 기억, 기본 1회)
 const countOf = (h) => Math.max(0, Number(config.value?.hitCounts?.[h.key] ?? 1) || 0);
 function setCount(h, v) {
@@ -166,11 +173,18 @@ const total = computed(() => {
   const list = hits.value.filter((h) => !h.unavailable);
   return {
     sum: list.reduce((a, h) => a + h.expected * countOf(h), 0),
+    baseSum: baseResult.value ? list.reduce((a, h) => a + (h.baseExpected ?? 0) * countOf(h), 0) : null,
     direct: list.filter((h) => h.kind === 'direct').reduce((a, h) => a + countOf(h), 0),
     summon: list.filter((h) => h.kind === 'summon').reduce((a, h) => a + countOf(h), 0),
   };
 });
 const unavailableCount = computed(() => hits.value.filter((h) => h.unavailable === 'channel').length);
+/** 조정 전 대비 증감 % 표기 */
+const diffPct = (now, before) => {
+  if (!before) return '';
+  const v = ((now - before) / before) * 100;
+  return `${v >= 0 ? '+' : ''}${(Math.round(v * 100) / 100).toLocaleString('ko-KR')}%`;
+};
 const stoneEffects = computed(() => Object.entries(result.value?.stats || {}).map(([id, v]) => statText(id, v)));
 
 const selectCls =
@@ -357,6 +371,12 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
         <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 border-l-4 border-cyan-500 px-4 py-3">
           <p :class="labelCls">총 누적 대미지 · 직타 {{ total.direct }}회 + 소환 {{ total.summon }}회</p>
           <p class="text-3xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 leading-none mt-1">{{ fmt(total.sum) }}</p>
+          <p v-if="total.baseSum != null" class="text-sm tabular-nums text-stone-600 dark:text-stone-300 mt-1.5">
+            조정 전 {{ fmt(total.baseSum) }}
+            <span class="font-semibold" :class="total.sum >= total.baseSum ? 'text-cyan-700 dark:text-cyan-300' : 'text-orange-600 dark:text-orange-400'">
+              → {{ total.sum >= total.baseSum ? '+' : '' }}{{ fmt(total.sum - total.baseSum) }} ({{ diffPct(total.sum, total.baseSum) }})
+            </span>
+          </p>
           <p class="text-[11px] text-stone-400 dark:text-stone-500 mt-1.5">
             스킬 데이터에는 타수가 없어 각 타격의 횟수를 직접 넣어야 합니다 (기본 1회). 인게임 대미지 로그 개수를 세어 넣으세요.
           </p>
@@ -381,7 +401,12 @@ const labelCls = 'text-[11px] font-medium tracking-wide text-stone-400 dark:text
             </p>
             <p v-else-if="h.unavailable" class="text-xs text-stone-500 dark:text-stone-400 mt-1.5">소환체 데이터가 없어 계산할 수 없습니다.</p>
             <template v-else>
-              <p class="text-2xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 mt-1">{{ fmt(h.expected) }}</p>
+              <p class="text-2xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 mt-1">
+                {{ fmt(h.expected) }}
+                <span v-if="h.baseExpected != null" class="text-xs font-medium" :class="h.expected >= h.baseExpected ? 'text-stone-500 dark:text-stone-400' : 'text-orange-600 dark:text-orange-400'">
+                  {{ diffPct(h.expected, h.baseExpected) }}
+                </span>
+              </p>
               <div class="grid grid-cols-2 gap-3 mt-1.5 text-xs tabular-nums">
                 <div v-for="k in ['noncrit', 'crit']" :key="k">
                   <p class="text-stone-400 dark:text-stone-500">{{ k === 'crit' ? '크리' : '비크리' }} {{ survival ? '최대' : '평균' }}</p>

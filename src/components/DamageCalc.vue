@@ -1,14 +1,15 @@
 <script setup>
 // 대미지 계산 — 공개 분석 문서의 공식을 그대로 돌려 실제 대미지를 낸다.
 //   ⚠ 인게임 실측 대조 전이다. docs/DAMAGE_FORMULA.md 의 검증 절차 참고.
-import { computed, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../utils/damageFormula.js';
-import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal } from '../utils/damageInputs.js';
+import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal, applyStatDeltas, DELTA_FIELDS } from '../utils/damageInputs.js';
 import { MONSTER_PRESETS, scaledMonsterStats, hasDifficulty, isStatusImmune } from '../data/monsterPresets.js';
 import { fmtRound as fmt, fmt1 } from '../utils/format.js';
 import { TOZ_COEF_BONUS } from '../utils/skillEngine.js';
 import InfoNote from './InfoNote.vue';
+import NumInput from './NumInput.vue';
 import SkillDamagePanel from './SkillDamagePanel.vue';
 
 const props = defineProps({
@@ -63,6 +64,33 @@ watch(
   },
 );
 
+// ── 스탯 조정 — 전투력 탭을 오가지 않고 T창 표시값을 가감해 대미지 변화를 본다 ──
+const DELTA_KEY = 'latale.damageCalc.deltas.v1';
+const deltas = reactive(Object.fromEntries(DELTA_FIELDS.map((f) => [f.key, 0])));
+try {
+  const saved = JSON.parse(localStorage.getItem(DELTA_KEY) || 'null');
+  if (saved) for (const f of DELTA_FIELDS) if (Number(saved[f.key])) deltas[f.key] = Number(saved[f.key]);
+} catch {
+  /* localStorage 불가 — 조정 없음 */
+}
+watch(deltas, () => {
+  try {
+    localStorage.setItem(DELTA_KEY, JSON.stringify(deltas));
+  } catch {
+    /* 저장 실패 무시 */
+  }
+});
+const adjusting = computed(() => DELTA_FIELDS.some((f) => Number(deltas[f.key])));
+const deltaOpen = ref(adjusting.value);
+const resetDeltas = () => DELTA_FIELDS.forEach((f) => (deltas[f.key] = 0));
+/** 계산에 쓰는 스탯 — 조정값이 있으면 가감한 사본 */
+const cur = computed(() => (adjusting.value ? applyStatDeltas(props.stats, deltas) : props.stats));
+const deltaSummary = computed(() =>
+  DELTA_FIELDS.filter((f) => Number(deltas[f.key]))
+    .map((f) => `${f.label.replace(/ %$/, '')} ${deltas[f.key] > 0 ? '+' : ''}${fmt1(deltas[f.key])}`)
+    .join(' · '),
+);
+
 // ── 대상 ──
 const preset = computed(() => MONSTER_PRESETS.find((p) => p.id === presetId.value) || MONSTER_PRESETS[0]);
 const needsDifficulty = computed(() => hasDifficulty(preset.value));
@@ -79,12 +107,8 @@ const presetGroups = computed(() => {
 // ── 계산 ──
 const hasStats = computed(() => calculateBattlePower(props.stats) > 0);
 
-const attacker = computed(() =>
-  attackerFromStats(props.stats, {
-    target: preset.value.target,
-    level: level.value,
-  }),
-);
+const attackerOf = (stats) => attackerFromStats(stats, { target: preset.value.target, level: level.value });
+const attacker = computed(() => attackerOf(cur.value));
 const target = computed(() => targetFromPreset(targetStats.value));
 const skill = computed(() => ({
   mode: skillMode.value,
@@ -104,29 +128,38 @@ const nonCrit = computed(() => (hasStats.value ? damageRange(attacker.value, tar
 const crit = computed(() => (hasStats.value ? damageRange(attacker.value, target.value, skill.value, { ...conditions.value, crit: true }) : null));
 // 표시 기준 — 생존본능이면 난수 최대(맥댐)로 고정, 아니면 적분 평균(없으면 중앙값)
 const pickVal = (r) => (survival.value ? r.max : (r.avg ?? r.mid));
-const expected = computed(() => {
-  if (!hasStats.value) return 0;
+function expectedFor(att) {
   const p = Math.min(1, Math.max(0, (Number(critRate.value) || 0) / 100));
-  if (survival.value) return nonCrit.value.max * (1 - p) + crit.value.max * p;
-  return expectedDamage(attacker.value, target.value, skill.value, conditions.value, p);
-});
+  if (survival.value) {
+    const nc = damageRange(att, target.value, skill.value, { ...conditions.value, crit: false });
+    const c = damageRange(att, target.value, skill.value, { ...conditions.value, crit: true });
+    return nc.max * (1 - p) + c.max * p;
+  }
+  return expectedDamage(att, target.value, skill.value, conditions.value, p);
+}
+const expected = computed(() => (hasStats.value ? expectedFor(attacker.value) : 0));
+const baseExpected = computed(() => (hasStats.value && adjusting.value ? expectedFor(attackerOf(props.stats)) : null));
+const diffPct = (now, before) => {
+  const v = before ? ((now - before) / before) * 100 : 0;
+  return `${v >= 0 ? '+' : ''}${(Math.round(v * 100) / 100).toLocaleString('ko-KR')}%`;
+};
 
 // 방어 계수 — "내 관통이 이 대상에 얼마나 먹히는지" 를 숫자로 보여준다.
 const defenseInfo = computed(() => {
-  const isMagic = props.stats?.type === 'M';
+  const isMagic = cur.value?.type === 'M';
   const a = defenseConstant(isMagic ? 'M' : 'P', level.value);
   const def = isMagic ? target.value.res : target.value.armor;
-  const pen = skillMode.value === 'summon' ? 99 : Number(props.stats?.관통) || 0;
+  const pen = skillMode.value === 'summon' ? 99 : Number(cur.value?.관통) || 0;
   return { a, def, pen, coef: defenseCoef(def, a, pen), label: isMagic ? '저항력' : '방어력' };
 });
 
-const weapon = computed(() => weaponRangeOf(props.stats));
+const weapon = computed(() => weaponRangeOf(cur.value));
 
 // 크리·최소·최대 = 추가 세부정보 +값 × (1 + 최종 %) — 기본_* 로 역산한 결과를 보여준다
 const finals = computed(() => [
-  { label: '크리티컬 대미지', ...splitFinal(props.stats?.크댐, props.stats?.기본_크댐) },
-  { label: '최소 대미지', ...splitFinal(props.stats?.최소뎀, props.stats?.기본_최소뎀) },
-  { label: '최대 대미지', ...splitFinal(props.stats?.최대뎀, props.stats?.기본_최대뎀) },
+  { label: '크리티컬 대미지', ...splitFinal(cur.value?.크댐, cur.value?.기본_크댐) },
+  { label: '최소 대미지', ...splitFinal(cur.value?.최소뎀, cur.value?.기본_최소뎀) },
+  { label: '최대 대미지', ...splitFinal(cur.value?.최대뎀, cur.value?.기본_최대뎀) },
 ]);
 const finalsMissing = computed(() => finals.value.filter((f) => !f.derived).map((f) => f.label));
 const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
@@ -285,9 +318,48 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         </div>
       </div>
 
+      <!-- 스탯 조정 -->
+      <div
+        class="rounded-xl ring-1 bg-white dark:bg-stone-800/60 p-3 sm:p-4"
+        :class="adjusting ? 'ring-cyan-400 dark:ring-cyan-600' : 'ring-stone-200 dark:ring-stone-700'"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <button type="button" class="flex items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-200 min-w-0" @click="deltaOpen = !deltaOpen">
+            <span class="inline-block transition-transform duration-200 text-stone-400 text-xs" :class="deltaOpen ? 'rotate-90' : ''">▶</span>
+            스탯 조정해서 비교
+            <span v-if="adjusting" class="text-[11px] font-medium text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/40 rounded px-1.5 py-0.5">적용 중</span>
+          </button>
+          <button
+            v-if="adjusting"
+            type="button"
+            class="h-7 px-2.5 rounded-md text-xs text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-700/60 shrink-0"
+            @click="resetDeltas"
+          >초기화</button>
+        </div>
+        <p v-if="adjusting && !deltaOpen" class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">{{ deltaSummary }}</p>
+        <div v-show="deltaOpen" class="mt-3 space-y-2">
+          <p class="text-[11px] text-stone-400 dark:text-stone-500">
+            T창 표시값에 더할 값을 넣습니다 (빼려면 음수). 캐릭터 스탯은 그대로 두고, 결과에 조정 전 대비 증감을 함께 보여 줍니다.
+          </p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2">
+            <label v-for="f in DELTA_FIELDS" :key="f.key" class="flex flex-col gap-1 min-w-0">
+              <span class="text-[11px] text-stone-500 dark:text-stone-400 truncate">{{ f.label }}</span>
+              <NumInput
+                v-model="deltas[f.key]"
+                :step="f.step || 1"
+                placeholder="±0"
+                class="h-8 w-full rounded-lg border-0 ring-1 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-2 text-sm text-right tabular-nums focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                :class="Number(deltas[f.key]) ? 'ring-cyan-400 dark:ring-cyan-600' : 'ring-stone-300 dark:ring-stone-600'"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
       <SkillDamagePanel
         v-if="inputMode === 'skill'"
-        :stats="stats"
+        :stats="cur"
+        :base-stats="adjusting ? stats : null"
         :target-stats="targetStats"
         :target-type="preset.target"
         :level="Number(level) || 1"
@@ -305,6 +377,12 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         </p>
         <p class="text-3xl font-semibold tracking-tight tabular-nums text-cyan-700 dark:text-cyan-300 leading-none mt-1">
           {{ fmt(expected) }}
+        </p>
+        <p v-if="baseExpected != null" class="text-sm tabular-nums text-stone-600 dark:text-stone-300 mt-1.5">
+          조정 전 {{ fmt(baseExpected) }}
+          <span class="font-semibold" :class="expected >= baseExpected ? 'text-cyan-700 dark:text-cyan-300' : 'text-orange-600 dark:text-orange-400'">
+            → {{ expected >= baseExpected ? '+' : '' }}{{ fmt(expected - baseExpected) }} ({{ diffPct(expected, baseExpected) }})
+          </span>
         </p>
         <p class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">
           {{ preset.label }} · {{ preset.target === 'boss' ? '보스' : '일반' }}
@@ -334,7 +412,7 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
 
       <!-- 적용 값 확인 -->
       <div class="rounded-xl ring-1 ring-stone-200 dark:ring-stone-700 bg-white dark:bg-stone-800/60 px-4 py-3">
-        <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-2">적용된 값<span v-if="inputMode === 'skill'" class="normal-case tracking-normal"> · 특화석·버프 적용 전</span></p>
+        <p class="text-[11px] font-medium tracking-wide text-stone-400 dark:text-stone-500 uppercase mb-2">적용된 값<span v-if="adjusting" class="normal-case tracking-normal"> · 스탯 조정 반영</span><span v-if="inputMode === 'skill'" class="normal-case tracking-normal"> · 특화석·버프 적용 전</span></p>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs tabular-nums">
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">{{ defenseInfo.label }}</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(defenseInfo.def) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-stone-500 dark:text-stone-400">레벨 상수 a</span><span class="text-stone-800 dark:text-stone-100">{{ fmt(defenseInfo.a) }}</span></div>
