@@ -30,8 +30,7 @@ export function splitFinal(display, base) {
 }
 
 /**
- * 대미지 탭 "스탯 조정" 항목 — 기본값(T창 추가 세부정보 +값)에 더하거나 뺄 값.
- * base 가 있는 항목은 기본값에 가감한 뒤 누적 %(최종 %)를 다시 곱해 표시값을 만든다.
+ * 대미지 탭 "스탯 조정" 항목. 가감 기준은 applyStatDeltas 의 mode 로 고른다.
  * 추가대미지·지배력은 일반·보스 양쪽에 같이 더한다.
  */
 export const DELTA_FIELDS = [
@@ -51,14 +50,18 @@ export const DELTA_FIELDS = [
 ];
 
 /**
- * T창 스탯에 기본값 기준 가감을 적용한 사본을 만든다 — 인게임에서 +값 옵션이 늘고 준 것과 같다.
- *   - 최소·최대·크리 대미지: 기본값 ± δ → floor(기본값 × (100 + 최종%) / 100)
- *   - 근력·무공·고댐·추가대미지: 기본값 ± δ, 표시값 = 기본값 × (표시값 / 기본값) (누적 % 유지)
- *   - 기본값이 없는 항목은 누적 % 를 알 수 없어 표시값에 그대로 더한다 (missingBase 로 알린다).
+ * T창 스탯에 가감을 적용한 사본을 만든다. 어느 쪽이든 누적 %(최종 %)는 유지한다.
+ *   mode 'base'    — 기본값(추가 세부정보 +값) ± δ 후 누적 % 를 다시 곱해 표시값을 만든다.
+ *                    인게임에서 +값 옵션이 늘고 준 것과 같다. 예) 크댐 −300 → 기본 크댐 −300
+ *   mode 'display' — 종합 T창 표시값 ± δ, 기본값은 누적 % 가 유지되도록 역산해 옮긴다.
+ *                    최소·최대·크리는 floor(raw × (100+F)/100) 가 되는 값으로 맞춰 ±1 오차가 날 수 있다.
+ *   기본값이 없는 항목은 누적 % 를 알 수 없어 두 모드 모두 표시값에 그대로 더한다 (deltaMissingBase).
  * @param {any} stats
  * @param {Record<string, number>} deltas
+ * @param {'base'|'display'} [mode]
  */
-export function applyStatDeltas(stats, deltas) {
+export function applyStatDeltas(stats, deltas, mode = 'base') {
+  const byBase = mode !== 'display';
   const s = { ...stats };
   const n = (v) => Number(v) || 0;
   const d = (k) => n(deltas?.[k]);
@@ -71,6 +74,12 @@ export function applyStatDeltas(stats, deltas) {
       return 1;
     }
     const ratio = disp / base;
+    if (!byBase) {
+      const after = Math.max(0, disp + delta);
+      s[baseKey] = after / ratio;
+      s[key] = after;
+      return 1;
+    }
     const nb = Math.max(0, base + delta);
     s[baseKey] = nb;
     s[key] = Math.floor(nb * ratio + 1e-9);
@@ -83,7 +92,9 @@ export function applyStatDeltas(stats, deltas) {
       s[baseKey] = 0; // 기본값으로 F 를 못 나눈 상태 그대로 (raw = 표시값, F = 0)
       return;
     }
-    const nb = Math.max(0, sp.raw + delta);
+    const nb = byBase
+      ? Math.max(0, sp.raw + delta)
+      : Math.round((Math.max(0, n(s[key]) + delta) * 100) / (100 + sp.f));
     s[baseKey] = nb;
     s[key] = Math.floor((nb * (100 + sp.f)) / 100);
   };
@@ -92,7 +103,7 @@ export function applyStatDeltas(stats, deltas) {
   if (d('공격력')) {
     const w = d('공격력');
     const ratio = shiftBase('공격력', '기본_공격력', w);
-    // 무공 표시범위 두 값도 같은 배율로 — 기본 최소·최대 무공이 각각 δ 만큼 움직인 것
+    // 무공 표시범위 두 값도 함께 — 기본 기준이면 δ × 누적 배율, 표시 기준이면 δ 그대로
     if (n(s.무기공표시min) > 0 && n(s.무기공표시max) > 0) {
       s.무기공표시min = Math.max(0, Math.floor(n(s.무기공표시min) + w * ratio));
       s.무기공표시max = Math.max(0, Math.floor(n(s.무기공표시max) + w * ratio));

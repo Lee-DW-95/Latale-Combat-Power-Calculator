@@ -80,12 +80,27 @@ watch(deltas, () => {
     /* 저장 실패 무시 */
   }
 });
+// 가감 기준 — 'display' 종합 T창(전투력 표기) 표시값 | 'base' 추가 세부정보 기본값
+const DELTA_MODE_KEY = 'latale.damageCalc.deltaMode.v1';
+const deltaMode = ref('base');
+try {
+  if (localStorage.getItem(DELTA_MODE_KEY) === 'display') deltaMode.value = 'display';
+} catch {
+  /* localStorage 불가 — 기본값 기준 */
+}
+watch(deltaMode, (v) => {
+  try {
+    localStorage.setItem(DELTA_MODE_KEY, v);
+  } catch {
+    /* 저장 실패 무시 */
+  }
+});
 const adjusting = computed(() => DELTA_FIELDS.some((f) => Number(deltas[f.key])));
 const deltaOpen = ref(adjusting.value);
 const resetDeltas = () => DELTA_FIELDS.forEach((f) => (deltas[f.key] = 0));
 /** 계산에 쓰는 스탯 — 조정값이 있으면 가감한 사본 */
-const cur = computed(() => (adjusting.value ? applyStatDeltas(props.stats, deltas) : props.stats));
-const deltaNoBase = computed(() => (adjusting.value ? deltaMissingBase(props.stats, deltas) : []));
+const cur = computed(() => (adjusting.value ? applyStatDeltas(props.stats, deltas, deltaMode.value) : props.stats));
+const deltaNoBase = computed(() => (adjusting.value && deltaMode.value === 'base' ? deltaMissingBase(props.stats, deltas) : []));
 const deltaSummary = computed(() =>
   DELTA_FIELDS.filter((f) => Number(deltas[f.key]))
     .map((f) => `${f.label.replace(/ %$/, '')} ${deltas[f.key] > 0 ? '+' : ''}${fmt1(deltas[f.key])}`)
@@ -337,14 +352,27 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
             @click="resetDeltas"
           >초기화</button>
         </div>
-        <p v-if="adjusting && !deltaOpen" class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">{{ deltaSummary }}</p>
+        <p v-if="adjusting && !deltaOpen" class="text-xs text-stone-500 dark:text-stone-400 mt-1.5 tabular-nums">{{ deltaMode === 'base' ? '기본값' : '최종 스탯' }} 기준 · {{ deltaSummary }}</p>
         <div v-show="deltaOpen" class="mt-3 space-y-2">
+          <div class="inline-flex rounded-lg bg-stone-100 dark:bg-stone-900/60 p-0.5 h-8">
+            <button
+              v-for="m in [{ id: 'display', label: '종합 T창 (최종 스탯)' }, { id: 'base', label: '추가 세부정보 (기본값)' }]"
+              :key="m.id"
+              type="button"
+              @click="deltaMode = m.id"
+              class="px-3 rounded-md text-xs font-medium transition"
+              :class="deltaMode === m.id
+                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-50 shadow-sm ring-1 ring-stone-200 dark:ring-stone-600'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-100'"
+            >{{ m.label }}</button>
+          </div>
           <p class="text-[11px] text-stone-400 dark:text-stone-500">
-            기본값(T창 추가 세부정보 +값)에 더할 값을 넣습니다 (빼려면 음수). 최종 %는 그대로 다시 곱해집니다.
-            캐릭터 스탯은 그대로 두고, 결과에 조정 전 대비 증감을 함께 보여 줍니다.
+            <template v-if="deltaMode === 'base'">추가 세부정보의 기본값(+값)에 더하고 최종 %를 다시 곱합니다. 예) 크댐 −300 → 기본 크댐 −300.</template>
+            <template v-else>전투력이 표기되는 종합 T창 값에 그대로 더합니다. 예) 크댐 −300 → 최종 크댐 −300.</template>
+            빼려면 음수를 넣습니다. 캐릭터 스탯은 그대로 둡니다.
           </p>
           <p v-if="deltaNoBase.length" class="text-[11px] text-orange-600 dark:text-orange-400">
-            {{ deltaNoBase.join('·') }}의 기본값이 없어 표시값에 그대로 더했습니다. 전투력 탭에서 기본값을 채우면 최종 %가 반영됩니다.
+            {{ deltaNoBase.join('·') }}의 기본값이 없어 최종 %를 몰라 표시값에 그대로 더했습니다. 전투력 탭에서 기본값을 채우면 정확해집니다.
           </p>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2">
             <label v-for="f in DELTA_FIELDS" :key="f.key" class="flex flex-col gap-1 min-w-0">
