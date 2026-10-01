@@ -162,3 +162,27 @@ def test_recover_password_rotates_code(client):
         json={"nickname": "recoveruser", "recovery_code": old_code, "new_password": "another123"},
     )
     assert res.status_code == 401
+
+
+def test_skill_configs_saved_and_kept_when_omitted(client):
+    headers = auth_headers(register(client, "skilluser")["token"])
+    skill = {"cls": 30, "skillId": 1002029, "configs": {"30:1002029": {"level": 5, "aw1": True, "aw2": True}}}
+    res = client.post("/characters", json=dict(sample_character(), skill_configs=skill), headers=headers)
+    assert res.status_code == 201, res.text
+    char_id = res.json()["id"]
+    assert res.json()["skill_configs"] == skill
+
+    # skill_configs 를 모르는 옛 클라이언트가 저장해도 기존 스킬 설정은 유지
+    res = client.put(f"/characters/{char_id}", json=sample_character(), headers=headers)
+    assert res.status_code == 200, res.text
+    assert res.json()["skill_configs"] == skill
+
+    # 보내면 교체
+    res = client.put(f"/characters/{char_id}", json=dict(sample_character(), skill_configs={}), headers=headers)
+    assert res.json()["skill_configs"] == {}
+
+
+def test_skill_configs_default_empty(client):
+    headers = auth_headers(register(client, "skilluser2")["token"])
+    res = client.post("/characters", json=sample_character(), headers=headers)
+    assert res.json()["skill_configs"] == {}

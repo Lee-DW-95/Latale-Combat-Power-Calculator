@@ -60,11 +60,12 @@ def init_db() -> None:
 
 # create_all 은 기존 테이블에 새 컬럼을 추가하지 않는다. Alembic 없이 운영하므로
 # 모델에 있는데 실제 테이블에 없는 JSON 컬럼만 ADD COLUMN 으로 보충한다 (idempotent).
-#   (컬럼명, DDL) — 새 JSON 리스트 컬럼을 늘릴 때 여기에 한 줄 추가.
+#   (컬럼명, DDL) — 새 JSON 컬럼을 늘릴 때 여기에 한 줄 추가.
 _JSON_LIST_COLUMNS = {
     "characters": [
         ("memorials", "JSON NOT NULL DEFAULT '[]'"),
         ("runeword", "JSON NOT NULL DEFAULT '[]'"),
+        ("skill_configs", "JSON NOT NULL DEFAULT '{}'"),
     ],
 }
 

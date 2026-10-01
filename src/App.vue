@@ -270,6 +270,7 @@ const stats = ref(createEmptyStats('P'));
 const awakStones = ref([]); // 활성 캐릭터의 각성석 옵션 — EfficiencyPanel 과 v-model 양방향.
 const memorials = ref([]);  // 활성 캐릭터의 보유 메모리얼 카드 — MemorialLoadoutPanel 과 v-model 양방향.
 const runeword = ref(sanitizeRuneword([])); // 활성 캐릭터의 장착 룬워드 (룬 id 8개) — RuneWordLoadoutPanel 과 양방향.
+const skillConfigs = ref({}); // 활성 캐릭터의 대미지 탭 스킬 설정 (직업·스킬·각성·특화석) — SkillDamagePanel 과 양방향.
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
 
@@ -314,6 +315,7 @@ async function applyCharacterToWorkspace(c) {
     awakStones.value = Array.isArray(c.awak_stones) ? [...c.awak_stones] : [];
     memorials.value = sanitizeMemorialCards(c.memorials);
     runeword.value = sanitizeRuneword(c.runeword);
+    skillConfigs.value = c.skill_configs && typeof c.skill_configs === 'object' ? c.skill_configs : {};
   }
   await nextTick();
   applyingFromCharacter = false;
@@ -357,7 +359,7 @@ let saveTimer = null;
 const SAVE_DEBOUNCE_MS = 2000;
 
 watch(
-  [stats, awakStones, memorials, runeword],
+  [stats, awakStones, memorials, runeword, skillConfigs],
   () => {
     if (applyingFromCharacter) return;
     if (!activeCharacter.value) return; // 활성 캐릭터 없으면 자동 저장 X.
@@ -371,7 +373,7 @@ watch(
       saveStatus.value = 'saving';
       saveError.value = '';
       try {
-        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value);
+        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, skillConfigs.value);
         saveStatus.value = 'saved';
         lastSavedAt.value = Date.now();
       } catch (err) {
@@ -411,7 +413,7 @@ async function onConflictOverwrite() {
   conflictBusy.value = true;
   saveStatus.value = 'saving';
   try {
-    await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, { force: true });
+    await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, skillConfigs.value, { force: true });
     saveStatus.value = 'saved';
     lastSavedAt.value = Date.now();
   } catch (err) {
@@ -790,7 +792,7 @@ const savedTimeLabel = computed(() => {
 
       <!-- ───── 탭: 대미지 계산 ───── -->
       <template v-else-if="activeTab === 'damage'">
-        <DamageCalc :stats="stats" />
+        <DamageCalc v-model:skill-configs="skillConfigs" :stats="stats" :has-character="!!activeCharacter" />
       </template>
 
       <!-- ───── 탭 9: 어드벤처 ───── -->

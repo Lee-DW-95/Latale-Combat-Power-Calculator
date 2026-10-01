@@ -65,6 +65,7 @@ def create_character(
         awak_stones=body.awak_stones,
         memorials=body.memorials,
         runeword=body.runeword,
+        skill_configs=body.skill_configs,
     )
     db.add(char)
     db.commit()
@@ -113,6 +114,8 @@ def update_character(
     char.awak_stones = body.awak_stones
     char.memorials = body.memorials
     char.runeword = body.runeword
+    if body.skill_configs is not None:
+        char.skill_configs = body.skill_configs
     db.commit()
     db.refresh(char)
     return char

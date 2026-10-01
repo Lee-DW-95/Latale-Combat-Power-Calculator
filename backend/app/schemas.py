@@ -49,10 +49,12 @@ class CharacterBase(BaseModel):
 
 
 class CharacterCreate(CharacterBase):
-    pass
+    skill_configs: dict[str, Any] = Field(default_factory=dict)
 
 
 class CharacterUpdate(CharacterBase):
+    # 생략(None)하면 기존 값 유지 — 이 칸을 모르는 옛 클라이언트가 저장해도 스킬 설정이 지워지지 않게.
+    skill_configs: dict[str, Any] | None = None
     # 낙관적 잠금 — 클라이언트가 마지막으로 본 updated_at. 보내면 서버 값과 초 단위로
     # 비교해 다르면 409 (다른 기기에서 먼저 저장). 생략하면 기존과 동일하게 무조건 덮어씀.
     expected_updated_at: datetime | None = None
@@ -60,6 +62,7 @@ class CharacterUpdate(CharacterBase):
 
 class CharacterRead(CharacterBase):
     id: int
+    skill_configs: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

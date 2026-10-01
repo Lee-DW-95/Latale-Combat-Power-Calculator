@@ -43,6 +43,8 @@ class Character(Base):
     memorials: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # 장착 룬워드 — 룬 id 8개 (마지막이 왕룬), 빈 칸은 null. 예: [10, 19, null, ..., 28]
     runeword: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # 대미지 탭 스킬 설정 — {cls, skillId, configs: {"직업:스킬": {level, aw1, aw2, stones, ...}}, noblesse, title}
+    skill_configs: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )

@@ -17,7 +17,10 @@ const props = defineProps({
   toz: { type: Boolean, default: false },
   survival: { type: Boolean, default: false }, // 생존본능 — 난수 최대 고정 표기
   baseStats: { type: Object, default: null }, // 스탯 조정 중이면 조정 전 스탯 — 같은 스킬 설정으로 한 번 더 계산해 비교
+  hasCharacter: { type: Boolean, default: false }, // 활성 캐릭터가 있으면 스킬 설정을 캐릭터(skillConfigs)에 저장
 });
+// 활성 캐릭터의 스킬 설정 — 캐릭터와 함께 서버(로그인)·브라우저(비로그인) 캐릭터 목록에 저장된다
+const skillConfigs = defineModel('skillConfigs', { type: Object, default: null });
 
 const STORAGE_KEY = 'latale.skillDamage.v1';
 
@@ -27,19 +30,43 @@ import('../data/skillData.json')
   .then((m) => (engine.value = createSkillEngine(m.default)))
   .catch(() => (loadError.value = '스킬 데이터를 불러오지 못했습니다. 새로고침해 주세요.'));
 
-// ── 선택 상태 (브라우저에 저장) ──
-const state = reactive({ cls: 0, skillId: 0, configs: {}, noblesse: false, title: false });
-try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-  if (saved && typeof saved === 'object') Object.assign(state, saved);
-} catch {
-  /* localStorage 불가 — 기본값 */
+// ── 선택 상태 — 활성 캐릭터가 있으면 캐릭터에, 없으면 브라우저에 저장 ──
+const emptyState = () => ({ cls: 0, skillId: 0, configs: {}, noblesse: false, title: false });
+const state = reactive(emptyState());
+function readLocal() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    return saved && typeof saved === 'object' ? saved : null;
+  } catch {
+    return null; // localStorage 불가 — 기본값
+  }
 }
+// 마지막으로 불러오거나 내보낸 상태 — 내가 보낸 값이 v-model 로 되돌아올 때 다시 불러오지 않게 비교한다
+let lastJson = '';
+watch(
+  [() => props.hasCharacter, skillConfigs],
+  ([has, cfg]) => {
+    const next = { ...emptyState(), ...((has ? cfg : readLocal()) || {}) };
+    const json = JSON.stringify(next);
+    if (json === lastJson) return;
+    for (const k of Object.keys(state)) delete state[k];
+    Object.assign(state, next);
+    lastJson = json;
+  },
+  { immediate: true },
+);
 watch(
   state,
   () => {
+    const json = JSON.stringify(state);
+    if (json === lastJson) return;
+    lastJson = json;
+    if (props.hasCharacter) {
+      skillConfigs.value = JSON.parse(json);
+      return;
+    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, json);
     } catch {
       /* 저장 실패 무시 */
     }

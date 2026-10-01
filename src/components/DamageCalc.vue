@@ -14,7 +14,10 @@ import SkillDamagePanel from './SkillDamagePanel.vue';
 
 const props = defineProps({
   stats: { type: Object, required: true },
+  hasCharacter: { type: Boolean, default: false },
 });
+// 스킬 선택 설정 — 활성 캐릭터에 저장 (App.vue ↔ SkillDamagePanel 중계)
+const skillConfigs = defineModel('skillConfigs', { type: Object, default: null });
 
 const STORAGE_KEY = 'latale.damageCalc.v1';
 
@@ -398,6 +401,8 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         :level="Number(level) || 1"
         :crit-rate="Number(critRate) || 0"
         :conditions="conditions"
+        v-model:skill-configs="skillConfigs"
+        :has-character="hasCharacter"
         :toz="toz"
         :survival="survival"
       />

@@ -50,11 +50,17 @@ function fromServerCharacter(c) {
     awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
     memorials: Array.isArray(c.memorials) ? c.memorials : [],
     runeword: Array.isArray(c.runeword) ? c.runeword : [],
+    skill_configs: skillConfigsOf(c.skill_configs),
     updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
     // 서버가 준 updated_at 원문 — 저장 때 expected_updated_at 으로 그대로 돌려보내 낙관적 잠금에 쓴다.
     //   (ms 로 변환한 updatedAt 을 다시 문자열로 만들면 마이크로초·tz 표기가 달라질 수 있어 원문을 보관)
     serverUpdatedAt: c.updated_at || null,
   };
+}
+
+/** 대미지 탭 스킬 설정 — 객체가 아니면 빈 설정 */
+function skillConfigsOf(v) {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 }
 
 /** 409 응답이 낙관적 잠금 충돌인지 (이름 중복 409 와 구분 — detail 에 character 가 실려 온다) */
@@ -114,10 +120,10 @@ function makeLocalId() {
 
 export function useCharacterStorage() {
   // saveCharacter — 동일 이름 캐릭터가 있으면 갱신, 없으면 신규 생성.
-  //   awakStones / memorials / runeword 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
+  //   awakStones / memorials / runeword / skillConfigs 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
   //   opts.force: 낙관적 잠금을 건너뛰고 덮어쓴다 (충돌 배너에서 "내 변경으로 덮어쓰기" 를 골랐을 때).
   //   서버 모드에서 다른 기기가 먼저 저장해 409 가 오면 conflict 를 채우고 ConflictError 를 던진다.
-  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null, opts = {}) {
+  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null, skillConfigs = null, opts = {}) {
     const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('캐릭터 이름을 입력해주세요.');
 
@@ -131,6 +137,7 @@ export function useCharacterStorage() {
         awak_stones: awakStones ?? existing?.awak_stones ?? [],
         memorials: memorials ?? existing?.memorials ?? [],
         runeword: runeword ?? existing?.runeword ?? [],
+        skill_configs: skillConfigs ?? existing?.skill_configs ?? {},
       };
       if (existing) {
         // 내가 마지막으로 받은 서버 버전을 함께 보낸다 — 그 사이 다른 기기가 저장했으면 서버가 409.
@@ -166,6 +173,7 @@ export function useCharacterStorage() {
       if (awakStones !== null) existing.awak_stones = awakStones;
       if (memorials !== null) existing.memorials = memorials;
       if (runeword !== null) existing.runeword = runeword;
+      if (skillConfigs !== null) existing.skill_configs = skillConfigs;
       existing.updatedAt = Date.now();
       activeId.value = existing.id;
       return existing;
@@ -177,6 +185,7 @@ export function useCharacterStorage() {
       awak_stones: awakStones ?? [],
       memorials: memorials ?? [],
       runeword: runeword ?? [],
+      skill_configs: skillConfigs ?? {},
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -201,7 +210,7 @@ export function useCharacterStorage() {
   }
 
   // ── JSON 내보내기 / 가져오기 — 비로그인 사용자 백업, 기기 간 수동 이동용 ──
-  //   형식: { format: 'latale-characters', version: 1, exportedAt, characters: [{ name, stats, awak_stones, memorials, runeword }] }
+  //   형식: { format: 'latale-characters', version: 1, exportedAt, characters: [{ name, stats, awak_stones, memorials, runeword, skill_configs }] }
   const EXPORT_FORMAT = 'latale-characters';
 
   function exportCharacters() {
@@ -215,6 +224,7 @@ export function useCharacterStorage() {
         awak_stones: c.awak_stones || [],
         memorials: c.memorials || [],
         runeword: c.runeword || [],
+        skill_configs: skillConfigsOf(c.skill_configs),
       })),
     };
   }
@@ -243,6 +253,7 @@ export function useCharacterStorage() {
           Array.isArray(c.awak_stones) ? c.awak_stones : [],
           Array.isArray(c.memorials) ? c.memorials : [],
           Array.isArray(c.runeword) ? c.runeword : [],
+          c.skill_configs ? skillConfigsOf(c.skill_configs) : null,
           { force: true },
         );
         if (existed) result.updated += 1;
@@ -310,6 +321,7 @@ export function useCharacterStorage() {
             awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
             memorials: Array.isArray(c.memorials) ? c.memorials : [],
             runeword: Array.isArray(c.runeword) ? c.runeword : [],
+            skill_configs: skillConfigsOf(c.skill_configs),
           }),
         );
         characters.value = [created, ...characters.value];
