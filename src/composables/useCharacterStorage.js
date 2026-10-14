@@ -50,7 +50,7 @@ function fromServerCharacter(c) {
     awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
     memorials: Array.isArray(c.memorials) ? c.memorials : [],
     runeword: Array.isArray(c.runeword) ? c.runeword : [],
-    skill_configs: skillConfigsOf(c.skill_configs),
+    ...settingsOf(c),
     updatedAt: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
     // 서버가 준 updated_at 원문 — 저장 때 expected_updated_at 으로 그대로 돌려보내 낙관적 잠금에 쓴다.
     //   (ms 로 변환한 updatedAt 을 다시 문자열로 만들면 마이크로초·tz 표기가 달라질 수 있어 원문을 보관)
@@ -58,9 +58,17 @@ function fromServerCharacter(c) {
   };
 }
 
-/** 대미지 탭 스킬 설정 — 객체가 아니면 빈 설정 */
-function skillConfigsOf(v) {
+// 캐릭터별 설정 JSON 칸 — 대미지 탭 스킬 설정 / 성물 발동 시뮬 / 대미지 탭 입력 (백엔드 schemas.SETTING_FIELDS 와 같은 목록)
+const SETTING_KEYS = ['skill_configs', 'relics', 'damage_settings'];
+
+/** 설정 칸 하나 — 객체가 아니면 빈 설정 */
+function settingOf(v) {
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+/** 캐릭터(또는 가져오기 파일) → 설정 칸 전부 ({skill_configs, relics, damage_settings}) */
+function settingsOf(c) {
+  return Object.fromEntries(SETTING_KEYS.map((k) => [k, settingOf(c?.[k])]));
 }
 
 /** 409 응답이 낙관적 잠금 충돌인지 (이름 중복 409 와 구분 — detail 에 character 가 실려 온다) */
@@ -120,10 +128,11 @@ function makeLocalId() {
 
 export function useCharacterStorage() {
   // saveCharacter — 동일 이름 캐릭터가 있으면 갱신, 없으면 신규 생성.
-  //   awakStones / memorials / runeword / skillConfigs 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
+  //   awakStones / memorials / runeword 인자가 null/undefined 면 기존 값 유지(있을 때) 또는 빈 배열(신규).
+  //   settings: { skill_configs?, relics?, damage_settings? } — 빠진 칸은 기존 값 유지(있을 때) 또는 빈 설정(신규).
   //   opts.force: 낙관적 잠금을 건너뛰고 덮어쓴다 (충돌 배너에서 "내 변경으로 덮어쓰기" 를 골랐을 때).
   //   서버 모드에서 다른 기기가 먼저 저장해 409 가 오면 conflict 를 채우고 ConflictError 를 던진다.
-  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null, skillConfigs = null, opts = {}) {
+  async function saveCharacter(name, stats, awakStones = null, memorials = null, runeword = null, settings = null, opts = {}) {
     const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('캐릭터 이름을 입력해주세요.');
 
@@ -137,7 +146,7 @@ export function useCharacterStorage() {
         awak_stones: awakStones ?? existing?.awak_stones ?? [],
         memorials: memorials ?? existing?.memorials ?? [],
         runeword: runeword ?? existing?.runeword ?? [],
-        skill_configs: skillConfigs ?? existing?.skill_configs ?? {},
+        ...mergedSettings(settings, existing),
       };
       if (existing) {
         // 내가 마지막으로 받은 서버 버전을 함께 보낸다 — 그 사이 다른 기기가 저장했으면 서버가 409.
@@ -173,7 +182,7 @@ export function useCharacterStorage() {
       if (awakStones !== null) existing.awak_stones = awakStones;
       if (memorials !== null) existing.memorials = memorials;
       if (runeword !== null) existing.runeword = runeword;
-      if (skillConfigs !== null) existing.skill_configs = skillConfigs;
+      Object.assign(existing, mergedSettings(settings, existing));
       existing.updatedAt = Date.now();
       activeId.value = existing.id;
       return existing;
@@ -185,13 +194,18 @@ export function useCharacterStorage() {
       awak_stones: awakStones ?? [],
       memorials: memorials ?? [],
       runeword: runeword ?? [],
-      skill_configs: skillConfigs ?? {},
+      ...mergedSettings(settings, null),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
     characters.value = [created, ...characters.value];
     activeId.value = created.id;
     return created;
+  }
+
+  // 설정 칸 — 넘어온 값 우선, 없으면 기존 캐릭터 값, 그것도 없으면 빈 설정
+  function mergedSettings(settings, existing) {
+    return Object.fromEntries(SETTING_KEYS.map((k) => [k, settings?.[k] ?? existing?.[k] ?? {}]));
   }
 
   // 충돌 배너에서 "서버 저장본 불러오기" — 목록의 캐릭터를 서버 버전으로 바꾼다.
@@ -210,7 +224,7 @@ export function useCharacterStorage() {
   }
 
   // ── JSON 내보내기 / 가져오기 — 비로그인 사용자 백업, 기기 간 수동 이동용 ──
-  //   형식: { format: 'latale-characters', version: 1, exportedAt, characters: [{ name, stats, awak_stones, memorials, runeword, skill_configs }] }
+  //   형식: { format: 'latale-characters', version: 1, exportedAt, characters: [{ name, stats, awak_stones, memorials, runeword, skill_configs, relics, damage_settings }] }
   const EXPORT_FORMAT = 'latale-characters';
 
   function exportCharacters() {
@@ -224,7 +238,7 @@ export function useCharacterStorage() {
         awak_stones: c.awak_stones || [],
         memorials: c.memorials || [],
         runeword: c.runeword || [],
-        skill_configs: skillConfigsOf(c.skill_configs),
+        ...settingsOf(c),
       })),
     };
   }
@@ -253,7 +267,8 @@ export function useCharacterStorage() {
           Array.isArray(c.awak_stones) ? c.awak_stones : [],
           Array.isArray(c.memorials) ? c.memorials : [],
           Array.isArray(c.runeword) ? c.runeword : [],
-          c.skill_configs ? skillConfigsOf(c.skill_configs) : null,
+          // 파일에 없는 칸은 null 로 넘겨 기존 값을 유지한다
+          Object.fromEntries(SETTING_KEYS.filter((k) => c[k]).map((k) => [k, settingOf(c[k])])),
           { force: true },
         );
         if (existed) result.updated += 1;
@@ -321,7 +336,7 @@ export function useCharacterStorage() {
             awak_stones: Array.isArray(c.awak_stones) ? c.awak_stones : [],
             memorials: Array.isArray(c.memorials) ? c.memorials : [],
             runeword: Array.isArray(c.runeword) ? c.runeword : [],
-            skill_configs: skillConfigsOf(c.skill_configs),
+            ...settingsOf(c),
           }),
         );
         characters.value = [created, ...characters.value];

@@ -65,7 +65,7 @@ def create_character(
         awak_stones=body.awak_stones,
         memorials=body.memorials,
         runeword=body.runeword,
-        skill_configs=body.skill_configs,
+        **{f: getattr(body, f) for f in schemas.SETTING_FIELDS},
     )
     db.add(char)
     db.commit()
@@ -114,8 +114,9 @@ def update_character(
     char.awak_stones = body.awak_stones
     char.memorials = body.memorials
     char.runeword = body.runeword
-    if body.skill_configs is not None:
-        char.skill_configs = body.skill_configs
+    for f in schemas.SETTING_FIELDS:
+        if getattr(body, f) is not None:
+            setattr(char, f, getattr(body, f))
     db.commit()
     db.refresh(char)
     return char

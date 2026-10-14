@@ -271,6 +271,8 @@ const awakStones = ref([]); // 활성 캐릭터의 각성석 옵션 — Efficien
 const memorials = ref([]);  // 활성 캐릭터의 보유 메모리얼 카드 — MemorialLoadoutPanel 과 v-model 양방향.
 const runeword = ref(sanitizeRuneword([])); // 활성 캐릭터의 장착 룬워드 (룬 id 8개) — RuneWordLoadoutPanel 과 양방향.
 const skillConfigs = ref({}); // 활성 캐릭터의 대미지 탭 스킬 설정 (직업·스킬·각성·특화석) — SkillDamagePanel 과 양방향.
+const relics = ref({}); // 활성 캐릭터의 성물 발동 시뮬 세팅 — RelicActivePanel 과 양방향.
+const damageSettings = ref({}); // 활성 캐릭터의 대미지 탭 입력 (몬스터·레벨·토글·스탯 조정) — DamageCalc 와 양방향.
 const oldEquip = ref(createEmptyEquipment());
 const newEquip = ref(createEmptyEquipment());
 
@@ -316,6 +318,8 @@ async function applyCharacterToWorkspace(c) {
     memorials.value = sanitizeMemorialCards(c.memorials);
     runeword.value = sanitizeRuneword(c.runeword);
     skillConfigs.value = c.skill_configs && typeof c.skill_configs === 'object' ? c.skill_configs : {};
+    relics.value = c.relics && typeof c.relics === 'object' ? c.relics : {};
+    damageSettings.value = c.damage_settings && typeof c.damage_settings === 'object' ? c.damage_settings : {};
   }
   await nextTick();
   applyingFromCharacter = false;
@@ -356,10 +360,16 @@ const lastSavedAt = ref(null);
 const saveError = ref('');
 
 let saveTimer = null;
+// 캐릭터별 설정 칸 — saveCharacter 의 settings 인자
+const characterSettings = () => ({
+  skill_configs: skillConfigs.value,
+  relics: relics.value,
+  damage_settings: damageSettings.value,
+});
 const SAVE_DEBOUNCE_MS = 2000;
 
 watch(
-  [stats, awakStones, memorials, runeword, skillConfigs],
+  [stats, awakStones, memorials, runeword, skillConfigs, relics, damageSettings],
   () => {
     if (applyingFromCharacter) return;
     if (!activeCharacter.value) return; // 활성 캐릭터 없으면 자동 저장 X.
@@ -373,7 +383,7 @@ watch(
       saveStatus.value = 'saving';
       saveError.value = '';
       try {
-        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, skillConfigs.value);
+        await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, characterSettings());
         saveStatus.value = 'saved';
         lastSavedAt.value = Date.now();
       } catch (err) {
@@ -413,7 +423,7 @@ async function onConflictOverwrite() {
   conflictBusy.value = true;
   saveStatus.value = 'saving';
   try {
-    await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, skillConfigs.value, { force: true });
+    await saveCharacter(target.name, stats.value, awakStones.value, memorials.value, runeword.value, characterSettings(), { force: true });
     saveStatus.value = 'saved';
     lastSavedAt.value = Date.now();
   } catch (err) {
@@ -716,7 +726,7 @@ const savedTimeLabel = computed(() => {
             </CollapsibleSection>
 
             <CollapsibleSection id="relicActive" title="🗿 성물 발동 시뮬" :default-open="false">
-              <RelicActivePanel :stats="stats" />
+              <RelicActivePanel v-model:relics="relics" :stats="stats" :has-character="!!activeCharacter" />
             </CollapsibleSection>
 
             <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교" :default-open="false">
@@ -792,7 +802,12 @@ const savedTimeLabel = computed(() => {
 
       <!-- ───── 탭: 대미지 계산 ───── -->
       <template v-else-if="activeTab === 'damage'">
-        <DamageCalc v-model:skill-configs="skillConfigs" :stats="stats" :has-character="!!activeCharacter" />
+        <DamageCalc
+          v-model:skill-configs="skillConfigs"
+          v-model:damage-settings="damageSettings"
+          :stats="stats"
+          :has-character="!!activeCharacter"
+        />
       </template>
 
       <!-- ───── 탭 9: 어드벤처 ───── -->

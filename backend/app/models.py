@@ -45,6 +45,10 @@ class Character(Base):
     runeword: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # 대미지 탭 스킬 설정 — {cls, skillId, configs: {"직업:스킬": {level, aw1, aw2, stones, ...}}, noblesse, title}
     skill_configs: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # 성물 발동 시뮬 — {current: {성물key: {level, enchantValue, stones}}, activeKey, candidate, previewOn, editTarget, backAtkUptime}
+    relics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # 대미지 탭 입력 — {inputs: {presetId, difficulty, level, critRate, ...}, deltas: {스탯: 가감값}, deltaMode}
+    damage_settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )

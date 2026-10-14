@@ -48,13 +48,22 @@ class CharacterBase(BaseModel):
     runeword: list[Any] = Field(default_factory=list)
 
 
+# 캐릭터별 설정 JSON 칸 — 대미지 탭 스킬 설정 / 성물 발동 시뮬 / 대미지 탭 입력.
+#   PUT 에서 생략(None)하면 기존 값을 유지한다 (router 가 이 목록을 돈다).
+SETTING_FIELDS = ("skill_configs", "relics", "damage_settings")
+
+
 class CharacterCreate(CharacterBase):
     skill_configs: dict[str, Any] = Field(default_factory=dict)
+    relics: dict[str, Any] = Field(default_factory=dict)
+    damage_settings: dict[str, Any] = Field(default_factory=dict)
 
 
 class CharacterUpdate(CharacterBase):
-    # 생략(None)하면 기존 값 유지 — 이 칸을 모르는 옛 클라이언트가 저장해도 스킬 설정이 지워지지 않게.
+    # 생략(None)하면 기존 값 유지 — 이 칸을 모르는 옛 클라이언트가 저장해도 설정이 지워지지 않게.
     skill_configs: dict[str, Any] | None = None
+    relics: dict[str, Any] | None = None
+    damage_settings: dict[str, Any] | None = None
     # 낙관적 잠금 — 클라이언트가 마지막으로 본 updated_at. 보내면 서버 값과 초 단위로
     # 비교해 다르면 409 (다른 기기에서 먼저 저장). 생략하면 기존과 동일하게 무조건 덮어씀.
     expected_updated_at: datetime | None = None
@@ -63,6 +72,8 @@ class CharacterUpdate(CharacterBase):
 class CharacterRead(CharacterBase):
     id: int
     skill_configs: dict[str, Any] = Field(default_factory=dict)
+    relics: dict[str, Any] = Field(default_factory=dict)
+    damage_settings: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

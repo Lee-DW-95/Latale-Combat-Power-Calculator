@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import {
   ACTIVE_RELICS,
   STONE_OPTION_DEFS,
@@ -11,31 +11,23 @@ import {
 import { RELIC_BASE_OPTIONS, relicBaseOptionValue } from '../data/relics.js';
 import { getStatLabel } from '../utils/battlePower.js';
 import { fmt } from '../utils/format.js';
+import { useCharacterSetting, localJsonStore } from '../composables/useCharacterSetting.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
+  hasCharacter: { type: Boolean, default: false }, // 활성 캐릭터가 있으면 성물 세팅을 캐릭터(relics)에 저장
 });
+// 활성 캐릭터의 성물 세팅 — 캐릭터와 함께 서버(로그인)·브라우저(비로그인) 캐릭터 목록에 저장된다
+const relics = defineModel('relics', { type: Object, default: null });
 
 // ============================================================
-// 상태 — localStorage 영속
+// 상태 — 활성 캐릭터가 있으면 캐릭터(relics)에, 없으면 브라우저(localStorage)에 저장
 //   current  : 현재 착용 세팅
 //   candidate: 교체안 (교체 미리보기 켰을 때만 존재)
 //   activeKey: 발동 중인 성물 key (단일) — 성물은 성물별 개별 액티브 스킬이고
 //              중첩 불가 (다른 액티브 사용 시 기존 버프 소멸). 발동한 1종만 ×50 적용.
 // ============================================================
 const STORAGE_KEY = 'latale_relicActive_v1';
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
 // 저장 포맷이 바뀌어도 빈 로드아웃 골격에 덮어써 안전하게 복원
 function hydrateLoadout(saved) {
@@ -65,47 +57,49 @@ const VALID_KEYS = new Set(ACTIVE_RELICS.map((r) => r.key));
 // 백어택 옵션 라벨 (STONE_OPTION_DEFS 의 special: '백어택' 항목)
 const BACK_ATK_LABEL = STONE_OPTION_DEFS.find((d) => d.special === '백어택')?.label ?? '';
 
-const saved = loadState();
-const current = ref(hydrateLoadout(saved?.current));
+const current = ref(createEmptyRelicLoadout());
 // 백어택 가동률 (%) — 성물 백어택 옵션 BP 환산 가중치.
 //   스탯 폼의 백어택 활성/가동률과 무관하게 발동 계산에서 이 값이 우선 적용된다.
 //   초기값: 저장값 → 스탯 폼 가동률(활성 시) → 0
-const backAtkUptime = ref(
-  Number.isFinite(Number(saved?.backAtkUptime))
+const backAtkUptime = ref(0);
+const activeKey = ref(null); // 발동 성물 (단일)
+const previewOn = ref(false);
+const candidate = ref(null);
+// 편집 대상 탭: 'current' | 'candidate'
+const editTarget = ref('current');
+
+function applySaved(saved) {
+  current.value = hydrateLoadout(saved?.current);
+  backAtkUptime.value = Number.isFinite(Number(saved?.backAtkUptime))
     ? Math.max(0, Math.min(100, Number(saved.backAtkUptime)))
     : props.stats?.백어택활성
     ? Math.max(0, Math.min(100, Number(props.stats?.백어택가동률) || 0))
-    : 0,
-);
-// 발동 성물 (단일). 구버전 배열 저장(activeKeys)은 첫 항목만 승계.
-const activeKey = ref(
-  VALID_KEYS.has(saved?.activeKey)
+    : 0;
+  // 구버전 배열 저장(activeKeys)은 첫 항목만 승계
+  activeKey.value = VALID_KEYS.has(saved?.activeKey)
     ? saved.activeKey
     : Array.isArray(saved?.activeKeys) && VALID_KEYS.has(saved.activeKeys[0])
     ? saved.activeKeys[0]
-    : null,
-);
-const previewOn = ref(!!saved?.previewOn);
-const candidate = ref(saved?.candidate ? hydrateLoadout(saved.candidate) : null);
-// 편집 대상 탭: 'current' | 'candidate'
-const editTarget = ref(previewOn.value && saved?.editTarget === 'candidate' ? 'candidate' : 'current');
+    : null;
+  previewOn.value = !!saved?.previewOn;
+  candidate.value = saved?.candidate ? hydrateLoadout(saved.candidate) : null;
+  editTarget.value = previewOn.value && saved?.editTarget === 'candidate' ? 'candidate' : 'current';
+}
 
-watch(
-  [current, activeKey, previewOn, candidate, editTarget, backAtkUptime],
-  () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        current: current.value,
-        activeKey: activeKey.value,
-        previewOn: previewOn.value,
-        candidate: candidate.value,
-        editTarget: editTarget.value,
-        backAtkUptime: backAtkUptime.value,
-      }));
-    } catch { /* ignore */ }
-  },
-  { deep: true },
-);
+useCharacterSetting({
+  model: relics,
+  hasCharacter: () => props.hasCharacter,
+  local: localJsonStore(STORAGE_KEY),
+  snapshot: () => ({
+    current: current.value,
+    activeKey: activeKey.value,
+    previewOn: previewOn.value,
+    candidate: candidate.value,
+    editTarget: editTarget.value,
+    backAtkUptime: backAtkUptime.value,
+  }),
+  apply: applySaved,
+});
 
 // 편집 중인 로드아웃 (카드 UI 바인딩 대상)
 const editing = computed(() =>

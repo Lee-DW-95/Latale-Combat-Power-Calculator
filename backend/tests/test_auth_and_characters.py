@@ -186,3 +186,27 @@ def test_skill_configs_default_empty(client):
     headers = auth_headers(register(client, "skilluser2")["token"])
     res = client.post("/characters", json=sample_character(), headers=headers)
     assert res.json()["skill_configs"] == {}
+
+
+def test_relics_and_damage_settings_saved_and_kept_when_omitted(client):
+    headers = auth_headers(register(client, "relicuser")["token"])
+    relics = {"current": {"gleipnir": {"level": 10, "enchantValue": 42, "stones": []}}, "activeKey": "gleipnir"}
+    damage = {"inputs": {"level": 235, "critRate": 100}, "deltas": {"크댐": 100}, "deltaMode": "base"}
+    res = client.post(
+        "/characters", json=dict(sample_character(), relics=relics, damage_settings=damage), headers=headers
+    )
+    assert res.status_code == 201, res.text
+    char_id = res.json()["id"]
+    assert res.json()["relics"] == relics
+    assert res.json()["damage_settings"] == damage
+
+    # 두 칸을 모르는 옛 클라이언트가 저장해도 기존 값은 유지
+    res = client.put(f"/characters/{char_id}", json=sample_character(), headers=headers)
+    assert res.status_code == 200, res.text
+    assert res.json()["relics"] == relics
+    assert res.json()["damage_settings"] == damage
+
+    # 하나만 보내면 그 칸만 교체
+    res = client.put(f"/characters/{char_id}", json=dict(sample_character(), relics={}), headers=headers)
+    assert res.json()["relics"] == {}
+    assert res.json()["damage_settings"] == damage

@@ -1,7 +1,7 @@
 <script setup>
 // 대미지 계산 — 공개 분석 문서의 공식을 그대로 돌려 실제 대미지를 낸다.
 //   ⚠ 인게임 실측 대조 전이다. docs/DAMAGE_FORMULA.md 의 검증 절차 참고.
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { calculateBattlePower } from '../utils/battlePower.js';
 import { damageRange, expectedDamage, defenseConstant, defenseCoef } from '../utils/damageFormula.js';
 import { attackerFromStats, targetFromPreset, weaponRangeOf, splitFinal, applyStatDeltas, deltaMissingBase, DELTA_FIELDS } from '../utils/damageInputs.js';
@@ -11,6 +11,7 @@ import { TOZ_COEF_BONUS } from '../utils/skillEngine.js';
 import InfoNote from './InfoNote.vue';
 import NumInput from './NumInput.vue';
 import SkillDamagePanel from './SkillDamagePanel.vue';
+import { useCharacterSetting } from '../composables/useCharacterSetting.js';
 
 const props = defineProps({
   stats: { type: Object, required: true },
@@ -18,8 +19,8 @@ const props = defineProps({
 });
 // 스킬 선택 설정 — 활성 캐릭터에 저장 (App.vue ↔ SkillDamagePanel 중계)
 const skillConfigs = defineModel('skillConfigs', { type: Object, default: null });
-
-const STORAGE_KEY = 'latale.damageCalc.v1';
+// 대미지 탭 입력(몬스터·레벨·크리율·토글·스탯 조정) — 활성 캐릭터에 저장
+const damageSettings = defineModel('damageSettings', { type: Object, default: null });
 
 // ── 입력 ──
 const presetId = ref(MONSTER_PRESETS[0].id);
@@ -37,66 +38,67 @@ const status = ref(false);
 const toz = ref(false); // 토즈 버프 — 직타 스킬 계수 +1000
 const survival = ref(false); // 생존본능(수련의방) — 대미지 난수를 최대값으로 고정해 표기
 
-// 입력은 브라우저에 남긴다 — 매번 다시 채우지 않게.
-try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-  if (saved) {
-    for (const [k, r] of Object.entries({
-      presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
-      critRate, backAttack, melee, status, toz, survival,
-    })) {
-      if (saved[k] !== undefined) r.value = saved[k];
-    }
-  }
-} catch {
-  /* localStorage 불가 환경 — 기본값 사용 */
-}
-watch(
-  [presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc, critRate, backAttack, melee, status, toz, survival],
-  () => {
+// ── 스탯 조정 — 전투력 탭을 오가지 않고 T창 표시값을 가감해 대미지 변화를 본다 ──
+const deltas = reactive(Object.fromEntries(DELTA_FIELDS.map((f) => [f.key, 0])));
+// 가감 기준 — 'display' 종합 T창(전투력 표기) 표시값 | 'base' 추가 세부정보 기본값
+const deltaMode = ref('base');
+
+// ── 입력 저장 — 활성 캐릭터가 있으면 캐릭터(damageSettings)에, 없으면 브라우저에 ──
+//   형식: { inputs: {presetId, difficulty, level, ...}, deltas: {스탯: 가감값}, deltaMode }
+const INPUT_REFS = {
+  presetId, difficulty, level, inputMode, skillMode, skillCoef, summonS, summonSc,
+  critRate, backAttack, melee, status, toz, survival,
+};
+const INPUT_DEFAULTS = Object.fromEntries(Object.entries(INPUT_REFS).map(([k, r]) => [k, r.value]));
+// 캐릭터가 없을 때의 브라우저 저장소 — 예전 키 3개를 그대로 쓴다 (기존 값 호환)
+const STORAGE_KEY = 'latale.damageCalc.v1';
+const DELTA_KEY = 'latale.damageCalc.deltas.v1';
+const DELTA_MODE_KEY = 'latale.damageCalc.deltaMode.v1';
+const localStore = {
+  read() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        presetId: presetId.value, difficulty: difficulty.value, level: level.value,
-        inputMode: inputMode.value, skillMode: skillMode.value, skillCoef: skillCoef.value, summonS: summonS.value, summonSc: summonSc.value,
-        critRate: critRate.value,
-        backAttack: backAttack.value, melee: melee.value, status: status.value, toz: toz.value, survival: survival.value,
-      }));
+      const inputs = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      const saved = JSON.parse(localStorage.getItem(DELTA_KEY) || 'null');
+      const mode = localStorage.getItem(DELTA_MODE_KEY);
+      if (!inputs && !saved && !mode) return null;
+      return { inputs: inputs || {}, deltas: saved || {}, deltaMode: mode || 'base' };
+    } catch {
+      return null; // localStorage 불가 환경 — 기본값 사용
+    }
+  },
+  write(obj) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj.inputs));
+      localStorage.setItem(DELTA_KEY, JSON.stringify(obj.deltas));
+      localStorage.setItem(DELTA_MODE_KEY, obj.deltaMode);
     } catch {
       /* 저장 실패는 무시 */
     }
   },
-);
-
-// ── 스탯 조정 — 전투력 탭을 오가지 않고 T창 표시값을 가감해 대미지 변화를 본다 ──
-const DELTA_KEY = 'latale.damageCalc.deltas.v1';
-const deltas = reactive(Object.fromEntries(DELTA_FIELDS.map((f) => [f.key, 0])));
-try {
-  const saved = JSON.parse(localStorage.getItem(DELTA_KEY) || 'null');
-  if (saved) for (const f of DELTA_FIELDS) if (Number(saved[f.key])) deltas[f.key] = Number(saved[f.key]);
-} catch {
-  /* localStorage 불가 — 조정 없음 */
-}
-watch(deltas, () => {
-  try {
-    localStorage.setItem(DELTA_KEY, JSON.stringify(deltas));
-  } catch {
-    /* 저장 실패 무시 */
-  }
-});
-// 가감 기준 — 'display' 종합 T창(전투력 표기) 표시값 | 'base' 추가 세부정보 기본값
-const DELTA_MODE_KEY = 'latale.damageCalc.deltaMode.v1';
-const deltaMode = ref('base');
-try {
-  if (localStorage.getItem(DELTA_MODE_KEY) === 'display') deltaMode.value = 'display';
-} catch {
-  /* localStorage 불가 — 기본값 기준 */
-}
-watch(deltaMode, (v) => {
-  try {
-    localStorage.setItem(DELTA_MODE_KEY, v);
-  } catch {
-    /* 저장 실패 무시 */
-  }
+  clear() {
+    try {
+      for (const k of [STORAGE_KEY, DELTA_KEY, DELTA_MODE_KEY]) localStorage.removeItem(k);
+    } catch {
+      /* 무시 */
+    }
+  },
+};
+useCharacterSetting({
+  model: damageSettings,
+  hasCharacter: () => props.hasCharacter,
+  local: localStore,
+  snapshot: () => ({
+    inputs: Object.fromEntries(Object.entries(INPUT_REFS).map(([k, r]) => [k, r.value])),
+    deltas: { ...deltas },
+    deltaMode: deltaMode.value,
+  }),
+  apply: (saved) => {
+    for (const [k, r] of Object.entries(INPUT_REFS)) {
+      r.value = saved?.inputs?.[k] !== undefined ? saved.inputs[k] : INPUT_DEFAULTS[k];
+    }
+    for (const f of DELTA_FIELDS) deltas[f.key] = Number(saved?.deltas?.[f.key]) || 0;
+    deltaMode.value = saved?.deltaMode === 'display' ? 'display' : 'base';
+  },
 });
 const adjusting = computed(() => DELTA_FIELDS.some((f) => Number(deltas[f.key])));
 const deltaOpen = ref(adjusting.value);

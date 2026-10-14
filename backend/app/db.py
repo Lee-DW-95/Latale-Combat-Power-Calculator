@@ -66,6 +66,8 @@ _JSON_LIST_COLUMNS = {
         ("memorials", "JSON NOT NULL DEFAULT '[]'"),
         ("runeword", "JSON NOT NULL DEFAULT '[]'"),
         ("skill_configs", "JSON NOT NULL DEFAULT '{}'"),
+        ("relics", "JSON NOT NULL DEFAULT '{}'"),
+        ("damage_settings", "JSON NOT NULL DEFAULT '{}'"),
     ],
 }
 
