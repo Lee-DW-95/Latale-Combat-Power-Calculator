@@ -3,14 +3,15 @@ import { ref, watch } from 'vue';
 import AdventureAiManual from './AdventureAiManual.vue';
 
 // ============================================================
-// 어드벤처 AI — 원작자(alfm201) 허락을 받아 원본 시뮬레이터를 그대로 띄운다.
+// 어드벤처 AI — 원작자(alfm201) 허락을 받아 원본 시뮬레이터를 우리 서버에서 띄운다.
 //   원본: UI + 수동/자동/어시스트(화면 인식) 모드 + VELA·LYRA·X36 모델 + 음성 안내.
-//   iframe 이라 원본이 업데이트되면 별도 작업 없이 최신판이 보인다.
+//   오라클 VM 의 /srv/adventure 에 원본 저장소와 모델 파일을 미러링해 Caddy 로 서빙한다
+//   (backend/scripts/adventure_mirror.sh). 원본 업데이트는 그 스크립트를 다시 돌리면 반영된다.
 //   어시스트의 화면 공유(getDisplayMedia)는 iframe 에 display-capture 권한을 줘야 동작한다.
-// 간단 추천: 우리 지도 데이터 위에 새로 짠 엔진(adventureAi.js) — 원본이 안 열릴 때의 대안.
+// 간단 추천: 우리 지도 데이터 위에 새로 짠 엔진(adventureAi.js) — 미러가 안 열릴 때의 대안.
 // ============================================================
 
-const SOURCE_URL = 'https://alfm201.github.io/adventure/';
+const SOURCE_URL = 'https://latale-api.duckdns.org/adventure/';
 const REPO_URL = 'https://github.com/alfm201/adventure';
 const VIEW_KEY = 'latale.adventure.ai.view';
 
@@ -70,7 +71,7 @@ const tab = (active) =>
         />
       </div>
       <p class="mt-2 text-center text-[11px] text-stone-500 dark:text-stone-400">
-        어시스트 화면 공유가 안 되면 "새 창에서 열기"로 쓰세요. 모델은 원작자 서버에서 받습니다.
+        어시스트 화면 공유가 안 되면 "새 창에서 열기"로 쓰세요. 코드와 모델 모두 우리 서버에서 받습니다.
       </p>
     </div>
 
