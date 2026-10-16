@@ -88,4 +88,4 @@ def recover(
 @router.get("/me", response_model=schemas.MeResponse)
 def me(user: User = Depends(get_current_user)):
     # 프론트가 접속할 때마다 호출 — 제한 탭 권한(privileged)을 DB 에서 바로 읽어 간다.
-    return schemas.MeResponse(nickname=user.nickname, privileged=user.privileged)
+    return schemas.MeResponse(nickname=user.nickname, privileged=user.privileged, admin=user.admin)

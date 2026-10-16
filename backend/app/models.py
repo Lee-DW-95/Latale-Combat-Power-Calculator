@@ -20,6 +20,8 @@ class User(Base):
     recovery_hash: Mapped[str | None] = mapped_column(String(72), nullable=True)
     # 제한 탭(메모리얼·인챈트·대미지 등) 노출 권한 — DB 에서 UPDATE 하면 재배포 없이 다음 접속부터 반영.
     privileged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    # 관리자 전용 탭(실험 기능) 노출 권한 — privileged 와 같은 방식으로 UPDATE 만으로 반영.
+    admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     characters: Mapped[list["Character"]] = relationship(

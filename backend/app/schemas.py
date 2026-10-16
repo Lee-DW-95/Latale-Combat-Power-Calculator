@@ -35,6 +35,7 @@ class RegisterResponse(TokenResponse):
 class MeResponse(BaseModel):
     nickname: str
     privileged: bool
+    admin: bool = False
 
 
 class RecoverResponse(TokenResponse):

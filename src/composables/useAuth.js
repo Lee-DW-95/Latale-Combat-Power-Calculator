@@ -11,15 +11,21 @@ import { api, setAuthHandler } from '../api/client.js';
 const TOKEN_KEY = 'latale.auth.token.v1';
 const NICKNAME_KEY = 'latale.auth.nickname.v1';
 const PRIVILEGED_KEY = 'latale.auth.privileged.v1';
+const ADMIN_KEY = 'latale.auth.admin.v1';
 
 const token = ref(localStorage.getItem(TOKEN_KEY) || null);
 const nickname = ref(localStorage.getItem(NICKNAME_KEY) || null);
 const privileged = ref(!!token.value && localStorage.getItem(PRIVILEGED_KEY) === '1');
+const admin = ref(!!token.value && localStorage.getItem(ADMIN_KEY) === '1');
 
-function setPrivileged(val) {
-  privileged.value = !!val;
-  if (val) localStorage.setItem(PRIVILEGED_KEY, '1');
-  else localStorage.removeItem(PRIVILEGED_KEY);
+function setFlag(flag, key, val) {
+  flag.value = !!val;
+  if (val) localStorage.setItem(key, '1');
+  else localStorage.removeItem(key);
+}
+function setPrivileged(val, adminVal = false) {
+  setFlag(privileged, PRIVILEGED_KEY, val);
+  setFlag(admin, ADMIN_KEY, adminVal);
 }
 
 function persist(newToken, newNickname) {
@@ -41,7 +47,7 @@ async function refreshMe() {
   if (!token.value) return;
   try {
     const me = await api.me();
-    setPrivileged(me.privileged);
+    setPrivileged(me.privileged, me.admin);
     if (me.nickname && me.nickname !== nickname.value) persist(token.value, me.nickname);
   } catch {
     /* 서버 미기동 등 — 캐시 값 유지 */
@@ -81,5 +87,5 @@ export function useAuth() {
     return res;
   }
 
-  return { token, nickname, privileged, isLoggedIn, register, login, recover, logout, refreshMe };
+  return { token, nickname, privileged, admin, isLoggedIn, register, login, recover, logout, refreshMe };
 }

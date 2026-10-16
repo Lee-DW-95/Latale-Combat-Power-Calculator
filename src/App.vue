@@ -49,12 +49,13 @@ const ItemAwakeningSimulator = lazyTab(() => import('./components/ItemAwakeningS
 const RuneWordSimulator = lazyTab(() => import('./components/RuneWordSimulator.vue'));
 const AdventureView = lazyTab(() => import('./components/AdventureView.vue'));
 const AdventureQuickView = lazyTab(() => import('./components/AdventureQuickView.vue'));
+const AdventureAi = lazyTab(() => import('./components/AdventureAi.vue'));
 const DamageCalc = lazyTab(() => import('./components/DamageCalc.vue'));
 
 // ============================================================
 // 인증 상태 + 모달 트리거
 // ============================================================
-const { isLoggedIn, nickname: authNickname, privileged, logout } = useAuth();
+const { isLoggedIn, nickname: authNickname, privileged, admin, logout } = useAuth();
 const authModalOpen = ref(false);
 const authModalInitialStep = ref('login');
 
@@ -157,6 +158,8 @@ const TABS = [
   { id: 'adventure', label: '🗺️ 어드벤처', desc: '어드벤처 단계별 버프 + 전체 지도', restricted: true },
   // 게임을 켜둔 채 옆에 띄워 쓰는 용도라 로그인 조건 없이 항상 노출한다.
   { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', short: '⚡ 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
+  // 실험 기능 — users.admin 계정에게만 노출.
+  { id: 'adventureAi', label: '🤖 어드벤처 AI', short: '🤖 AI', desc: '현재 상태에서 주사위/카드 중 무엇을 쓸지 추천', adminOnly: true },
 ];
 
 // 탭이 많아 한 줄에 다 안 들어가므로 시뮬레이터 6종은 상위 탭 하나로 묶고, 고르면 아래 줄에 하위 탭을 띄운다.
@@ -193,11 +196,13 @@ function onTabKeydown(e, idx, items, pick) {
 
 // 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 서버가 준 권한.
 const canSeeRestricted = computed(() => isLocalDev || (isLoggedIn.value && privileged.value));
+// 관리자 전용 탭 노출 여부 — users.admin.
+const canSeeAdmin = computed(() => isLocalDev || (isLoggedIn.value && admin.value));
+
+const tabAllowed = (t) => (!t.restricted || canSeeRestricted.value) && (!t.adminOnly || canSeeAdmin.value);
 
 // 실제로 그릴 탭 목록.
-const visibleTabs = computed(() =>
-  TABS.filter((t) => !t.restricted || canSeeRestricted.value),
-);
+const visibleTabs = computed(() => TABS.filter(tabAllowed));
 
 // 그룹 안에서 마지막으로 본 하위 탭 — 상위 탭을 다시 누르면 그 탭으로 돌아간다
 const lastInGroup = ref({});
@@ -247,14 +252,12 @@ watch(activeTab, () =>
   { immediate: true },
 );
 
-// 권한이 사라졌는데(로그아웃 등) 제한 탭을 보고 있으면 전투력 탭으로 되돌림.
+// 권한이 사라졌는데(로그아웃 등) 제한·관리자 탭을 보고 있으면 전투력 탭으로 되돌림.
 watch(
-  canSeeRestricted,
-  (ok) => {
-    if (!ok && activeTab.value !== 'calc') {
-      const cur = TABS.find((t) => t.id === activeTab.value);
-      if (cur?.restricted) activeTab.value = 'calc';
-    }
+  [canSeeRestricted, canSeeAdmin],
+  () => {
+    const cur = TABS.find((t) => t.id === activeTab.value);
+    if (cur && !tabAllowed(cur)) activeTab.value = 'calc';
   },
   { immediate: true },
 );
@@ -814,6 +817,11 @@ const savedTimeLabel = computed(() => {
       <!-- ───── 탭 9: 어드벤처 빠른보기 ───── -->
       <template v-else-if="activeTab === 'adventureQuick'">
         <AdventureQuickView />
+      </template>
+
+      <!-- ───── 어드벤처 AI (관리자 전용) ───── -->
+      <template v-else-if="activeTab === 'adventureAi'">
+        <AdventureAi />
       </template>
 
       <footer class="pt-4 text-center text-xs text-stone-400 dark:text-stone-500">

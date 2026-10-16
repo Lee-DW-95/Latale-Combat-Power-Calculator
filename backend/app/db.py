@@ -64,6 +64,7 @@ def init_db() -> None:
 _ADDED_COLUMNS = {
     "users": [
         ("privileged", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("admin", "BOOLEAN NOT NULL DEFAULT 0"),
     ],
     "characters": [
         ("memorials", "JSON NOT NULL DEFAULT '[]'"),
