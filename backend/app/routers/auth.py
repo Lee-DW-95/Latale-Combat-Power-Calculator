@@ -8,7 +8,7 @@ from ..auth import (
     hash_password,
     verify_password,
 )
-from ..deps import get_db
+from ..deps import get_current_user, get_db
 from ..models import User
 from ..rate_limit import limiter
 
@@ -83,3 +83,9 @@ def recover(
         token=create_access_token(user.id),
         recovery_code=new_code,
     )
+
+
+@router.get("/me", response_model=schemas.MeResponse)
+def me(user: User = Depends(get_current_user)):
+    # 프론트가 접속할 때마다 호출 — 제한 탭 권한(privileged)을 DB 에서 바로 읽어 간다.
+    return schemas.MeResponse(nickname=user.nickname, privileged=user.privileged)

@@ -54,7 +54,7 @@ const DamageCalc = lazyTab(() => import('./components/DamageCalc.vue'));
 // ============================================================
 // 인증 상태 + 모달 트리거
 // ============================================================
-const { isLoggedIn, nickname: authNickname, logout } = useAuth();
+const { isLoggedIn, nickname: authNickname, privileged, logout } = useAuth();
 const authModalOpen = ref(false);
 const authModalInitialStep = ref('login');
 
@@ -122,11 +122,11 @@ const activeTab = ref('calc');
 // ── 탭 노출 게이팅 ──────────────────────────────────────────
 // 전투력 계산은 우리 고유 저작물이라 항상 공개. 나머지 탭(메모리얼/인챈트/성물/
 // 각성석/어드벤처)은 외부 자료(lataleinfo·게임 자산) 의존이라 저작권 이슈를 피하기 위해
-// 특정 계정(닉네임)에게만 노출한다.
+// 권한이 있는 계정에게만 노출한다. 권한은 서버 DB(users.privileged)에 있고 /auth/me 로 받아온다.
+//   부여: sqlite3 latale.db "UPDATE users SET privileged=1 WHERE nickname='닉네임'" — 재시작 불필요, 다음 접속부터 반영.
 //   ⚠ 이건 프론트엔드 클라이언트 게이팅 — 번들 JS/localStorage 를 파면 우회 가능하다.
 //   민감 데이터 완전 은닉이 목적이 아니라 "일반 사용자에게 노출하지 않는" 소프트 게이트.
 //   토큰 기반 로그인(isLoggedIn)을 전제로 하되, 진짜 보호가 필요하면 서버측 검증 필요.
-const PRIVILEGED_NICKNAMES = ['선봉', '백르', '독주', 'Spammayo', '워나', '혀나'];
 
 // 로컬 개발 환경(vite dev / localhost 프리뷰)에서는 로그인 없이 모든 탭을 연다.
 //   로컬은 백엔드(localhost:8000)를 안 띄우면 로그인 자체가 안 돼서 제한 탭을 볼 수 없다.
@@ -191,12 +191,8 @@ function onTabKeydown(e, idx, items, pick) {
   e.currentTarget.parentElement?.children[next]?.focus();
 }
 
-// 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 특권 닉네임.
-const canSeeRestricted = computed(
-  () =>
-    isLocalDev ||
-    (isLoggedIn.value && PRIVILEGED_NICKNAMES.includes((authNickname.value || '').trim())),
-);
+// 제한 탭 노출 여부 — 로컬 개발이거나, 로그인 + 서버가 준 권한.
+const canSeeRestricted = computed(() => isLocalDev || (isLoggedIn.value && privileged.value));
 
 // 실제로 그릴 탭 목록.
 const visibleTabs = computed(() =>

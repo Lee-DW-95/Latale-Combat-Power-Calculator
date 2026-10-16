@@ -86,6 +86,9 @@ export const api = {
       body: { nickname, recovery_code, new_password },
     }),
 
+  // 닉네임 + 제한 탭 권한(privileged) — 서버 DB 값을 그대로 돌려준다.
+  me: () => request('/auth/me', { auth: true }),
+
   // ── Characters ──
   listCharacters: () => request('/characters', { auth: true }),
 

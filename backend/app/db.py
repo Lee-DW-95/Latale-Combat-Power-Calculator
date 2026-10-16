@@ -59,9 +59,12 @@ def init_db() -> None:
 
 
 # create_all 은 기존 테이블에 새 컬럼을 추가하지 않는다. Alembic 없이 운영하므로
-# 모델에 있는데 실제 테이블에 없는 JSON 컬럼만 ADD COLUMN 으로 보충한다 (idempotent).
-#   (컬럼명, DDL) — 새 JSON 컬럼을 늘릴 때 여기에 한 줄 추가.
-_JSON_LIST_COLUMNS = {
+# 모델에 있는데 실제 테이블에 없는 컬럼만 ADD COLUMN 으로 보충한다 (idempotent).
+#   (컬럼명, DDL) — 새 컬럼을 늘릴 때 여기에 한 줄 추가.
+_ADDED_COLUMNS = {
+    "users": [
+        ("privileged", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
     "characters": [
         ("memorials", "JSON NOT NULL DEFAULT '[]'"),
         ("runeword", "JSON NOT NULL DEFAULT '[]'"),
@@ -75,7 +78,7 @@ _JSON_LIST_COLUMNS = {
 def _add_missing_columns() -> None:
     insp = inspect(engine)
     with engine.begin() as conn:
-        for table, cols in _JSON_LIST_COLUMNS.items():
+        for table, cols in _ADDED_COLUMNS.items():
             if not insp.has_table(table):
                 continue
             existing = {c["name"] for c in insp.get_columns(table)}
