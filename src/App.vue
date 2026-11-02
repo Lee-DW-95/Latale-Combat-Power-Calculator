@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref, shallowRef, toRaw, watch } from 'vue';
 import {
   calculateBattlePower,
   compareEquipment,
@@ -282,7 +282,7 @@ const result = computed(() => {
     (k) => Number(oldEquip.value[k] || 0) !== Number(newEquip.value[k] || 0)
   );
   if (!hasAnyDiff) return null;
-  return compareEquipment(stats.value, oldEquip.value, newEquip.value);
+  return compareEquipment(panelStats.value, oldEquip.value, newEquip.value);
 });
 
 function resetEquipment() {
@@ -325,6 +325,26 @@ async function applyCharacterToWorkspace(c) {
 }
 
 watch(activeCharacter, (c) => applyCharacterToWorkspace(c), { immediate: true });
+
+// ── 분석 패널용 지연 스탯 ──
+//   입력칸은 키마다 stats 를 갈아끼우는데, 접힌 섹션도 v-show 로 마운트돼 있어 각성석 환산(옵션×5모드
+//   이분탐색) 등이 키마다 전부 재계산됐다 — 실캐릭 기준 키 1회 0.6~1초 멈춤.
+//   헤더 전투력(StatInputForm·BpSummaryBar)은 계속 즉시 갱신하고, 무거운 패널만 입력이 멈춘 뒤 한 번 계산한다.
+//   반응형 Proxy 가 아닌 평범한 객체를 넘겨(shallowRef) 솔버의 수천 번 객체 복사에 붙던 추적 비용도 없앤다.
+const PANEL_STATS_DELAY_MS = 250;
+const panelStats = shallowRef({ ...toRaw(stats.value) });
+let panelStatsTimer = null;
+watch(
+  stats,
+  (s) => {
+    clearTimeout(panelStatsTimer);
+    const apply = () => { panelStats.value = { ...toRaw(s) }; };
+    // 캐릭터 전환·불러오기는 타이핑이 아니므로 즉시 반영 (이전 캐릭터 분석이 잠깐 보이지 않게)
+    if (applyingFromCharacter) apply();
+    else panelStatsTimer = setTimeout(apply, PANEL_STATS_DELAY_MS);
+  },
+  { deep: true },
+);
 
 // ── 공유 링크(?c=…)로 열린 경우 — 캐릭터를 선택하지 않은 "미저장" 상태로 작업영역에 올린다.
 //   활성 캐릭터가 없으니 자동 저장은 돌지 않고, 저장하려면 캐릭터 패널에서 이름을 넣고 저장하면 된다.
@@ -704,34 +724,34 @@ const savedTimeLabel = computed(() => {
             </CollapsibleSection>
 
             <CollapsibleSection id="efficiency" title="⚡ 효율 분석" :default-open="false">
-              <EfficiencyPanel :stats="stats" mode="efficiency" />
+              <EfficiencyPanel :stats="panelStats" mode="efficiency" />
             </CollapsibleSection>
 
             <CollapsibleSection id="awakening" title="💎 각성석 종합 환산" :default-open="false">
-              <EfficiencyPanel :stats="stats" mode="awakening" v-model:awak-stones="awakStones" />
+              <EfficiencyPanel :stats="panelStats" mode="awakening" v-model:awak-stones="awakStones" />
             </CollapsibleSection>
 
             <!-- 보유 메모리얼·스펙업 방향 — 메모리얼/각성석 확률표(외부 자료) 의존이라 시뮬 탭과 같은 게이트 -->
             <CollapsibleSection v-if="canSeeRestricted" id="memorialLoadout" title="🎲 메모리얼 보유 현황" :default-open="false">
-              <MemorialLoadoutPanel :stats="stats" v-model:memorials="memorials" />
+              <MemorialLoadoutPanel :stats="panelStats" v-model:memorials="memorials" />
             </CollapsibleSection>
 
             <CollapsibleSection v-if="canSeeRestricted" id="runewordLoadout" title="🔮 룬워드 장착 현황" :default-open="false">
-              <RuneWordLoadoutPanel :stats="stats" v-model:runeword="runeword" />
+              <RuneWordLoadoutPanel :stats="panelStats" v-model:runeword="runeword" />
             </CollapsibleSection>
 
             <CollapsibleSection v-if="canSeeRestricted" id="specupAdvisor" title="📈 스펙업 방향 — 어떤 내실부터 굴릴까" :default-open="false">
-              <SpecupAdvisorPanel :stats="stats" :awak-stones="awakStones" :memorials="memorials" :runeword="runeword" />
+              <SpecupAdvisorPanel :stats="panelStats" :awak-stones="awakStones" :memorials="memorials" :runeword="runeword" />
             </CollapsibleSection>
 
             <CollapsibleSection id="relicActive" title="🗿 성물 발동 시뮬" :default-open="false">
-              <RelicActivePanel v-model:relics="relics" :stats="stats" :has-character="!!activeCharacter" />
+              <RelicActivePanel v-model:relics="relics" :stats="panelStats" :has-character="!!activeCharacter" />
             </CollapsibleSection>
 
             <CollapsibleSection id="equipCompare" title="🛡️ 장비 비교" :default-open="false">
               <div class="space-y-4">
                 <EquipmentCompare
-                  :stats="stats"
+                  :stats="panelStats"
                   v-model:old-equip="oldEquip"
                   v-model:new-equip="newEquip"
                   @reset="resetEquipment"

@@ -767,6 +767,8 @@ export function solveEquivalentAmount(deltaFn, targetDelta) {
   let mid = 0;
   for (let i = 0; i < 100; i++) {
     mid = (aLo + aHi) / 2;
+    // 부동소수점 한계로 구간이 더 안 줄면 이후 반복은 같은 mid 만 되풀이한다 → 결과 동일, 조기 종료.
+    if (mid === aLo || mid === aHi) break;
     const d = deltaFn(mid);
     if (sgn > 0) {
       if (d < targetDelta) aLo = mid; else aHi = mid;
