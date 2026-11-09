@@ -3,7 +3,15 @@
 //   엔진: utils/skillEngine.js (원본 계산기 SkillEngine 과 정수 단위 일치 확인)
 //   데이터: data/skillData.json (3.4MB) — 이 패널을 열 때만 내려받는다.
 import { computed, reactive, ref, shallowRef, watch } from 'vue';
-import { createSkillEngine, hitLabel, statText, variantLabel, cleanName, SKILL_GRADE_LABEL } from '../utils/skillEngine.js';
+import {
+  createSkillEngine,
+  migrateSkillState,
+  hitLabel,
+  statText,
+  variantLabel,
+  cleanName,
+  SKILL_GRADE_LABEL,
+} from '../utils/skillEngine.js';
 import { engineInputFromStats } from '../utils/damageInputs.js';
 import { fmtRound as fmt } from '../utils/format.js';
 
@@ -27,12 +35,22 @@ const STORAGE_KEY = 'latale.skillDamage.v1';
 const engine = shallowRef(null);
 const loadError = ref('');
 import('../data/skillData.json')
-  .then((m) => (engine.value = createSkillEngine(m.default)))
+  .then((m) => {
+    engine.value = createSkillEngine(m.default);
+    migrateState();
+  })
   .catch(() => (loadError.value = '스킬 데이터를 불러오지 못했습니다. 새로고침해 주세요.'));
 
 // ── 선택 상태 — 활성 캐릭터가 있으면 캐릭터에, 없으면 브라우저에 저장 ──
-const emptyState = () => ({ cls: 0, skillId: 0, configs: {}, noblesse: false, title: false });
+//   dataSource: 저장할 때의 게임 데이터 판(skillData.source). 데이터가 갱신되면 변형 키를 옮기는 기준이 된다.
+const emptyState = () => ({ cls: 0, skillId: 0, configs: {}, noblesse: false, title: false, dataSource: '' });
 const state = reactive(emptyState());
+/** 예전 데이터 판으로 저장된 설정이면 변형 키를 지금 판으로 옮긴다 — 바뀌면 아래 state watch 가 저장한다 */
+function migrateState() {
+  const e = engine.value;
+  if (!e || state.dataSource === e.data.source) return;
+  Object.assign(state, migrateSkillState(JSON.parse(JSON.stringify(state)), e.data));
+}
 function readLocal() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
@@ -52,6 +70,7 @@ watch(
     for (const k of Object.keys(state)) delete state[k];
     Object.assign(state, next);
     lastJson = json;
+    migrateState();
   },
   { immediate: true },
 );

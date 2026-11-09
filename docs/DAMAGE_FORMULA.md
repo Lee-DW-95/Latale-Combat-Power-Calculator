@@ -21,6 +21,17 @@
 | 공식 문서 | https://github.com/alfm201/damage-test/blob/main/README.md | 공식 구조 설명 | **코드와 일부 다름 (§3)** |
 
 - 분석 기준: 저장소 `main` = **v9.17 (커밋 `bf36a3eb`, 2026-09-24)**. README 는 v9.9 이후 바뀌지 않았다.
+- **반영 이력**
+  | 반영일 | 원본 | 내용 |
+  |---|---|---|
+  | 2026-09-28 | v9.17 `bf36a3eb` | 계산 공식·스킬 엔진·`SKILL_DATA`(2026-09-16) 최초 반영 |
+  | 2026-11-09 | v9.18 `ce6de419` (2026-10-25) | **게임 데이터만 갱신** — 계산 코드는 v9.17 과 같다. `SKILL_DATA` 2026-09-16 → 2026-10-23 |
+  | — | `3f4baa69` (2026-09-30) | README 의 f32 순서를 코드에 맞춘 문서 수정 — 우리는 이미 코드 기준이라 반영할 것 없음 |
+- v9.18 데이터 변화: 스킬 506개 중 476개의 변형 키 번호가 바뀌었고(대부분 번호만), **계수·구성이 실제로 바뀐 스킬은 103개**
+  (세이버 14 · 저지먼트 8 · 아크메이지 8 · 윈드스토커 7 · 레이니아 7 … 그리고 거의 전 직업의 [인피니티] 스킬).
+  몬스터 523 → 530, 특화석 옵션 효과 2 → 10종, 이전 키 → 새 키 대응표 `legacyVariants` 추가.
+  저장된 변형 선택은 `migrateSkillState()` 가 원본 `restore()` 와 같은 규칙으로 옮긴다 (§9-2).
+  반영 후 원본 v9.18 엔진과 **73,920개 설정 / 116,552타 전부 일치**.
 - 저장소에 라이선스가 없으므로 **코드는 복사하지 않았다.** 공식(게임 메커니즘)만 읽고 우리 구현을 새로 썼다.
   원본 함수는 검증할 때 스크래치 폴더에서만 실행했다.
 
@@ -116,7 +127,10 @@ cd       = floor((rawCD − 50) × 소환체.Cri_Dam/100) + 몹.BASE_CRITICAL_DA
 
 ---
 
-## 6. `SKILL_DATA` — 게임 데이터 테이블 (추출일 2026-09-16)
+## 6. `SKILL_DATA` — 게임 데이터 테이블 (추출일 2026-10-23, 원본 v9.18)
+
+> 아래 개수는 최초 분석(2026-09-16 판) 기준이다. 2026-10-23 판에서 몬스터는 530종, `optionEffects`·`optionBuffs` 는 10종이고
+> 이전 판 변형 키 → 새 키 대응표 `legacyVariants: { source, keys: { 스킬ID: { 옛키: 새키 } } }` 가 추가됐다.
 
 컬럼명이 게임 원본 형식(`Base_Atk_Min_Dam`, `Option_Groupid` 등)이다. **클라이언트 데이터 추출본으로 보인다.**
 
@@ -201,7 +215,7 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
 | `src/data/monsterPresets.js` | 대상 12종 + 난이도 보정 (전부 `verified: false`) |
 | `src/components/DamageCalc.vue` | "💥 대미지 계산" 탭 (제한 탭) |
 | `tests/damageFormula.test.js` | 구조 테스트 + **원본 대조 골든 값 8건** |
-| `src/data/skillData.json` | 원본 `SKILL_DATA` 전체 (3.5MB, gzip 215KB, 추출일 2026-09-16). 대미지 탭에서만 동적 import |
+| `src/data/skillData.json` | 원본 `SKILL_DATA` 전체 (3.9MB, gzip 245KB, 추출일 2026-10-23 · v9.18). 대미지 탭에서만 동적 import |
 | `src/utils/skillEngine.js` | 원본 `SkillEngine` 을 다시 쓴 것 — 특화석·각성·변형·버프 → 타격별 `damageRange` |
 | `src/components/SkillDamagePanel.vue` | 대미지 탭의 "스킬 선택" 모드 (직업·스킬·레벨·각성·특화석 3칸·버프) |
 | `tests/skillEngine.test.js` | 원본 `SkillEngine` 골든 14건 + 특화석 규칙 + 어댑터 |
@@ -229,6 +243,10 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
 
 - 데이터: `src/data/skillData.json` — 원본 `SKILL_DATA` 를 compact JSON 으로 그대로 옮김.
   원본이 갱신되면 `index.html` 의 `const SKILL_DATA = {...}` 를 다시 떼어 덮어쓰면 된다.
+  단, 갱신 때 변형(variant) 키 번호가 바뀔 수 있다 (v9.18 에서 476개 스킬). 저장된 설정에는 `dataSource`(저장 당시 `source`)가 남고,
+  `migrateSkillState()` 가 원본 `restore()` 와 같은 규칙으로 옮긴다 — 같은 판이면 그대로, `dataSource` 가 없거나
+  `legacyVariants.source` 와 같으면 대응표로 변환, 그 밖의 판이면 변형 선택만 비운다.
+  두 판 이상 건너뛰면 대응표가 직전 판만 다루므로 변형 선택이 기본값으로 돌아간다 — 갱신을 놓치지 않는 게 중요하다.
 - 번들: 동적 import 라 대미지 탭의 "스킬 선택" 을 열 때만 받는다 (skillData 청크 3.5MB / gzip 212KB).
   PWA 프리캐시 한도를 6MB 로 올려 오프라인에서도 쓴다 (`vite.config.js`).
 - 엔진 흐름 (`skillEngine.calculate`):

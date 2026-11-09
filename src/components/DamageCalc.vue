@@ -194,7 +194,7 @@ const pct = (f) => (Math.round(f * 100) / 100).toLocaleString('ko-KR');
         <strong class="font-medium text-orange-600 dark:text-orange-400">아직 인게임 실측과 대조하지 않은 계산</strong>이라 값이 틀릴 수 있습니다.
       </template>
       <p>
-        공식 출처: 공개 계산기 alfm201/damage-test (v9.17). 원본 계산 코드와 결과가 정수 단위로 일치하도록 맞췄지만,
+        공식 출처: 공개 계산기 alfm201/damage-test (v9.18, 게임 데이터 2026-10-23). 원본 계산 코드와 결과가 정수 단위로 일치하도록 맞췄지만,
         인게임 실측과는 아직 대조하지 않았습니다. 대상 수치도 그쪽이 정리한 값입니다.
         검증 절차와 남은 일은 저장소의 <strong>docs/DAMAGE_FORMULA.md</strong> 에 적어 두었습니다.
       </p>

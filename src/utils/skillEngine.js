@@ -3,7 +3,8 @@
  * 스킬 엔진 — 직업 · 스킬 · 레벨 · 각성 · 특화석 → 타격별 대미지.
  *
  * 근거: alfm201/damage-test v9.17 의 SkillEngine 동작을 읽고 우리 코드로 다시 썼다 (docs/DAMAGE_FORMULA.md §6 · §9-2).
- *   데이터는 src/data/skillData.json (게임 데이터 테이블, 추출일 2026-09-16).
+ *   v9.18 은 엔진 코드가 같고 게임 데이터만 바뀌었다.
+ *   데이터는 src/data/skillData.json (원본 v9.18 의 게임 데이터 테이블, 추출일 2026-10-23).
  *   대미지 수식 자체는 damageFormula.js 를 그대로 쓴다 — 여기서는 "어떤 계수·배율로 몇 번 치는가" 만 정한다.
  *
  * 흐름
@@ -97,6 +98,32 @@ export function hitLabel(row, index) {
   const ch = row.channel === 'physical' ? '물리' : '마법';
   const cond = row.conditions?.length ? '조건부 ' : '';
   return row.kind === 'summon' ? `${cond}${ch} 소환 ${row.summonIndex || index || 1}` : `${cond}${ch} 직타`;
+}
+
+/**
+ * 저장된 스킬 설정(SkillDamagePanel state)을 지금 데이터 기준으로 옮긴다 — 원본 restore() 와 같은 규칙.
+ *   게임 데이터가 갱신되면 변형(variant) 키 번호가 바뀐다 (예: 2026-10-23 판에서 SKILL_USE_1:800 → 803).
+ *   - dataSource 가 지금 데이터와 같으면 그대로
+ *   - dataSource 가 없거나(갱신 전 저장분) 직전 판(legacyVariants.source)이면 legacyVariants 표로 키를 바꾼다
+ *   - 그 밖의 판이면 표가 없으므로 변형 선택만 비운다 (기본 변형으로 돌아감)
+ * 레벨·각성·특화석·overrides 는 키 체계가 그대로라 손대지 않는다.
+ * @param {any} saved  { cls, skillId, configs: {"직업:스킬": config}, dataSource?, ... }
+ * @param {any} data   skillData.json
+ * @returns {any} 바뀐 것이 없으면 saved 그대로, 아니면 새 객체
+ */
+export function migrateSkillState(saved, data) {
+  if (!saved || typeof saved !== 'object' || saved.dataSource === data.source) return saved;
+  const legacy = data.legacyVariants;
+  const fromLegacy = !saved.dataSource || saved.dataSource === legacy?.source;
+  const configs = {};
+  for (const [key, config] of Object.entries(saved.configs || {})) {
+    const id = key.split(':')[1];
+    const variant = typeof config?.variant === 'string' ? config.variant : '';
+    configs[key] = variant
+      ? { ...config, variant: (fromLegacy && legacy?.keys?.[id]?.[variant]) || '' }
+      : config;
+  }
+  return { ...saved, configs, dataSource: data.source };
 }
 
 /**
