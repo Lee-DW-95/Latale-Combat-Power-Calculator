@@ -79,3 +79,32 @@ def test_prunes_to_keep_limit(client, monkeypatch):
     rows = _history(client, headers, created["id"])
     assert len(rows) == 3
     assert rows[0]["changes"]["stats.크댐"] == [203, 204]
+
+
+def _make_admin(engine, nickname):
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET admin = 1 WHERE nickname = :n"), {"n": nickname})
+
+
+def test_admin_history_requires_admin(client):
+    headers, _ = _setup(client)
+    assert client.get("/admin/history", headers=headers).status_code == 403
+    assert client.get("/admin/history").status_code == 401
+
+
+def test_admin_history_lists_all_users_with_paging_and_search(client, engine):
+    _setup(client, "유저A")
+    admin_headers, _ = _setup(client, "관리자")
+    _make_admin(engine, "관리자")
+
+    rows = client.get("/admin/history", headers=admin_headers).json()
+    assert {r["nickname"] for r in rows} == {"유저A", "관리자"}
+    assert rows[0]["id"] > rows[1]["id"]
+
+    page2 = client.get(f"/admin/history?before_id={rows[0]['id']}", headers=admin_headers).json()
+    assert [r["id"] for r in page2] == [rows[1]["id"]]
+
+    found = client.get("/admin/history?q=유저", headers=admin_headers).json()
+    assert [r["nickname"] for r in found] == ["유저A"]

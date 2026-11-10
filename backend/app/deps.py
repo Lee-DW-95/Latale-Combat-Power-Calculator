@@ -33,3 +33,10 @@ def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "사용자를 찾을 수 없습니다.")
     return user
+
+
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    # users.admin 계정만 — 프론트 탭 숨김과 별개로 서버에서 다시 막는다.
+    if not user.admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "관리자만 볼 수 있습니다.")
+    return user

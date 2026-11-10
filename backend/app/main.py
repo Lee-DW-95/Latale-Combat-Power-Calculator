@@ -9,6 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from .config import get_settings
 from .db import init_db
 from .rate_limit import limiter
+from .routers import admin as admin_router
 from .routers import auth as auth_router
 from .routers import characters as characters_router
 
@@ -44,6 +45,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(characters_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/health", tags=["meta"])

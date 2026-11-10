@@ -94,3 +94,8 @@ class CharacterHistoryRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdminHistoryRead(CharacterHistoryRead):
+    user_id: int
+    nickname: str

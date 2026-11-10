@@ -50,6 +50,7 @@ const RuneWordSimulator = lazyTab(() => import('./components/RuneWordSimulator.v
 const AdventureView = lazyTab(() => import('./components/AdventureView.vue'));
 const AdventureQuickView = lazyTab(() => import('./components/AdventureQuickView.vue'));
 const AdventureAi = lazyTab(() => import('./components/AdventureAi.vue'));
+const ChangeHistory = lazyTab(() => import('./components/ChangeHistory.vue'));
 const DamageCalc = lazyTab(() => import('./components/DamageCalc.vue'));
 
 // ============================================================
@@ -160,6 +161,7 @@ const TABS = [
   { id: 'adventureQuick', label: '⚡ 어드벤처 빠른보기', short: '⚡ 빠른보기', desc: '게임 옆에 띄워놓고 쓰는 행운카드 판단용' },
   // 실험 기능 — users.admin 계정에게만 노출.
   { id: 'adventureAi', label: '🤖 어드벤처 AI', short: '🤖 AI', desc: '현재 상태에서 주사위/카드 중 무엇을 쓸지 추천', adminOnly: true },
+  { id: 'history', label: '📜 변경 이력', short: '📜 이력', desc: '전체 사용자의 캐릭터 생성·수정·삭제 기록', adminOnly: true },
 ];
 
 // 탭이 많아 한 줄에 다 안 들어가므로 시뮬레이터 6종은 상위 탭 하나로 묶고, 고르면 아래 줄에 하위 탭을 띄운다.
@@ -842,6 +844,11 @@ const savedTimeLabel = computed(() => {
       <!-- ───── 어드벤처 AI (관리자 전용) ───── -->
       <template v-else-if="activeTab === 'adventureAi'">
         <AdventureAi />
+      </template>
+
+      <!-- ───── 캐릭터 변경 이력 (관리자 전용) ───── -->
+      <template v-else-if="activeTab === 'history'">
+        <ChangeHistory />
       </template>
 
       <footer class="pt-4 text-center text-xs text-stone-400 dark:text-stone-500">

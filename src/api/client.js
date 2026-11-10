@@ -101,6 +101,14 @@ export const api = {
   deleteCharacter: (id) =>
     request(`/characters/${id}`, { method: 'DELETE', auth: true }),
 
+  // ── Admin (users.admin 전용) ──
+  adminHistory: ({ limit = 50, beforeId, q } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (beforeId) params.set('before_id', String(beforeId));
+    if (q) params.set('q', q);
+    return request(`/admin/history?${params}`, { auth: true });
+  },
+
   // ── Meta ──
   health: () => request('/health'),
 };
