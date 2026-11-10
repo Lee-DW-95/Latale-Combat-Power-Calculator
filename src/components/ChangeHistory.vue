@@ -127,7 +127,7 @@ const empty = computed(() => !loading.value && !error.value && rows.value.length
   <section class="space-y-3">
     <div>
       <h2 class="text-base font-bold text-stone-800 dark:text-stone-100">캐릭터 변경 이력</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-300">전체 사용자의 생성·수정·삭제 기록 (관리자 전용, 최신순, 캐릭터당 최근 500건 보관)</p>
+      <p class="text-xs text-stone-500 dark:text-stone-300">전체 사용자의 생성·수정·삭제 기록 (관리자 전용, 최신순). 11-10 이전은 일일 백업 비교로 복원한 하루 단위 기록</p>
     </div>
 
     <form class="flex gap-2" @submit.prevent="load()">
@@ -164,7 +164,14 @@ const empty = computed(() => !loading.value && !error.value && rows.value.length
             <span class="block truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
               {{ r.nickname }} <span class="font-normal text-stone-400">/</span> {{ r.character_name }}
             </span>
-            <span class="block truncate text-xs text-stone-500 dark:text-stone-300">{{ summary(r) }}</span>
+            <span class="block truncate text-xs text-stone-500 dark:text-stone-300">
+              <span
+                v-if="r.source === 'backup'"
+                class="mr-1 text-stone-400"
+                title="일일 DB 백업끼리 비교해 복원한 기록 — 하루 안의 중간 변경은 빠지고 그날 최종 결과만 있다"
+                >백업 복원 ·</span
+              >{{ summary(r) }}
+            </span>
           </span>
           <span class="shrink-0 text-right text-[11px] tabular-nums text-stone-500 dark:text-stone-300">{{ fmtTime(r.created_at) }}</span>
         </button>

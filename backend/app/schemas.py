@@ -92,6 +92,7 @@ class CharacterHistoryRead(BaseModel):
     action: str
     changes: dict[str, Any]
     created_at: datetime
+    source: str = "live"
 
     model_config = ConfigDict(from_attributes=True)
 

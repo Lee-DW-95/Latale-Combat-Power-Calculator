@@ -80,3 +80,6 @@ class CharacterHistory(Base):
     # create/delete: 그 시점 전체 스냅샷 {필드: 값}.
     changes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    # 'live' = 저장 시점 실시간 기록, 'backup' = 일일 DB 백업끼리 비교해 복원한 기록 (scripts/backfill_history.py).
+    #   backup 은 하루 안의 중간 변경이 빠지고, created_at 은 그 캐릭터의 updated_at(없으면 백업 시각)이다.
+    source: Mapped[str] = mapped_column(String(8), nullable=False, default="live", server_default="live")

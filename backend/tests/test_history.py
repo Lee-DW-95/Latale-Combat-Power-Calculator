@@ -108,3 +108,39 @@ def test_admin_history_lists_all_users_with_paging_and_search(client, engine):
 
     found = client.get("/admin/history?q=유저", headers=admin_headers).json()
     assert [r["nickname"] for r in found] == ["유저A"]
+
+
+def test_backfill_from_snapshots(tmp_path):
+    """scripts.backfill_history — 두 스냅샷 비교로 생성·수정·삭제를 만들고, 시각은 구간 안 updated_at 을 쓴다."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+
+    from scripts.backfill_history import build_records
+
+    def snap(name, rows):
+        p = tmp_path / name
+        con = sqlite3.connect(p)
+        con.execute("CREATE TABLE characters (id, user_id, name, type, stats, awak_stones, memorials, runeword, updated_at)")
+        con.executemany("INSERT INTO characters VALUES (?,?,?,?,?,?,?,?,?)", rows)
+        con.commit()
+        con.close()
+        return p
+
+    t0 = datetime(2026, 11, 1, 3, tzinfo=timezone(timedelta(hours=9)))
+    t1 = t0 + timedelta(days=1)
+    a = snap("a.db", [
+        (1, 1, "선봉", "P", '{"크댐": 150}', "[]", "[]", "[]", "2026-10-30 00:00:00"),
+        (2, 1, "부캐", "P", "{}", "[]", "[]", "[]", "2026-10-30 00:00:00"),
+    ])
+    b = snap("b.db", [
+        (1, 1, "선봉", "P", '{"크댐": 160}', "[]", "[]", "[]", "2026-11-01 05:30:00"),
+        (3, 2, "새캐", "M", "{}", "[]", "[]", "[]", "2026-11-01 01:00:00"),
+        (4, 9, "탈퇴", "M", "{}", "[]", "[]", "[]", "2026-11-01 01:00:00"),
+    ])
+    recs = build_records([(t0, a), (t1, b)], valid_users={1, 2})
+    got = {(r["key"], r["action"]): r for r in recs}
+    assert set(got) == {((1, 1), "update"), ((3, 2), "create"), ((2, 1), "delete")}
+    upd = got[((1, 1), "update")]
+    assert upd["changes"] == {"stats.크댐": [150, 160]}
+    assert upd["at"] == datetime(2026, 11, 1, 5, 30, tzinfo=timezone.utc)
+    assert got[((2, 1), "delete")]["at"] == t1

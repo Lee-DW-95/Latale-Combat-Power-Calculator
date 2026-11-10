@@ -73,6 +73,9 @@ _ADDED_COLUMNS = {
         ("relics", "JSON NOT NULL DEFAULT '{}'"),
         ("damage_settings", "JSON NOT NULL DEFAULT '{}'"),
     ],
+    "character_history": [
+        ("source", "VARCHAR(8) NOT NULL DEFAULT 'live'"),
+    ],
 }
 
 
