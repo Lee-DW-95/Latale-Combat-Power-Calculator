@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import schemas
+from .. import history, schemas
 from ..deps import get_current_user, get_db
-from ..models import Character, User
+from ..models import Character, CharacterHistory, User
 
 
 router = APIRouter(prefix="/characters", tags=["characters"])
@@ -68,6 +68,8 @@ def create_character(
         **{f: getattr(body, f) for f in schemas.SETTING_FIELDS},
     )
     db.add(char)
+    db.flush()  # char.id 확보
+    history.record(db, char, "create", history.snapshot(char))
     db.commit()
     db.refresh(char)
     return char
@@ -108,6 +110,7 @@ def update_character(
         if clash is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, "같은 이름의 캐릭터가 이미 있습니다.")
 
+    before = history.snapshot(char)
     char.name = new_name
     char.type = body.type
     char.stats = body.stats
@@ -117,6 +120,7 @@ def update_character(
     for f in schemas.SETTING_FIELDS:
         if getattr(body, f) is not None:
             setattr(char, f, getattr(body, f))
+    history.record(db, char, "update", history.diff(before, history.snapshot(char)))
     db.commit()
     db.refresh(char)
     return char
@@ -129,6 +133,24 @@ def delete_character(
     db: Session = Depends(get_db),
 ):
     char = _own_character_or_404(db, user, character_id)
+    history.record(db, char, "delete", history.snapshot(char))
     db.delete(char)
     db.commit()
     return None
+
+
+@router.get("/{character_id}/history", response_model=list[schemas.CharacterHistoryRead])
+def list_character_history(
+    character_id: int,
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 삭제된 캐릭터의 이력도 본인 것이면 볼 수 있게 캐릭터 존재 여부는 따지지 않는다.
+    return (
+        db.query(CharacterHistory)
+        .filter(CharacterHistory.user_id == user.id, CharacterHistory.character_id == character_id)
+        .order_by(CharacterHistory.id.desc())
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )

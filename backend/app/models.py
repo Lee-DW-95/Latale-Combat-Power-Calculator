@@ -58,3 +58,25 @@ class Character(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="characters")
+
+
+class CharacterHistory(Base):
+    """캐릭터 데이터 변경 이력 — 생성·수정·삭제 때마다 바뀐 값(전/후)을 남긴다.
+
+    character_id 에 FK 를 걸지 않는다: 캐릭터를 지워도 이력은 남겨야 삭제 직전 값을 볼 수 있다.
+    (SQLite 는 rowid 를 재사용하므로 같은 id 가 다른 캐릭터일 수 있다 — character_name·created_at 으로 구분.)
+    """
+
+    __tablename__ = "character_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    character_name: Mapped[str] = mapped_column(String(40), nullable=False)
+    action: Mapped[str] = mapped_column(String(8), nullable=False)  # 'create' | 'update' | 'delete'
+    # update: {"stats.크댐": [전, 후], "awak_stones": [전, 후], ...} — dict 는 키 단위로 펼치고 list·값은 통째로.
+    # create/delete: 그 시점 전체 스냅샷 {필드: 값}.
+    changes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

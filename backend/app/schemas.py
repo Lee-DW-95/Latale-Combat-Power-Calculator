@@ -83,3 +83,14 @@ class CharacterRead(CharacterBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CharacterHistoryRead(BaseModel):
+    id: int
+    character_id: int
+    character_name: str
+    action: str
+    changes: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
