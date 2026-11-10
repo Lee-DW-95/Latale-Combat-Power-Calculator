@@ -1,0 +1,63 @@
+# 원본 alfm201/damage-test 갱신 추적 — 매일 09:00 KST 에 점검한다.
+# 새 커밋이 있으면 라벨 damage-test-sync 이슈를 열고(이미 열려 있으면 본문 갱신 + 새 커밋이면 댓글),
+# scripts/damage-test-sync.json 의 reviewedCommit 을 최신으로 올려 갱신이 없어지면 이슈를 닫는다.
+name: damage-test sync check
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: damage-test-sync
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - id: check
+        name: 원본 갱신 점검
+        run: node scripts/check-damage-test.mjs --out "$RUNNER_TEMP/body.md"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 이슈 열기·갱신·닫기
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGED: ${{ steps.check.outputs.changed }}
+          HEAD_SHA: ${{ steps.check.outputs.head }}
+          TITLE: ${{ steps.check.outputs.title }}
+        run: |
+          set -euo pipefail
+          LABEL=damage-test-sync
+          gh label create "$LABEL" --color 0E8A16 --description "원본 damage-test 갱신 추적" 2>/dev/null || true
+          OPEN=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+
+          if [ "$CHANGED" = "true" ]; then
+            BODY="$RUNNER_TEMP/body.md"
+            printf '\n\n<!-- head:%s -->\n' "$HEAD_SHA" >> "$BODY"
+            if [ -z "$OPEN" ]; then
+              gh issue create --title "$TITLE" --label "$LABEL" --body-file "$BODY"
+            else
+              PREV=$(gh issue view "$OPEN" --json body --jq '.body' | grep -o 'head:[0-9a-f]*' | cut -d: -f2 || true)
+              gh issue edit "$OPEN" --title "$TITLE" --body-file "$BODY"
+              if [ "$PREV" != "$HEAD_SHA" ]; then
+                gh issue comment "$OPEN" --body "원본에 새 커밋이 더 올라왔다 (\`${HEAD_SHA:0:8}\`). 본문을 최신 기준으로 갱신했다."
+              fi
+            fi
+          elif [ -n "$OPEN" ]; then
+            gh issue close "$OPEN" --comment "scripts/damage-test-sync.json 기준점이 원본 최신과 같아져 닫는다."
+          else
+            echo "원본 갱신 없음"
+          fi

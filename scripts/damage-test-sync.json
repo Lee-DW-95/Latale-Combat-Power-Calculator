@@ -1,0 +1,10 @@
+{
+  "repo": "alfm201/damage-test",
+  "branch": "main",
+  "file": "index.html",
+  "reviewedCommit": "ce6de4190d8c0cc7a8515f98c0b05d9490bb2d42",
+  "version": "v9.18",
+  "dataSource": "2026-10-23",
+  "reviewedAt": "2026-11-09",
+  "note": "원본을 검토(반영 또는 반영 불필요 판정)할 때마다 reviewedCommit/version/dataSource/reviewedAt 을 갱신한다. docs/DAMAGE_FORMULA.md §1 반영 이력 표와 함께 고친다."
+}

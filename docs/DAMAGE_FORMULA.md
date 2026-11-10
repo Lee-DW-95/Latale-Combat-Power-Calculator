@@ -27,6 +27,9 @@
   | 2026-09-28 | v9.17 `bf36a3eb` | 계산 공식·스킬 엔진·`SKILL_DATA`(2026-09-16) 최초 반영 |
   | 2026-11-09 | v9.18 `ce6de419` (2026-10-25) | **게임 데이터만 갱신** — 계산 코드는 v9.17 과 같다. `SKILL_DATA` 2026-09-16 → 2026-10-23 |
   | — | `3f4baa69` (2026-09-30) | README 의 f32 순서를 코드에 맞춘 문서 수정 — 우리는 이미 코드 기준이라 반영할 것 없음 |
+- **갱신 추적 (2026-11-10~)**: `.github/workflows/damage-test-sync.yml` 이 매일 09:00 KST 에 `scripts/check-damage-test.mjs` 를 돌린다.
+  `scripts/damage-test-sync.json` 의 `reviewedCommit` 이후 원본 커밋이 있으면 라벨 `damage-test-sync` 이슈를 열고(버전·`SKILL_DATA.source` 비교 포함),
+  원본을 반영하거나 반영 불필요로 판정한 뒤 그 파일의 기준점을 올리면 다음 점검 때 이슈가 닫힌다. 로컬 확인은 `npm run check:damage-test`.
 - v9.18 데이터 변화: 스킬 506개 중 476개의 변형 키 번호가 바뀌었고(대부분 번호만), **계수·구성이 실제로 바뀐 스킬은 103개**
   (세이버 14 · 저지먼트 8 · 아크메이지 8 · 윈드스토커 7 · 레이니아 7 … 그리고 거의 전 직업의 [인피니티] 스킬).
   몬스터 523 → 530, 특화석 옵션 효과 2 → 10종, 이전 키 → 새 키 대응표 `legacyVariants` 추가.
@@ -218,7 +221,7 @@ C = base + step × 스킬레벨 + 특화석[659] + 특화석[660] × 스킬레�
 | `src/data/skillData.json` | 원본 `SKILL_DATA` 전체 (3.9MB, gzip 245KB, 추출일 2026-10-23 · v9.18). 대미지 탭에서만 동적 import |
 | `src/utils/skillEngine.js` | 원본 `SkillEngine` 을 다시 쓴 것 — 특화석·각성·변형·버프 → 타격별 `damageRange` |
 | `src/components/SkillDamagePanel.vue` | 대미지 탭의 "스킬 선택" 모드 (직업·스킬·레벨·각성·특화석 3칸·버프) |
-| `tests/skillEngine.test.js` | 원본 `SkillEngine` 골든 14건 + 특화석 규칙 + 어댑터 |
+| `tests/skillEngine.test.js` | 원본 `SkillEngine` 골든 18건 + 특화석 규칙 + 어댑터 |
 
 원본 대조: 직타/소환 × 물리/마법 × 대상 3종 × 조건 조합 **72건에서 min·max·평균 완전 일치**.
 
